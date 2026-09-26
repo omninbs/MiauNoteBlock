@@ -5,3 +5,5 @@ src-tauri/
 .git/
 __pycache__/
 *.pyc
+# 本地离线构建产物 (node build_local.js 生成, 可删除后重建)
+blbl-toy/

@@ -74,4 +74,34 @@ for (const locale of Object.keys(samples)) {
   }
 }
 console.log('\n=== 残留失败:', fail, '| ja-JP 可疑:', warn, '===');
+
+// ===== 压缩弹窗新增文案: 必须覆盖全部 9 种非中文语言 =====
+// (缺失时 translate() 会回退 en-US, 非英文界面出现英文残留; ja-JP 回退英文亦视为未本地化)
+const compressKeys = [
+  '压缩方式', '仅删除重复音符', '使用压缩算法',
+  '轻度压缩', '中度压缩', '较强压缩', '最强压缩',
+  '最强压缩：可能过度删除音符，歌曲听感可能明显受损',
+  '只删除同一时间点、同一音色、同一音高完全重复的音符，几乎不影响质量。',
+  '在去重的基础上按「压缩等级」进一步删除存在感低的音符，压缩率更高。',
+  '只删除完全重复的音符，几乎不影响质量。',
+  '按所选「压缩等级」删除存在感低的音符，压缩率更高，质量损失随等级增加。',
+];
+const nineLocales = ['en-US', 'es-ES', 'pt-BR', 'ru-RU', 'de-DE', 'fr-FR', 'ja-JP', 'ko-KR', 'id-ID'];
+// 基准: 先取 en-US 渲染结果, 用于识别「回退 en-US 但本语言缺词条」
+I18n.apply('en-US');
+const enTexts = {};
+for (const k of compressKeys) enTexts[k] = I18n.translate(k);
+console.log('\n== 压缩弹窗文案 (9 种非中文语言) ==');
+for (const loc of nineLocales) {
+  I18n.apply(loc);
+  const missing = compressKeys.filter((k) => {
+    const out = I18n.translate(k);
+    if (out === k) return true;                                  // 回退中文原文 = 未翻译
+    return loc !== 'en-US' && out === enTexts[k];                 // 回退英文 = 本语言缺词条
+  });
+  console.log(`  [${loc}] ${compressKeys.length - missing.length}/${compressKeys.length}` +
+    (missing.length ? ' 缺: ' + missing.join(' / ') : ' OK'));
+  fail += missing.length;
+}
+console.log('\n=== 合计失败:', fail, '| ja-JP 可疑:', warn, '===');
 process.exit(fail ? 1 : 0);

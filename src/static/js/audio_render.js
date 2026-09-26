@@ -262,8 +262,10 @@
         if (_ownBuffers[soundName]) return _ownBuffers[soundName];
         var dctx = getDecodeCtx();
         if (!dctx) return Promise.reject(new Error('无法创建解码上下文'));
-        _ownBuffers[soundName] = fetch(window.STATIC_BASE + '/sounds/' + soundName + '.ogg')
-            .then(function(res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.arrayBuffer(); })
+        _ownBuffers[soundName] = (window.AudioEngine && AudioEngine.getSoundArrayBuffer
+            ? AudioEngine.getSoundArrayBuffer(soundName)
+            : fetch(window.STATIC_BASE + '/sounds/' + soundName + '.ogg')
+                .then(function(res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.arrayBuffer(); }))
             .then(function(ab) { return dctx.decodeAudioData(ab); })
             .catch(function(e) { delete _ownBuffers[soundName]; throw e; });
         return _ownBuffers[soundName];

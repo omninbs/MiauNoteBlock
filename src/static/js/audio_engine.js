@@ -58,6 +58,41 @@ var _styleChainOutput = null;  // 当前风格链的输出节点
 var _enhanceCompressor = null;
 var _enhanceWetGain = null;
 var _enhanceDryGain = null;
+
+/**
+ * 获取音色样本的二进制数据 (ArrayBuffer)
+ *
+ * 优先读取 window.SOUNDS_BASE64（由 build_local.js 生成的内嵌 base64 表），
+ * 供 file:// 协议下直接双击 index.html 打开时使用（file:// 下 fetch 本地文件会被浏览器拦截）。
+ * 未找到内嵌表时回退到 fetch（HTTP 服务器托管模式）。
+ *
+ * @param {string} name 音色名 (如 'harp')
+ * @returns {Promise<ArrayBuffer>}
+ */
+function getSoundArrayBuffer(name) {
+    if (window.SOUNDS_BASE64 && typeof window.SOUNDS_BASE64[name] === 'string' && window.SOUNDS_BASE64[name].length > 0) {
+        try {
+            return Promise.resolve(base64ToUint8Array(window.SOUNDS_BASE64[name]).buffer);
+        } catch (e) {
+            console.warn('解码内嵌音色失败 [' + name + ']:', e.message);
+        }
+    }
+    return fetch(window.STATIC_BASE + '/sounds/' + name + '.ogg').then(function(response) {
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.arrayBuffer();
+    });
+}
+
+/**
+ * base64 字符串 -> Uint8Array (纯 ASCII，无 atob 前缀开销)
+ */
+function base64ToUint8Array(b64) {
+    var binary = atob(b64);
+    var len = binary.length;
+    var out = new Uint8Array(len);
+    for (var i = 0; i < len; i++) out[i] = binary.charCodeAt(i);
+    return out;
+}
 var _enhanceReverb = null;
 
 // 乐器音量归一化：根据音符盒实际音量调整
@@ -269,12 +304,7 @@ function preloadAllSounds() {
     var total = uniqueNames.length;
 
     uniqueNames.forEach(function(name) {
-        var url = window.STATIC_BASE + '/sounds/' + name + '.ogg';
-        fetch(url)
-            .then(function(response) {
-                if (!response.ok) throw new Error('HTTP ' + response.status);
-                return response.arrayBuffer();
-            })
+        getSoundArrayBuffer(name)
             .then(function(arrayBuffer) {
                 return audioContext.decodeAudioData(arrayBuffer);
             })
@@ -459,13 +489,7 @@ function playBuffer(buffer, key, velocity, pan, soundName, customOpt, pitch) {
 function loadAndPlaySound(soundName, key, velocity, pan, pitch) {
     if (!audioContext) return;
 
-    var url = window.STATIC_BASE + '/sounds/' + soundName + '.ogg';
-
-    fetch(url)
-        .then(function(response) {
-            if (!response.ok) throw new Error('HTTP ' + response.status);
-            return response.arrayBuffer();
-        })
+    getSoundArrayBuffer(soundName)
         .then(function(arrayBuffer) {
             return audioContext.decodeAudioData(arrayBuffer);
         })
@@ -603,5 +627,7 @@ window.AudioEngine = {
     setStyle: setLiveStyle,
     getStyle: getLiveStyle,
     // 供 offline 渲染复用已解码的默认音色缓冲
-    getSoundBuffer: function(name) { return audioBuffers[name] || null; }
+    getSoundBuffer: function(name) { return audioBuffers[name] || null; },
+    // 获取音色样本二进制数据 (优先内嵌 base64, 供 file:// 模式; 否则 fetch)
+    getSoundArrayBuffer: getSoundArrayBuffer
 };

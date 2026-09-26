@@ -1920,6 +1920,9 @@
         // 加载记住的 MIDI 设置
         loadMidiSettings();
 
+        // 音色拟合「推荐选项」档位控件 (档位缩放拟合槽数)
+        initFittingLevelControl();
+
         // 八度警告
         var octaveCloseBtn = $('octave-close-btn');
         var octaveCloseX = $('octave-close-x');
@@ -2252,7 +2255,10 @@
             }
             // 创作辅助悬浮窗: 常驻面板, 不因点击外部关闭 (仅通过按钮/Esc/×关闭)
             // 音符查找/替换浮层: 点击面板外部区域关闭
-            if (findPanelVisible() && !$('find-panel').contains(e.target)) {
+            // (悬浮选择窗 #find-pick-pop 挂在 body 上, 视觉上是面板的一部分, 需一并视为「内部」)
+            var findPick = findPickPop();
+            if (findPanelVisible() && !$('find-panel').contains(e.target)
+                && !(findPick && findPick.style.display !== 'none' && findPick.contains(e.target))) {
                 closeFindPanel();
             }
             // 历史对话框
@@ -3032,6 +3038,8 @@
         velMode: 'single',
         velSingle: null,
         velMin: 0, velMax: 100,
+        repInst: null,          // 替换目标音色 (null = 不变)
+        repKey: null,           // 替换目标音调 (null = 不变)
         results: [],
         index: -1
     };
@@ -3046,93 +3054,258 @@
         return panel && panel.style.display !== 'none';
     }
 
-    function fillFindKeySelect(sel, includeEmpty) {
-        if (!sel) return;
-        sel.innerHTML = '';
-        if (includeEmpty) {
-            var e0 = document.createElement('option');
-            e0.value = '';
-            e0.textContent = '不限';
-            sel.appendChild(e0);
-        }
-        for (var k = 0; k < FIND_MAX_KEYS; k++) {
-            var o = document.createElement('option');
-            o.value = k;
-            o.textContent = findKeyLabel(k) + ' (' + k + ')';
-            sel.appendChild(o);
-        }
-    }
-
-    function findDistinctKeys() {
-        var notes = state.pianoRoll ? state.pianoRoll.getNotes() : [];
-        var set = {};
-        for (var i = 0; i < notes.length; i++) set[notes[i].key] = true;
-        return Object.keys(set).map(Number).sort(function(a, b) { return a - b; });
-    }
-
-    function buildFindInstrumentChips() {
-        var wrap = $('find-cond-instruments');
-        if (!wrap) return;
-        var notes = state.pianoRoll ? state.pianoRoll.getNotes() : [];
-        var set = {};
-        for (var i = 0; i < notes.length; i++) set[notes[i].instrument] = true;
-        var insts = Object.keys(set).map(Number).sort(function(a, b) { return a - b; });
+    // ============ 通用悬浮选择器 (音色 / 音调统一入口) ============
+    // 交互: 「选择X」按钮 → 弹出悬浮窗 → 点击条目即选中 (选中高亮, 单选选完自动关闭);
+    //       已选内容实时显示在按钮右侧, 内容过长时右侧淡出省略 (CSS mask)。
+    function findInstLabel(i) {
         var names = getInstrumentNames();
-        wrap.innerHTML = '';
-        for (var j = 0; j < insts.length; j++) {
-            (function(inst) {
-                var chip = document.createElement('button');
-                chip.type = 'button';
-                chip.className = 'find-mini-btn' + (findState.inst.indexOf(inst) >= 0 ? ' active' : '');
-                chip.textContent = names[inst] || ('音色' + inst);
-                chip.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    var idx = findState.inst.indexOf(inst);
-                    if (idx >= 0) findState.inst.splice(idx, 1);
-                    else findState.inst.push(inst);
-                    this.classList.toggle('active');
-                    runFind();
-                });
-                wrap.appendChild(chip);
-            })(insts[j]);
+        return names[i] || ('音色' + i);
+    }
+    function findInstCustomColor(i) {
+        var list = (window.CustomInstruments && CustomInstruments.list) ? CustomInstruments.list() : [];
+        for (var a = 0; a < list.length; a++) if (list[a].instrument === i) return list[a].color || null;
+        return null;
+    }
+    // 悬浮窗列表: 全部内置音色 + 自定义音色 (选中不存在的音色自然匹配 0 个结果)
+    function findInstrumentValues() {
+        var out = [];
+        var names = getInstrumentNames();
+        for (var i = 0; i < names.length; i++) out.push(i);
+        var list = (window.CustomInstruments && CustomInstruments.list) ? CustomInstruments.list() : [];
+        for (var c = 0; c < list.length; c++) if (out.indexOf(list[c].instrument) < 0) out.push(list[c].instrument);
+        return out.sort(function (a, b) { return a - b; });
+    }
+    function findKeyValues() {
+        var out = [];
+        for (var k = 0; k < FIND_MAX_KEYS; k++) out.push(k);
+        return out;
+    }
+    function findInstCellHTML(i) {
+        var color = findInstCustomColor(i);
+        var ic = color
+            ? '<span class="find-pick-ic" style="background:' + color + ';"></span>'
+            : '<span class="find-pick-ic"><img src="static/sprites/spr_instrumenticons/inst_' + i + '.png" alt="" onerror="this.style.display=\'none\'"></span>';
+        return ic + '<span class="find-pick-name">' + findInstLabel(i) + '</span>';
+    }
+    function findKeyCellHTML(k) {
+        return '<span class="find-pick-name">' + findKeyLabel(k) + '</span><span class="find-pick-sub">' + k + '</span>';
+    }
+
+    var pickCfg = null;        // 当前打开的 picker 配置
+    var pickAnchor = null;
+
+    function findPickPop() { return $('find-pick-pop'); }
+
+    function pickPopEnsure() {
+        var pop = findPickPop();
+        if (pop) return pop;
+        pop = document.createElement('div');
+        pop.className = 'find-pick-pop';
+        pop.id = 'find-pick-pop';
+        pop.style.display = 'none';
+        pop.innerHTML =
+            '<div class="find-pick-pop-head">'
+            + '<span class="find-pick-pop-title" id="find-pick-pop-title"></span>'
+            + '<button type="button" class="find-pick-pop-tool" id="find-pick-pop-all">' + i18nText('全选') + '</button>'
+            + '<button type="button" class="find-pick-pop-tool" id="find-pick-pop-clear">' + i18nText('清除') + '</button>'
+            + '<button type="button" class="find-pick-pop-close" id="find-pick-pop-close">&times;</button>'
+            + '</div>'
+            + '<div class="find-pick-pop-grid" id="find-pick-pop-grid"></div>';
+        document.body.appendChild(pop);
+        pop.querySelector('#find-pick-pop-close').addEventListener('click', function (e) {
+            e.stopPropagation();
+            closeFindPickPop();
+        });
+        pop.querySelector('#find-pick-pop-all').addEventListener('click', function (e) {
+            e.stopPropagation();
+            if (pickCfg && pickCfg.multi) { pickCfg.onSetValues(pickCfg.allValues()); refreshFindPickPop(); }
+        });
+        pop.querySelector('#find-pick-pop-clear').addEventListener('click', function (e) {
+            e.stopPropagation();
+            if (pickCfg && pickCfg.multi) { pickCfg.onSetValues([]); refreshFindPickPop(); }
+        });
+        return pop;
+    }
+
+    function closeFindPickPop() {
+        var pop = findPickPop();
+        if (pop) pop.style.display = 'none';
+        pickCfg = null;
+        pickAnchor = null;
+    }
+
+    // 依据当前选中集刷新条目高亮 + 外部摘要 (单选的「不限/不变」空项以 data-v="none" 标记)
+    function refreshFindPickPop() {
+        if (!pickCfg) return;
+        var pop = findPickPop();
+        var cells = pop ? pop.querySelectorAll('.find-pick-cell') : [];
+        var cur = pickCfg.curValues();
+        for (var i = 0; i < cells.length; i++) {
+            var raw = cells[i].getAttribute('data-v');
+            var on = raw === 'none' ? cur.length === 0 : cur.indexOf(parseInt(raw, 10)) >= 0;
+            cells[i].classList.toggle('active', on);
         }
+        if (pickCfg.onChanged) pickCfg.onChanged();
+    }
+
+    function positionFindPickPop(anchor, pop) {
+        var r = anchor.getBoundingClientRect();
+        var pw = pop.offsetWidth, ph = pop.offsetHeight;
+        var left = Math.max(8, Math.min(r.left, window.innerWidth - pw - 8));
+        var top = r.bottom + 6;
+        if (top + ph > window.innerHeight - 8) {
+            var up = r.top - ph - 6;
+            top = up >= 8 ? up : Math.max(8, window.innerHeight - ph - 8);
+        }
+        pop.style.left = Math.round(left) + 'px';
+        pop.style.top = Math.round(top) + 'px';
+    }
+
+    function openFindPickPop(anchor, cfg) {
+        if (!anchor) return;
+        var pop = pickPopEnsure();
+        // 同一按钮再次点击 = 收起
+        if (pickAnchor === anchor && pop.style.display !== 'none') { closeFindPickPop(); return; }
+        pickCfg = cfg;
+        pickAnchor = anchor;
+        var isMulti = !!cfg.multi;
+        pop.querySelector('#find-pick-pop-title').textContent = cfg.title;
+        pop.querySelector('#find-pick-pop-all').style.display = isMulti ? '' : 'none';
+        pop.querySelector('#find-pick-pop-clear').style.display = isMulti ? '' : 'none';
+        var grid = pop.querySelector('#find-pick-pop-grid');
+        grid.className = 'find-pick-pop-grid' + (cfg.kind === 'key' ? ' is-key' : '');
+        grid.innerHTML = '';
+        if (cfg.emptyLabel) {
+            var emptyCell = document.createElement('button');
+            emptyCell.type = 'button';
+            emptyCell.className = 'find-pick-cell find-pick-cell-empty';
+            emptyCell.setAttribute('data-v', 'none');
+            emptyCell.textContent = cfg.emptyLabel;
+            emptyCell.addEventListener('click', function (e) {
+                e.stopPropagation();
+                cfg.onPick(null);
+                refreshFindPickPop();
+                setTimeout(closeFindPickPop, 0);
+            });
+            grid.appendChild(emptyCell);
+        }
+        var vals = cfg.allValues();
+        for (var i = 0; i < vals.length; i++) {
+            (function (v) {
+                var cell = document.createElement('button');
+                cell.type = 'button';
+                cell.className = 'find-pick-cell';
+                cell.setAttribute('data-v', String(v));
+                cell.innerHTML = cfg.cellHTML(v);
+                cell.title = cfg.cellTitle ? cfg.cellTitle(v) : '';
+                cell.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    if (isMulti) cfg.onToggle(v); else cfg.onPick(v);
+                    refreshFindPickPop();
+                    if (!isMulti) setTimeout(closeFindPickPop, 0);
+                });
+                grid.appendChild(cell);
+            })(vals[i]);
+        }
+        refreshFindPickPop();
+        pop.style.display = 'flex';
+        pop.style.visibility = 'hidden';
+        positionFindPickPop(anchor, pop);
+        pop.style.visibility = '';
+    }
+
+    // 音色筛选 (多选): 不选 = 全部
+    function openFindInstPick() {
+        openFindPickPop($('find-inst-btn'), {
+            title: i18nText('选择音色'), kind: 'inst', multi: true,
+            allValues: findInstrumentValues,
+            curValues: function () { return findState.inst.slice(); },
+            onSetValues: function (arr) {
+                findState.inst = arr.slice().sort(function (a, b) { return a - b; });
+                runFind();
+            },
+            onToggle: function (v) {
+                var i = findState.inst.indexOf(v);
+                if (i >= 0) findState.inst.splice(i, 1);
+                else findState.inst.push(v);
+                findState.inst.sort(function (a, b) { return a - b; });
+                runFind();
+            },
+            onChanged: renderFindFieldSummaries,
+            cellHTML: findInstCellHTML,
+            cellTitle: findInstLabel
+        });
+    }
+    // 单值音调选择 (查找条件的单个/范围端点, 以及替换为音调)
+    function openFindKeyPick(kind) {
+        var getVal, setVal, emptyLabel = i18nText('不限');
+        if (kind === 'single') {
+            getVal = function () { return findState.keySingle; };
+            setVal = function (v) { findState.keySingle = v; };
+        } else if (kind === 'rangeStart') {
+            getVal = function () { return findState.keyRange[0]; };
+            setVal = function (v) { findState.keyRange[0] = v; };
+        } else if (kind === 'rangeEnd') {
+            getVal = function () { return findState.keyRange[1]; };
+            setVal = function (v) { findState.keyRange[1] = v; };
+        } else {
+            emptyLabel = i18nText('不变');
+            getVal = function () { return findState.repKey; };
+            setVal = function (v) { findState.repKey = v; };
+        }
+        openFindPickPop($(kind === 'replace' ? 'find-replace-key-btn'
+            : (kind === 'single' ? 'find-key-single-btn'
+                : (kind === 'rangeStart' ? 'find-key-range-start-btn' : 'find-key-range-end-btn'))), {
+            title: i18nText('选择音调'), kind: 'key', multi: false, emptyLabel: emptyLabel,
+            allValues: findKeyValues,
+            curValues: function () { var v = getVal(); return (v === null || v === undefined) ? [] : [v]; },
+            onPick: function (v) { setVal(v); renderFindFieldSummaries(); runFind(); },
+            cellHTML: findKeyCellHTML,
+            cellTitle: function (k) { return findKeyLabel(k) + ' (' + k + ')'; }
+        });
+    }
+    // 替换为音色 (单选): 不选 = 不变
+    function openFindReplaceInstPick() {
+        openFindPickPop($('find-replace-inst-btn'), {
+            title: i18nText('选择音色'), kind: 'inst', multi: false, emptyLabel: i18nText('不变'),
+            allValues: findInstrumentValues,
+            curValues: function () { return findState.repInst === null ? [] : [findState.repInst]; },
+            onPick: function (v) { findState.repInst = v; renderFindFieldSummaries(); },
+            cellHTML: findInstCellHTML,
+            cellTitle: findInstLabel
+        });
+    }
+
+    // 字段摘要 (按钮右侧): 过长由 CSS mask 淡出省略
+    function setFindSum(id, text, isDefault) {
+        var el = $(id);
+        if (!el) return;
+        el.textContent = text;
+        el.title = text;
+        el.classList.toggle('is-default', !!isDefault);
+    }
+    function renderFindFieldSummaries() {
+        var names = findState.inst.slice().sort(function (a, b) { return a - b; }).map(findInstLabel);
+        setFindSum('find-inst-sum', names.length ? names.join('、') : i18nText('全部'), !names.length);
+        setFindSum('find-key-single-sum',
+            findState.keySingle === null ? i18nText('不限') : findKeyLabel(findState.keySingle),
+            findState.keySingle === null);
+        setFindSum('find-key-range-start-sum',
+            findState.keyRange[0] === null ? i18nText('不限') : findKeyLabel(findState.keyRange[0]),
+            findState.keyRange[0] === null);
+        setFindSum('find-key-range-end-sum',
+            findState.keyRange[1] === null ? i18nText('不限') : findKeyLabel(findState.keyRange[1]),
+            findState.keyRange[1] === null);
+        setFindSum('find-replace-inst-sum',
+            findState.repInst === null ? i18nText('不变') : findInstLabel(findState.repInst),
+            findState.repInst === null);
+        setFindSum('find-replace-key-sum',
+            findState.repKey === null ? i18nText('不变') : findKeyLabel(findState.repKey),
+            findState.repKey === null);
     }
 
     function buildFindPanels() {
-        fillFindKeySelect($('find-key-single-select'), true);
-        fillFindKeySelect($('find-key-range-start'), true);
-        fillFindKeySelect($('find-key-range-end'), true);
-        buildFindInstrumentChips();
-        // 替换区选择框
-        var repInst = $('find-replace-instrument');
-        if (repInst) {
-            repInst.innerHTML = '';
-            var e0 = document.createElement('option');
-            e0.value = '';
-            e0.textContent = '不变';
-            repInst.appendChild(e0);
-            var names = getInstrumentNames();
-            for (var i = 0; i < names.length; i++) {
-                var o = document.createElement('option');
-                o.value = i;
-                o.textContent = names[i];
-                repInst.appendChild(o);
-            }
-        }
-        var repKey = $('find-replace-key');
-        if (repKey) {
-            repKey.innerHTML = '';
-            var e1 = document.createElement('option');
-            e1.value = '';
-            e1.textContent = '不变';
-            repKey.appendChild(e1);
-            for (var k = 0; k < FIND_MAX_KEYS; k++) {
-                var ok = document.createElement('option');
-                ok.value = k;
-                ok.textContent = findKeyLabel(k) + ' (' + k + ')';
-                repKey.appendChild(ok);
-            }
-        }
+        renderFindFieldSummaries();
     }
 
     function syncFindPanelUI() {
@@ -3156,11 +3329,8 @@
         if (velMinEl) velMinEl.value = findState.velMin;
         if (velMaxEl) velMaxEl.value = findState.velMax;
         if (velEqEl) velEqEl.value = (findState.velSingle === null || findState.velSingle === undefined) ? '' : findState.velSingle;
-        var keySel = $('find-key-single-select');
-        if (keySel) keySel.value = (findState.keySingle === null || findState.keySingle === undefined) ? '' : findState.keySingle;
-        var keyStart = $('find-key-range-start'), keyEnd = $('find-key-range-end');
-        if (keyStart) keyStart.value = (findState.keyRange[0] === null || findState.keyRange[0] === undefined) ? '' : findState.keyRange[0];
-        if (keyEnd) keyEnd.value = (findState.keyRange[1] === null || findState.keyRange[1] === undefined) ? '' : findState.keyRange[1];
+        // 音色/音调字段摘要 (选择按钮右侧)
+        renderFindFieldSummaries();
         // 查找/替换模式
         var modeBtns = document.querySelectorAll('.find-modes .find-mode');
         for (var m = 0; m < modeBtns.length; m++) {
@@ -3191,6 +3361,7 @@
 
     function closeFindPanel() {
         var panel = $('find-panel');
+        closeFindPickPop();
         if (!panel) return;
         panel.style.display = 'none';
         panel.setAttribute('aria-hidden', 'true');
@@ -3288,11 +3459,9 @@
 
     function getReplaceValues() {
         var vals = {};
-        var instSel = $('find-replace-instrument');
-        var keySel = $('find-replace-key');
+        if (findState.repInst !== null) vals.instrument = findState.repInst;
+        if (findState.repKey !== null) vals.key = findState.repKey;
         var velInput = $('find-replace-velocity');
-        if (instSel && instSel.value !== '') vals.instrument = parseInt(instSel.value, 10);
-        if (keySel && keySel.value !== '') vals.key = parseInt(keySel.value, 10);
         if (velInput && velInput.value !== '') {
             var v = parseInt(velInput.value, 10);
             if (!isNaN(v)) vals.velocity = clampNum(v, 1, 100, 100);
@@ -3387,24 +3556,32 @@
                 runFind();
             });
         }
-        // 键值输入
-        var keySel = $('find-key-single-select');
-        if (keySel) keySel.addEventListener('change', function() {
-            findState.keySingle = this.value === '' ? null : parseInt(this.value, 10);
-            runFind();
-        });
-        var keyStart = $('find-key-range-start');
-        if (keyStart) keyStart.addEventListener('change', function() {
-            findState.keyRange[0] = this.value === '' ? null : parseInt(this.value, 10);
-            syncFindPanelUI();
-            runFind();
-        });
-        var keyEnd = $('find-key-range-end');
-        if (keyEnd) keyEnd.addEventListener('change', function() {
-            findState.keyRange[1] = this.value === '' ? null : parseInt(this.value, 10);
-            syncFindPanelUI();
-            runFind();
-        });
+        // 音色 / 音调 悬浮选择器入口
+        var instBtn = $('find-inst-btn');
+        if (instBtn) instBtn.addEventListener('click', function(e) { e.stopPropagation(); openFindInstPick(); });
+        var keySingleBtn = $('find-key-single-btn');
+        if (keySingleBtn) keySingleBtn.addEventListener('click', function(e) { e.stopPropagation(); openFindKeyPick('single'); });
+        var keyRangeStartBtn = $('find-key-range-start-btn');
+        if (keyRangeStartBtn) keyRangeStartBtn.addEventListener('click', function(e) { e.stopPropagation(); openFindKeyPick('rangeStart'); });
+        var keyRangeEndBtn = $('find-key-range-end-btn');
+        if (keyRangeEndBtn) keyRangeEndBtn.addEventListener('click', function(e) { e.stopPropagation(); openFindKeyPick('rangeEnd'); });
+        var repInstBtn = $('find-replace-inst-btn');
+        if (repInstBtn) repInstBtn.addEventListener('click', function(e) { e.stopPropagation(); openFindReplaceInstPick(); });
+        var repKeyBtn = $('find-replace-key-btn');
+        if (repKeyBtn) repKeyBtn.addEventListener('click', function(e) { e.stopPropagation(); openFindKeyPick('replace'); });
+        // 点击悬浮窗与触发按钮以外的区域 / ESC → 收起悬浮窗
+        document.addEventListener('mousedown', function(e) {
+            var pop = findPickPop();
+            if (!pop || pop.style.display === 'none') return;
+            if (pop.contains(e.target)) return;
+            if (pickAnchor && pickAnchor.contains(e.target)) return;
+            closeFindPickPop();
+        }, true);
+        document.addEventListener('keydown', function(e) {
+            if (e.key !== 'Escape') return;
+            var pop = findPickPop();
+            if (pop && pop.style.display !== 'none') { e.stopPropagation(); closeFindPickPop(); }
+        }, true);
         // 音量单个数值
         var velEq = $('find-vel-eq');
         if (velEq) velEq.addEventListener('change', function() {
@@ -3432,31 +3609,7 @@
                 runFind();
             });
         });
-        // 全选/清除音色
-        var instAll = $('find-inst-all');
-        if (instAll) instAll.addEventListener('click', function(e) {
-            e.stopPropagation();
-            var wrap = $('find-cond-instruments');
-            var btns = wrap ? wrap.querySelectorAll('.find-mini-btn') : [];
-            findState.inst.length = 0;
-            for (var a = 0; a < btns.length; a++) {
-                var instVal = parseInt(btns[a].getAttribute('data-inst'), 10);
-                if (!isNaN(instVal)) {
-                    btns[a].classList.add('active');
-                    findState.inst.push(instVal);
-                }
-            }
-            runFind();
-        });
-        var instClear = $('find-inst-clear');
-        if (instClear) instClear.addEventListener('click', function(e) {
-            e.stopPropagation();
-            findState.inst.length = 0;
-            var wrap = $('find-cond-instruments');
-            var btns = wrap ? wrap.querySelectorAll('.find-mini-btn') : [];
-            for (var c = 0; c < btns.length; c++) btns[c].classList.remove('active');
-            runFind();
-        });
+        // 全选/清除音色已移入悬浮窗内 (多选模式)
         // 重置 / 清空条件
         var resetBtn = $('find-reset');
         if (resetBtn) resetBtn.addEventListener('click', function(e) {
@@ -3475,6 +3628,7 @@
         var clearBtn = $('find-clear-all');
         if (clearBtn) clearBtn.addEventListener('click', function(e) {
             e.stopPropagation();
+            findState.inst.length = 0;
             findState.keySingle = null;
             findState.keyRange = [null, null];
             findState.velSingle = null;
@@ -3495,6 +3649,59 @@
         if (repCurrent) repCurrent.addEventListener('click', function(e) { e.stopPropagation(); findReplaceCurrent(); });
         var repAll = $('find-replace-all');
         if (repAll) repAll.addEventListener('click', function(e) { e.stopPropagation(); findReplaceAll(); });
+        initFindDrag();
+    }
+
+    // 面板拖拽 (标题栏已有 cursor:move 提示, 此处补齐实际拖动行为; 拖动时收起悬浮窗)
+    function initFindDrag() {
+        var header = $('find-panel-header');
+        var panel = $('find-panel');
+        if (!header || !panel) return;
+        function isCloseTarget(t) {
+            return t && (t.id === 'find-panel-close' || (t.closest && t.closest('.find-panel-close')));
+        }
+        function begin(clientX, clientY) {
+            closeFindPickPop();
+            var r = panel.getBoundingClientRect();
+            // 从 right 定位切换到 left 定位, 避免拖动时跳变
+            panel.style.left = Math.round(r.left) + 'px';
+            panel.style.top = Math.round(r.top) + 'px';
+            panel.style.right = 'auto';
+            var startX = clientX, startY = clientY;
+            var origX = r.left, origY = r.top;
+            return function(mx, my) {
+                var maxX = window.innerWidth - panel.offsetWidth - 4;
+                var maxY = window.innerHeight - 40;
+                panel.style.left = Math.max(4, Math.min(maxX, origX + mx - startX)) + 'px';
+                panel.style.top = Math.max(4, Math.min(maxY, origY + my - startY)) + 'px';
+            };
+        }
+        header.addEventListener('mousedown', function(e) {
+            if (isCloseTarget(e.target)) return;
+            e.preventDefault();
+            var move = begin(e.clientX, e.clientY);
+            function onMove(ev) { move(ev.clientX, ev.clientY); }
+            function onUp() {
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+            }
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        });
+        header.addEventListener('touchstart', function(e) {
+            if (isCloseTarget(e.target)) return;
+            var t = e.touches[0];
+            if (!t) return;
+            e.preventDefault();
+            var move = begin(t.clientX, t.clientY);
+            function onMove(ev) { var mt = ev.touches[0]; if (mt) move(mt.clientX, mt.clientY); }
+            function onUp() {
+                document.removeEventListener('touchmove', onMove);
+                document.removeEventListener('touchend', onUp);
+            }
+            document.addEventListener('touchmove', onMove, { passive: true });
+            document.addEventListener('touchend', onUp);
+        });
     }
 
     function switchTool(tool) {
@@ -11511,14 +11718,26 @@
             _preader.readAsArrayBuffer(state._midiFile);
         }
 
-        // 新文件时重置延音轨道选择（从已保存的设置恢复，否则为空）
-        _sustainTrackIndices = [];
-        try {
-            var saved = JSON.parse(localStorage.getItem('midi_import_settings'));
-            if (saved && Array.isArray(saved.sustain_track_indices)) {
-                _sustainTrackIndices = saved.sustain_track_indices.slice();
+        // 新文件时重置延音轨道选择
+        // 1) 已保存过非空选择 → 沿用用户的选择
+        // 2) 否则 → 依据本文件 GM 音色自动判定延音轨道 (持续型音色默认启用延音)
+        var _savedMidiSettings = null;
+        try { _savedMidiSettings = JSON.parse(localStorage.getItem('midi_import_settings')); } catch(e) {}
+        var _savedSustain = (_savedMidiSettings && Array.isArray(_savedMidiSettings.sustain_track_indices))
+            ? _savedMidiSettings.sustain_track_indices.slice() : null;
+        if (_savedSustain && _savedSustain.length > 0) {
+            _sustainTrackIndices = _savedSustain;
+        } else {
+            _sustainTrackIndices = detectSustainTrackIndices(info);
+            // 自动判定到延音轨道, 且"延音处理"当前为不保留 (或未保存过) 时, 默认切换为"按轨道选择"
+            if (_sustainTrackIndices.length > 0) {
+                var _knlSel = $('midi-keep-note-length');
+                var _savedKnl = _savedMidiSettings ? _savedMidiSettings.keep_note_length : undefined;
+                if (_knlSel && _knlSel.value === 'none' && (!_savedKnl || _savedKnl === 'none')) {
+                    _knlSel.value = 'sustain';
+                }
             }
-        } catch(e) {}
+        }
         updateSustainTracksUI();
         updateSnapGridInfo();
 
@@ -11683,25 +11902,31 @@
                 }
                 var output = outputs.values().next().value;
                 var ch = (channel || 0) & 0x0F;
-                // 发送 program change（使用原 MIDI 通道）
+                // 先发送 bank select (GM bank 0) + program change，再延迟发音，
+                // 确保合成器在收到 note-on 前已完成音色切换（避免听到上一个音色）
+                if (ch !== 9) {
+                    try { output.send([0xB0 | ch, 0, 0]); } catch(e) {}
+                    try { output.send([0xB0 | ch, 32, 0]); } catch(e) {}
+                }
                 try {
                     output.send([0xC0 | ch, program & 0x7F]);
                 } catch(e) {}
                 notes.forEach(function(note, index) {
+                    var t = 80 + index * 200;
                     var timeoutOn = setTimeout(function() {
                         try {
                             output.send([0x90 | ch, note & 0x7F, 100]);
                         } catch(e) {}
-                    }, index * 200);
+                    }, t);
                     var timeoutOff = setTimeout(function() {
                         try {
                             output.send([0x80 | ch, note & 0x7F, 0]);
                         } catch(e) {}
-                    }, index * 200 + 180);
+                    }, t + 180);
                     _midiPreviewNotes.push({ timeout: timeoutOn });
                     _midiPreviewNotes.push({ timeout: timeoutOff });
                 });
-                var stopT = setTimeout(stopMidiPreview, notes.length * 200 + 300);
+                var stopT = setTimeout(stopMidiPreview, 80 + notes.length * 200 + 300);
                 _midiPreviewTimeout = stopT;
             }).catch(function(err) {
                 console.warn('Web MIDI API 失败:', err);
@@ -12022,6 +12247,35 @@
                 prow[j].classList.toggle('channel-excluded', percExcluded);
             }
         }
+    }
+
+    // 根据 MIDI 音色自动判定需要启用延音的轨道
+    // 规则: 轨道所含通道中任一为持续型 GM 音色 (弦乐/管风琴/合唱/管乐/铜管/合成 Pad 等),
+    //       则该轨道默认加入延音轨道列表 (依据 GM_SUSTAIN_PROGRAMS)
+    function detectSustainTrackIndices(info) {
+        var result = [];
+        if (!info) return result;
+        var sustainMap = (window.NBSClient && NBSClient.GM_SUSTAIN_PROGRAMS) || null;
+        if (!sustainMap) return result;
+        // 通道 → program 映射 (排除打击乐通道)
+        var chProgram = {};
+        var channels = info.channels || [];
+        for (var i = 0; i < channels.length; i++) {
+            if (channels[i].is_percussion) continue;
+            chProgram[channels[i].channel] = channels[i].program || 0;
+        }
+        var tracks = info.tracks || [];
+        for (var t = 0; t < tracks.length; t++) {
+            var tl = tracks[t].channels || [];
+            for (var c = 0; c < tl.length; c++) {
+                var prog = chProgram[tl[c]];
+                if (prog !== undefined && sustainMap[prog]) {
+                    result.push(tracks[t].index);
+                    break;
+                }
+            }
+        }
+        return result;
     }
 
     // 延音轨道选择：更新“选择延音轨道”按钮和已选数量显示
@@ -13952,6 +14206,7 @@
         for (var i = 0; i < _timbrePreviewNodes.length; i++) {
             var node = _timbrePreviewNodes[i];
             if (!node) continue;
+            if (node.timeout) { try { clearTimeout(node.timeout); } catch(e) {} }
             if (node.osc) { try { node.osc.stop(); } catch(e) {} }
             if (node.gain) { try { node.gain.disconnect(); } catch(e) {} }
             if (node.noteOff) { try { node.noteOff(); } catch(e) {} }
@@ -14033,14 +14288,23 @@
                 if (outputs && outputs.size > 0) {
                     var output = outputs.values().next().value;
                     var ch = (channel || 0) & 0x0F;
+                    // 先发送 bank select (GM bank 0) + program change，确保合成器
+                    // 在收到 note-on 前已切换到目标音色；延迟 80ms 发音避免听到上一个音色
+                    if (ch !== 9) {
+                        try { output.send([0xB0 | ch, 0, 0]); } catch(e) {}
+                        try { output.send([0xB0 | ch, 32, 0]); } catch(e) {}
+                    }
                     try { output.send([0xC0 | ch, program & 0x7F]); } catch(e) {}
-                    try { output.send([0x90 | ch, midiNote & 0x7F, 100]); } catch(e) {}
+                    var tOn = setTimeout(function() {
+                        try { output.send([0x90 | ch, midiNote & 0x7F, 100]); } catch(e) {}
+                    }, 80);
                     _timbrePreviewNodes.push({
+                        timeout: tOn,
                         noteOff: function() {
                             try { output.send([0x80 | ch, midiNote & 0x7F, 0]); } catch(e) {}
                         }
                     });
-                    _timbrePreviewTimeout = setTimeout(stopTimbrePreview, 900);
+                    _timbrePreviewTimeout = setTimeout(stopTimbrePreview, 950);
                     return;
                 }
                 previewMidiNoteTinySynth(channel, midiNote, program);
@@ -14242,6 +14506,78 @@
         return null;
     }
 
+    // ============ 音色拟合 · 推荐选项 (档位缩放拟合槽数) ============
+    // 每个建槽都会为每个源音符额外叠加一个音符 (跨 layer 堆叠), 因此填满 3 槽 = 音符数 x3。
+    // 档位用于缩放默认填充的槽数: 少音符=1 / 适量=2 / 多音符=3, 且不超过该音色实际设计出的替代槽数。
+    var FITTING_LEVEL_KEY = 'webnbs_fitting_level';
+    var FITTING_LEVEL_CAP = { few: 1, moderate: 2, many: 3 };
+    var _fittingLevel = null;
+
+    function loadFittingLevel() {
+        if (_fittingLevel) return _fittingLevel;
+        var v = null;
+        try { v = localStorage.getItem(FITTING_LEVEL_KEY); } catch (e) {}
+        _fittingLevel = (v === 'few' || v === 'moderate' || v === 'many') ? v : 'moderate';
+        return _fittingLevel;
+    }
+
+    function saveFittingLevel(v) {
+        _fittingLevel = v;
+        try { localStorage.setItem(FITTING_LEVEL_KEY, v); } catch (e) {}
+    }
+
+    // 按档位 + GM 设计组合计算旋律行的 3 个默认槽
+    //   GM_FITTING_SLOTS[prog] = [highSub, lowSub] 决定该音色的有效替代槽数 (按乐器自动决定)
+    //   档位 cap 做缩放; 不足时按设计裁剪, 不留空槽 (不是每个槽都要填满)
+    function computeFittingSlots(prog, mainInst) {
+        var cap = FITTING_LEVEL_CAP[loadFittingLevel()] || 2;
+        var fit = (window.NBSClient && NBSClient.GM_FITTING_SLOTS && NBSClient.GM_FITTING_SLOTS[prog]) || null;
+        var subs = [];
+        if (fit) {
+            for (var i = 0; i < 2; i++) {
+                var s = fit[i];
+                if (s >= 0 && s !== mainInst && subs.indexOf(s) < 0) subs.push(s);
+            }
+        }
+        var use = Math.min(cap, 1 + subs.length);
+        var slots = [mainInst];
+        for (var k = 1; k < use; k++) slots.push(subs[k - 1]);
+        while (slots.length < 3) slots.push(-1);
+        return slots;
+    }
+
+    function updateFittingLevelUI() {
+        var lv = loadFittingLevel();
+        var btns = document.querySelectorAll('#midi-fitting-level .fitting-level-btn');
+        for (var i = 0; i < btns.length; i++) {
+            btns[i].classList.toggle('active', btns[i].getAttribute('data-level') === lv);
+        }
+    }
+
+    function initFittingLevelControl() {
+        updateFittingLevelUI();
+        var wrap = $('midi-fitting-level');
+        if (!wrap || wrap.dataset.levelBound) return;
+        wrap.dataset.levelBound = '1';
+        wrap.addEventListener('click', function(e) {
+            var btn = e.target && e.target.closest ? e.target.closest('.fitting-level-btn') : null;
+            if (!btn || !wrap.contains(btn)) return;
+            var lv = btn.getAttribute('data-level');
+            if (!lv || lv === loadFittingLevel()) { updateFittingLevelUI(); return; }
+            saveFittingLevel(lv);
+            updateFittingLevelUI();
+            // 按档位重置全部 (旋律) 音色槽: 清除已保存的旋律拟合, 重建拟合表
+            var saved = state._midiTimbreFittingSaved || loadSavedTimbreFitting();
+            var drums = saved.drums || {};
+            saveTimbreFitting({}, drums);
+            state._midiTimbreFittingSaved = { programs: {}, drums: drums };
+            if (state._midiInfo) {
+                buildTimbreFittingRows(state._midiInfo);
+                fillChannelInstrumentNames();
+            }
+        });
+    }
+
 function buildTimbreFittingRows(info) {
         var savedFitting = loadSavedTimbreFitting();
         state._midiTimbreFittingSaved = savedFitting;
@@ -14317,7 +14653,15 @@ function buildTimbreFittingRows(info) {
             var isPercussion = rowData.type === 'percussion';
             var idKey = isPercussion ? (rowData.drumNote || 0) : (rowData.program || 0);
             var savedSlots = getSavedFittingSlots(savedFitting, isPercussion ? null : idKey, isPercussion ? idKey : null);
-            var defaultSlots = savedSlots || [rowData.defaultInstrument, -1, -1];
+            var defaultSlots;
+            if (savedSlots) {
+                defaultSlots = savedSlots;
+            } else if (isPercussion) {
+                defaultSlots = [rowData.defaultInstrument, -1, -1];
+            } else {
+                // 旋律: 按推荐档位 + GM 设计组合计算默认槽 (档位越低叠加音符越少)
+                defaultSlots = computeFittingSlots(rowData.program || 0, rowData.defaultInstrument);
+            }
 
             var row = document.createElement('tr');
             row.className = 'timbre-main-row';

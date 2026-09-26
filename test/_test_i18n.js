@@ -87,21 +87,48 @@ const compressKeys = [
   '按所选「压缩等级」删除存在感低的音符，压缩率更高，质量损失随等级增加。',
 ];
 const nineLocales = ['en-US', 'es-ES', 'pt-BR', 'ru-RU', 'de-DE', 'fr-FR', 'ja-JP', 'ko-KR', 'id-ID'];
-// 基准: 先取 en-US 渲染结果, 用于识别「回退 en-US 但本语言缺词条」
-I18n.apply('en-US');
-const enTexts = {};
-for (const k of compressKeys) enTexts[k] = I18n.translate(k);
 console.log('\n== 压缩弹窗文案 (9 种非中文语言) ==');
 for (const loc of nineLocales) {
   I18n.apply(loc);
-  const missing = compressKeys.filter((k) => {
-    const out = I18n.translate(k);
-    if (out === k) return true;                                  // 回退中文原文 = 未翻译
-    return loc !== 'en-US' && out === enTexts[k];                 // 回退英文 = 本语言缺词条
-  });
+  const missing = compressKeys.filter((k) => !I18n.has(k));
   console.log(`  [${loc}] ${compressKeys.length - missing.length}/${compressKeys.length}` +
     (missing.length ? ' 缺: ' + missing.join(' / ') : ' OK'));
-  fail += missing.length;
+  if (missing.length) fail++;
 }
 console.log('\n=== 合计失败:', fail, '| ja-JP 可疑:', warn, '===');
+
+// ===== 查找/替换面板文案 (含新悬浮选择器) : 覆盖全部 9 种非中文语言 =====
+const findKeys = [
+  '查找条件', '选择音色', '选择音调', '起点', '终点', '不限', '不变', '清空条件', '全部',
+  '音色', '音调', '音量', '单个', '范围', '数值', '重置', '全选', '清除',
+  '结果', '全部选择', '替换为', '替换当前', '全部替换', '查找', '替换',
+];
+const nineLocales2 = ['en-US', 'es-ES', 'pt-BR', 'ru-RU', 'de-DE', 'fr-FR', 'ja-JP', 'ko-KR', 'id-ID'];
+console.log('\n== 查找面板文案 (9 种非中文语言, 按本语言词典判定) ==');
+for (const loc of nineLocales2) {
+  I18n.apply(loc);
+  const missing = findKeys.filter((k) => !I18n.has(k));
+  console.log(`  [${loc}] ${findKeys.length - missing.length}/${findKeys.length}` +
+    (missing.length ? ' 缺: ' + missing.join(' / ') : ' OK'));
+  if (missing.length) fail++;
+}
+console.log('\n=== 最终失败:', fail, '| ja-JP 可疑:', warn, '===');
+
+// ===== 音色拟合「推荐选项」档位控件文案 : 覆盖全部 9 种非中文语言 =====
+const fittingLevelKeys = [
+  '推荐选项', '少音符', '适量', '多音符',
+  '按档位缩放音色拟合槽数：档位越低叠加音符越少，越省性能',
+  '只保留主音色，叠加音符最少，最不容易卡',
+  '主音色 + 1 个替代音色，兼顾音色与性能（默认）',
+  '用满设计好的音色槽，最贴近原 MIDI，但音符最多',
+];
+console.log('\n== 音色拟合推荐选项文案 (9 种非中文语言) ==');
+for (const loc of nineLocales) {
+  I18n.apply(loc);
+  const missing = fittingLevelKeys.filter((k) => !I18n.has(k));
+  console.log(`  [${loc}] ${fittingLevelKeys.length - missing.length}/${fittingLevelKeys.length}` +
+    (missing.length ? ' 缺: ' + missing.join(' / ') : ' OK'));
+  if (missing.length) fail++;
+}
+console.log('\n=== 最终失败:', fail, '| ja-JP 可疑:', warn, '===');
 process.exit(fail ? 1 : 0);

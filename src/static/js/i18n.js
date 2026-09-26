@@ -1955,5 +1955,194 @@
         if (Object.prototype.hasOwnProperty.call(_settingsExtraI18n, _nl)) Object.assign(UI_TEXT[_nl], _settingsExtraI18n[_nl]);
     }
 
-    window.WebNBSI18n = { init: init, apply: apply, getLocale: function() { return current; }, t: t, translate: translate, supported: SUPPORTED.slice() };
+    // ============ 查找/替换面板「悬浮选择器」词条 (9 种非中文语言) ============
+    var _findPickerI18n = {
+        'en-US': {
+            '查找条件': 'Search criteria', '选择音色': 'Select timbre', '选择音调': 'Select pitch',
+            '起点': 'From', '终点': 'To', '不限': 'No limit', '不变': 'Unchanged',
+            '清空条件': 'Clear criteria', '全部': 'All'
+        },
+        'ja-JP': {
+            '查找条件': '検索条件', '选择音色': '音色を選択', '选择音调': '音程を選択',
+            '起点': '開始', '终点': '終了', '不限': '指定なし', '不变': '変更なし',
+            '清空条件': '条件をクリア', '全部': 'すべて'
+        },
+        'ko-KR': {
+            '查找条件': '검색 조건', '选择音色': '음색 선택', '选择音调': '음높이 선택',
+            '起点': '시작', '终点': '끝', '不限': '제한 없음', '不变': '변경 안 함',
+            '清空条件': '조건 지우기', '全部': '모두'
+        },
+        'es-ES': {
+            '查找条件': 'Criterios de búsqueda', '选择音色': 'Seleccionar timbre', '选择音调': 'Seleccionar tono',
+            '起点': 'Inicio', '终点': 'Fin', '不限': 'Sin límite', '不变': 'Sin cambios',
+            '清空条件': 'Borrar criterios', '全部': 'Todo'
+        },
+        'pt-BR': {
+            '查找条件': 'Critérios de busca', '选择音色': 'Selecionar timbre', '选择音调': 'Selecionar tom',
+            '起点': 'Início', '终点': 'Fim', '不限': 'Sem limite', '不变': 'Inalterado',
+            '清空条件': 'Limpar critérios', '全部': 'Tudo'
+        },
+        'ru-RU': {
+            '查找条件': 'Условия поиска', '选择音色': 'Выбрать тембр', '选择音调': 'Выбрать высоту',
+            '起点': 'Начало', '终点': 'Конец', '不限': 'Без ограничений', '不变': 'Без изменений',
+            '清空条件': 'Очистить условия', '全部': 'Всё'
+        },
+        'de-DE': {
+            '查找条件': 'Suchkriterien', '选择音色': 'Klangfarbe wählen', '选择音调': 'Tonhöhe wählen',
+            '起点': 'Von', '终点': 'Bis', '不限': 'Keine Einschränkung', '不变': 'Unverändert',
+            '清空条件': 'Kriterien löschen', '全部': 'Alle'
+        },
+        'fr-FR': {
+            '查找条件': 'Critères de recherche', '选择音色': 'Choisir le timbre', '选择音调': 'Choisir la hauteur',
+            '起点': 'Début', '终点': 'Fin', '不限': 'Sans limite', '不变': 'Inchangé',
+            '清空条件': 'Effacer les critères', '全部': 'Tout'
+        },
+        'id-ID': {
+            '查找条件': 'Kriteria pencarian', '选择音色': 'Pilih timbre', '选择音调': 'Pilih nada',
+            '起点': 'Awal', '终点': 'Akhir', '不限': 'Tanpa batas', '不变': 'Tidak diubah',
+            '清空条件': 'Hapus kriteria', '全部': 'Semua'
+        }
+    };
+    for (_nl in _findPickerI18n) {
+        if (Object.prototype.hasOwnProperty.call(_findPickerI18n, _nl)) Object.assign(UI_TEXT[_nl], _findPickerI18n[_nl]);
+    }
+
+    // 查找/替换面板既有文案补全 (此前仅 en-US 有词条, 其余 8 语言会回退英文)
+    var _findPanelI18n = {
+        'en-US': {
+            '查找': 'Find', '替换': 'Replace', '单个': 'Single', '范围': 'Range', '数值': 'Value',
+            '结果': 'Results', '全部选择': 'Select all', '替换为': 'Replace with',
+            '替换当前': 'Replace current', '全部替换': 'Replace all'
+        },
+        'ja-JP': {
+            '查找': '検索', '替换': '置換', '单个': '単一', '范围': '範囲', '数值': '数値',
+            '结果': '結果', '全部选择': 'すべて選択', '替换为': '置換後',
+            '替换当前': '現在を置換', '全部替换': 'すべて置換'
+        },
+        'ko-KR': {
+            '查找': '찾기', '替换': '바꾸기', '单个': '단일', '范围': '범위', '数值': '값',
+            '结果': '결과', '全部选择': '모두 선택', '替换为': '다음으로 바꾸기',
+            '替换当前': '현재 바꾸기', '全部替换': '모두 바꾸기'
+        },
+        'es-ES': {
+            '查找': 'Buscar', '替换': 'Reemplazar', '单个': 'Único', '范围': 'Rango', '数值': 'Valor',
+            '结果': 'Resultados', '全部选择': 'Seleccionar todo', '替换为': 'Reemplazar por',
+            '替换当前': 'Reemplazar actual', '全部替换': 'Reemplazar todo'
+        },
+        'pt-BR': {
+            '查找': 'Buscar', '替换': 'Substituir', '单个': 'Único', '范围': 'Intervalo', '数值': 'Valor',
+            '结果': 'Resultados', '全部选择': 'Selecionar tudo', '替换为': 'Substituir por',
+            '替换当前': 'Substituir atual', '全部替换': 'Substituir tudo'
+        },
+        'ru-RU': {
+            '查找': 'Поиск', '替换': 'Заменить', '单个': 'Один', '范围': 'Диапазон', '数值': 'Значение',
+            '结果': 'Результаты', '全部选择': 'Выбрать всё', '替换为': 'Заменить на',
+            '替换当前': 'Заменить текущий', '全部替换': 'Заменить всё'
+        },
+        'de-DE': {
+            '查找': 'Suchen', '替换': 'Ersetzen', '单个': 'Einzeln', '范围': 'Bereich', '数值': 'Wert',
+            '结果': 'Ergebnisse', '全部选择': 'Alle auswählen', '替换为': 'Ersetzen durch',
+            '替换当前': 'Aktuelles ersetzen', '全部替换': 'Alle ersetzen'
+        },
+        'fr-FR': {
+            '查找': 'Rechercher', '替换': 'Remplacer', '单个': 'Unique', '范围': 'Plage', '数值': 'Valeur',
+            '结果': 'Résultats', '全部选择': 'Tout sélectionner', '替换为': 'Remplacer par',
+            '替换当前': 'Remplacer l’actuel', '全部替换': 'Tout remplacer'
+        },
+        'id-ID': {
+            '查找': 'Cari', '替换': 'Ganti', '单个': 'Tunggal', '范围': 'Rentang', '数值': 'Nilai',
+            '结果': 'Hasil', '全部选择': 'Pilih semua', '替换为': 'Ganti dengan',
+            '替换当前': 'Ganti saat ini', '全部替换': 'Ganti semua'
+        }
+    };
+    for (_nl in _findPanelI18n) {
+        if (Object.prototype.hasOwnProperty.call(_findPanelI18n, _nl)) Object.assign(UI_TEXT[_nl], _findPanelI18n[_nl]);
+    }
+
+    // 音色拟合「推荐选项」档位控件文案
+    var _fittingLevelI18n = {
+        'en-US': {
+            '推荐选项': 'Recommended',
+            '少音符': 'Fewer notes', '适量': 'Balanced', '多音符': 'More notes',
+            '按档位缩放音色拟合槽数：档位越低叠加音符越少，越省性能': 'Scales timbre-fitting slots by level: lower levels stack fewer notes for better performance',
+            '只保留主音色，叠加音符最少，最不容易卡': 'Primary timbre only; fewest stacked notes, least likely to lag',
+            '主音色 + 1 个替代音色，兼顾音色与性能（默认）': 'Primary + one substitute timbre; balances fidelity and performance (default)',
+            '用满设计好的音色槽，最贴近原 MIDI，但音符最多': 'Uses all designed timbre slots; closest to the original MIDI but most notes'
+        },
+        'ja-JP': {
+            '推荐选项': 'おすすめ',
+            '少音符': '音符少なめ', '适量': '標準', '多音符': '音符多め',
+            '按档位缩放音色拟合槽数：档位越低叠加音符越少，越省性能': 'レベルに応じて音色フィットのスロット数を調整：低いほど重ねる音符が減り軽くなります',
+            '只保留主音色，叠加音符最少，最不容易卡': '主音色のみ。重ねる音符が最少で最も軽い',
+            '主音色 + 1 个替代音色，兼顾音色与性能（默认）': '主音色+代替1つ。音色と性能のバランス（既定）',
+            '用满设计好的音色槽，最贴近原 MIDI，但音符最多': '設計済みのスロットを全て使用。原曲に最も近いが音符は最多'
+        },
+        'ko-KR': {
+            '推荐选项': '추천',
+            '少音符': '적은 음', '适量': '적당', '多音符': '많은 음',
+            '按档位缩放音色拟合槽数：档位越低叠加音符越少，越省性能': '단계에 따라 음색 피팅 슬롯 수를 조정: 단계가 낮을수록 겹치는 음이 줄어 가볍습니다',
+            '只保留主音色，叠加音符最少，最不容易卡': '주 음색만 유지. 겹치는 음이 가장 적어 끊김이 적음',
+            '主音色 + 1 个替代音色，兼顾音色与性能（默认）': '주 음색 + 대체 1개. 음색과 성능의 균형(기본)',
+            '用满设计好的音色槽，最贴近原 MIDI，但音符最多': '설계된 슬롯을 모두 사용. 원본 MIDI에 가장 가깝지만 음이 가장 많음'
+        },
+        'es-ES': {
+            '推荐选项': 'Recomendado',
+            '少音符': 'Menos notas', '适量': 'Equilibrado', '多音符': 'Más notas',
+            '按档位缩放音色拟合槽数：档位越低叠加音符越少，越省性能': 'Escala las ranuras de timbre según el nivel: a menor nivel, menos notas superpuestas y mejor rendimiento',
+            '只保留主音色，叠加音符最少，最不容易卡': 'Solo el timbre principal; menos notas superpuestas, menos bloqueos',
+            '主音色 + 1 个替代音色，兼顾音色与性能（默认）': 'Timbre principal + uno sustituto; equilibra fidelidad y rendimiento (predeterminado)',
+            '用满设计好的音色槽，最贴近原 MIDI，但音符最多': 'Usa todas las ranuras diseñadas; lo más fiel al MIDI original, pero con más notas'
+        },
+        'pt-BR': {
+            '推荐选项': 'Recomendado',
+            '少音符': 'Menos notas', '适量': 'Equilibrado', '多音符': 'Mais notas',
+            '按档位缩放音色拟合槽数：档位越低叠加音符越少，越省性能': 'Escala os slots de timbre pelo nível: níveis menores empilham menos notas e pesam menos',
+            '只保留主音色，叠加音符最少，最不容易卡': 'Apenas o timbre principal; menos notas empilhadas, menos travamentos',
+            '主音色 + 1 个替代音色，兼顾音色与性能（默认）': 'Timbre principal + 1 substituto; equilibra fidelidade e desempenho (padrão)',
+            '用满设计好的音色槽，最贴近原 MIDI，但音符最多': 'Usa todos os slots projetados; mais próximo do MIDI original, mas com mais notas'
+        },
+        'ru-RU': {
+            '推荐选项': 'Рекомендуется',
+            '少音符': 'Меньше нот', '适量': 'Умеренно', '多音符': 'Больше нот',
+            '按档位缩放音色拟合槽数：档位越低叠加音符越少，越省性能': 'Масштабирует число слотов тембра по уровню: ниже уровень — меньше наложенных нот и легче нагрузка',
+            '只保留主音色，叠加音符最少，最不容易卡': 'Только основной тембр; минимум наложенных нот, меньше тормозов',
+            '主音色 + 1 个替代音色，兼顾音色与性能（默认）': 'Основной тембр + 1 заменяющий; баланс качества и нагрузки (по умолчанию)',
+            '用满设计好的音色槽，最贴近原 MIDI，但音符最多': 'Использовать все слоты; ближе всего к оригиналу MIDI, но больше всего нот'
+        },
+        'de-DE': {
+            '推荐选项': 'Empfohlen',
+            '少音符': 'Weniger Noten', '适量': 'Ausgewogen', '多音符': 'Mehr Noten',
+            '按档位缩放音色拟合槽数：档位越低叠加音符越少，越省性能': 'Skaliert die Klangfarben-Slots je Stufe: niedrigere Stufe = weniger überlagerte Noten und bessere Leistung',
+            '只保留主音色，叠加音符最少，最不容易卡': 'Nur Grundklang; wenigste überlagerte Noten, am wenigsten Ruckler',
+            '主音色 + 1 个替代音色，兼顾音色与性能（默认）': 'Grundklang + 1 Ersatzklang; Balance aus Klang und Leistung (Standard)',
+            '用满设计好的音色槽，最贴近原 MIDI，但音符最多': 'Nutzt alle vorgesehenen Slots; am nächsten am Original-MIDI, aber meiste Noten'
+        },
+        'fr-FR': {
+            '推荐选项': 'Recommandé',
+            '少音符': 'Moins de notes', '适量': 'Équilibré', '多音符': 'Plus de notes',
+            '按档位缩放音色拟合槽数：档位越低叠加音符越少，越省性能': 'Ajuste le nombre de slots de timbre selon le niveau : plus bas = moins de notes superposées et plus fluide',
+            '只保留主音色，叠加音符最少，最不容易卡': 'Timbre principal seulement ; le moins de notes superposées, le plus fluide',
+            '主音色 + 1 个替代音色，兼顾音色与性能（默认）': 'Timbre principal + 1 substitut ; équilibre fidélité et performance (par défaut)',
+            '用满设计好的音色槽，最贴近原 MIDI，但音符最多': 'Utilise tous les slots prévus ; au plus près du MIDI d’origine, mais le plus de notes'
+        },
+        'id-ID': {
+            '推荐选项': 'Rekomendasi',
+            '少音符': 'Sedikit nada', '适量': 'Seimbang', '多音符': 'Banyak nada',
+            '按档位缩放音色拟合槽数：档位越低叠加音符越少，越省性能': 'Menskalakan slot timbre sesuai tingkat: makin rendah, makin sedikit nada bertumpuk dan makin ringan',
+            '只保留主音色，叠加音符最少，最不容易卡': 'Hanya timbre utama; nada bertumpuk paling sedikit, paling tidak lag',
+            '主音色 + 1 个替代音色，兼顾音色与性能（默认）': 'Timbre utama + 1 pengganti; menyeimbangkan kualitas dan performa (bawaan)',
+            '用满设计好的音色槽，最贴近原 MIDI，但音符最多': 'Memakai semua slot yang dirancang; paling mirip MIDI asli, tapi nada paling banyak'
+        }
+    };
+    for (_nl in _fittingLevelI18n) {
+        if (Object.prototype.hasOwnProperty.call(_fittingLevelI18n, _nl)) Object.assign(UI_TEXT[_nl], _fittingLevelI18n[_nl]);
+    }
+
+    // has(key): 当前语言是否已有该词条 (不含回退)。供覆盖率自检用。
+    function has(key) {
+        var dictionary = UI_TEXT[current] || {};
+        return Object.prototype.hasOwnProperty.call(dictionary, key);
+    }
+
+    window.WebNBSI18n = { init: init, apply: apply, getLocale: function() { return current; }, t: t, translate: translate, has: has, supported: SUPPORTED.slice() };
 })();

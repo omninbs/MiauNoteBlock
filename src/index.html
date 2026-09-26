@@ -22,7 +22,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="static/css/style.css?v=20260913g">
+    <link rel="stylesheet" href="static/css/style.css?v=20260926g">
 </head>
 <body>
 
@@ -387,71 +387,77 @@
                 <button class="find-mode active" data-find-mode="find">查找</button>
                 <button class="find-mode" data-find-mode="replace">替换</button>
             </div>
-            <div class="find-cond-block">
-                <div class="find-cond-title">音色</div>
-                <div class="find-cond-instrument" id="find-cond-instruments"></div>
-                <div class="find-cond-toolbar">
-                    <button class="find-mini-btn" id="find-inst-all">全选</button>
-                    <button class="find-mini-btn" id="find-inst-clear">清除</button>
-                </div>
+            <div class="find-sec-title">查找条件</div>
+            <div class="find-row">
+                <span class="find-row-label">音色</span>
+                <button class="find-pick-btn" id="find-inst-btn" type="button">
+                    <i class="fa-solid fa-sliders"></i><span>选择音色</span>
+                </button>
+                <span class="find-pick-sum" id="find-inst-sum"></span>
             </div>
-            <div class="find-cond-block">
-                <div class="find-cond-title">音调</div>
+            <div class="find-row">
+                <span class="find-row-label">音调</span>
                 <div class="find-seg find-key-mode-seg">
                     <button class="find-seg-btn active" data-key-mode="single">单个</button>
                     <button class="find-seg-btn" data-key-mode="range">范围</button>
                 </div>
-                <div class="find-key-single" id="find-key-single">
-                    <select id="find-key-single-select"></select>
-                </div>
-                <div class="find-key-range" id="find-key-range" style="display:none;">
-                    <select id="find-key-range-start"></select>
-                    <span style="color:var(--text-secondary);">~</span>
-                    <select id="find-key-range-end"></select>
-                </div>
             </div>
-            <div class="find-cond-block">
-                <div class="find-cond-title">音量</div>
+            <div class="find-row find-row-sub find-key-single" id="find-key-single">
+                <button class="find-pick-btn" id="find-key-single-btn" type="button"><span>选择音调</span></button>
+                <span class="find-pick-sum" id="find-key-single-sum"></span>
+            </div>
+            <div class="find-row find-row-sub find-key-range" id="find-key-range" style="display:none;">
+                <button class="find-pick-btn find-pick-btn-sm" id="find-key-range-start-btn" type="button"><span>起点</span></button>
+                <span class="find-pick-sum find-pick-sum-sm" id="find-key-range-start-sum"></span>
+                <span class="find-range-tilde">~</span>
+                <button class="find-pick-btn find-pick-btn-sm" id="find-key-range-end-btn" type="button"><span>终点</span></button>
+                <span class="find-pick-sum find-pick-sum-sm" id="find-key-range-end-sum"></span>
+            </div>
+            <div class="find-row">
+                <span class="find-row-label">音量</span>
                 <div class="find-seg find-vel-mode-seg">
                     <button class="find-seg-btn active" data-vel-mode="single">数值</button>
                     <button class="find-seg-btn" data-vel-mode="range">范围</button>
                 </div>
-                <div class="find-vel-single" id="find-vel-single">
-                    <input class="assist-number" type="number" id="find-vel-eq" min="0" max="100" step="1" placeholder="音量">
-                </div>
-                <div class="find-vel-range" id="find-vel-range" style="display:none;">
-                    <input class="assist-number" type="number" id="find-vel-min" min="0" max="100" step="1">
-                    <span style="color:var(--text-secondary);">~</span>
-                    <input class="assist-number" type="number" id="find-vel-max" min="0" max="100" step="1">
-                </div>
             </div>
-            <div class="find-cond-toolbar">
+            <div class="find-row find-row-sub find-vel-single" id="find-vel-single">
+                <input class="assist-number find-num" type="number" id="find-vel-eq" min="0" max="100" step="1" placeholder="不限">
+            </div>
+            <div class="find-row find-row-sub find-vel-range" id="find-vel-range" style="display:none;">
+                <input class="assist-number find-num" type="number" id="find-vel-min" min="0" max="100" step="1">
+                <span class="find-range-tilde">~</span>
+                <input class="assist-number find-num" type="number" id="find-vel-max" min="0" max="100" step="1">
+            </div>
+            <div class="find-actions">
                 <button class="find-mini-btn" id="find-reset">重置</button>
-                <button class="find-mini-btn" id="find-clear-all">清空条件 (匹配全部)</button>
+                <button class="find-mini-btn" id="find-clear-all">清空条件</button>
             </div>
+            <div class="find-sec-title">结果</div>
             <div class="find-result-bar">
                 <button class="find-nav-btn" id="find-prev" title="上一个">&uarr;</button>
                 <span class="find-count" id="find-result-count">0/0</span>
                 <button class="find-nav-btn" id="find-next" title="下一个">&darr;</button>
-                <button class="find-mini-btn" id="find-select-all">全部选择</button>
+                <button class="find-mini-btn find-select-all" id="find-select-all">全部选择</button>
             </div>
             <div class="find-replace-area" id="find-replace-area" style="display:none;">
-                <div class="find-cond-title">替换为</div>
-                <div class="find-replace-row">
-                    <label>音色</label>
-                    <select id="find-replace-instrument"></select>
+                <div class="find-sec-title">替换为</div>
+                <div class="find-row">
+                    <span class="find-row-label">音色</span>
+                    <button class="find-pick-btn" id="find-replace-inst-btn" type="button"><span>选择音色</span></button>
+                    <span class="find-pick-sum" id="find-replace-inst-sum"></span>
                 </div>
-                <div class="find-replace-row">
-                    <label>音调</label>
-                    <select id="find-replace-key"></select>
+                <div class="find-row">
+                    <span class="find-row-label">音调</span>
+                    <button class="find-pick-btn" id="find-replace-key-btn" type="button"><span>选择音调</span></button>
+                    <span class="find-pick-sum" id="find-replace-key-sum"></span>
                 </div>
-                <div class="find-replace-row">
-                    <label>音量</label>
-                    <input class="assist-number" type="number" id="find-replace-velocity" min="1" max="100" step="1">
+                <div class="find-row">
+                    <span class="find-row-label">音量</span>
+                    <input class="assist-number find-num" type="number" id="find-replace-velocity" min="1" max="100" step="1" placeholder="不变">
                 </div>
-                <div class="find-replace-actions">
+                <div class="find-actions">
                     <button class="find-mini-btn" id="find-replace-current">替换当前</button>
-                    <button class="find-mini-btn" id="find-replace-all">全部替换</button>
+                    <button class="find-mini-btn find-primary" id="find-replace-all">全部替换</button>
                 </div>
             </div>
         </div>
@@ -1100,6 +1106,14 @@
                     <div class="midi-sub-tabs">
                         <button class="midi-sub-tab active" data-subtab="timbre-melody">旋律</button>
                         <button class="midi-sub-tab" data-subtab="timbre-percussion">打击乐</button>
+                        <div class="fitting-level" id="midi-fitting-level">
+                            <span class="fitting-level-label" title="按档位缩放音色拟合槽数：档位越低叠加音符越少，越省性能">推荐选项</span>
+                            <div class="fitting-level-seg">
+                                <button type="button" class="fitting-level-btn" data-level="few" title="只保留主音色，叠加音符最少，最不容易卡">少音符</button>
+                                <button type="button" class="fitting-level-btn active" data-level="moderate" title="主音色 + 1 个替代音色，兼顾音色与性能（默认）">适量</button>
+                                <button type="button" class="fitting-level-btn" data-level="many" title="用满设计好的音色槽，最贴近原 MIDI，但音符最多">多音符</button>
+                            </div>
+                        </div>
                     </div>
                     <div class="midi-sub-panel active" id="midi-sub-timbre-melody">
                         <div class="midi-table-wrap">
@@ -1277,11 +1291,11 @@
     }
 </script>
 <!-- nbs_client.js 必须在 api_client.js 之前加载 (api_client.js 引用 NBSClient 全局对象) -->
-<script src="static/js/nbs_client.js?v=20260926b"></script>
+<script src="static/js/nbs_client.js?v=20260926e"></script>
 <script src="static/js/compress_est.js?v=20260926b"></script>
 <script src="static/js/api_client.js?v=20260905a"></script>
 <script src="static/js/custom_dropdown.js?v=20260913f"></script>
-<script src="static/js/i18n.js?v=20260926b"></script>
+<script src="static/js/i18n.js?v=20260926h"></script>
 <script src="static/js/audio_engine.js?v=20260919c"></script>
 <script src="static/js/custom_instruments.js?v=20260905a"></script>
 <script src="static/js/audio_fix_utils.js?v=20260905a"></script>
@@ -1295,7 +1309,7 @@
 <!-- 离线渲染引擎: audio_render.js 必须在 main.js 之前加载 -->
 <script src="static/js/render_jsmix.js?v=20260906e"></script>
 <script src="static/js/audio_render.js?v=20260919c"></script>
-<script src="static/js/main.js?v=20260926b"></script>
+<script src="static/js/main.js?v=20260926i"></script>
 
 </body>
 </html>

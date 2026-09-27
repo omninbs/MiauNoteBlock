@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -28,6 +28,7 @@
 
 <!-- 全网页背景图片层 (位于最底层, 由个性化设置控制) -->
 <div id="page-bg" aria-hidden="true"></div>
+<div id="fps-indicator" aria-live="polite">FPS: --</div>
 
 <div id="app">
     <!-- ========== 顶部工具栏 ========== -->
@@ -481,6 +482,14 @@
                         <label class="settings-label">
                             <input type="checkbox" id="settings-smooth-scroll"> 平滑翻页 (播放头居中)
                         </label>
+                    </div>
+                    <div class="settings-row settings-inline-row">
+                        <label class="settings-label" for="settings-render-fps">画面 FPS:</label>
+                        <select id="settings-render-fps" class="settings-control">
+                            <option value="30">30 FPS</option>
+                            <option value="60" selected>60 FPS</option>
+                            <option value="0">垂直同步</option>
+                        </select>
                     </div>
                     <div class="settings-row">
                         <label class="settings-label">
@@ -1302,7 +1311,7 @@
 <script src="static/js/sf3_player.js?v=20260808a"></script>
 <script src="static/js/spessa_player.js?v=20260918a"></script>
 <script src="static/js/soundfont_loader.js?v=20260808b"></script>
-<script src="static/js/piano_roll.js?v=20260913n"></script>
+<script src="static/js/piano_roll.js?v=20260927c"></script>
 <!-- 本地化第三方库: ZIP 打包 (jszip) / MP3 编码 (lamejs) -->
 <script src="static/vendor/jszip.min.js?v=20260905a"></script>
 <script src="static/vendor/lame.min.js?v=20260905a"></script>

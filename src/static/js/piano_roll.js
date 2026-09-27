@@ -421,6 +421,26 @@
         this.ctx.setTransform(1, 0, 0, 1, 0, 0);
         this.ctx.scale(dpr, dpr);
 
+        if (!this._overlayCanvas) {
+            this._overlayCanvas = document.createElement('canvas');
+            this._overlayCanvas.setAttribute('aria-hidden', 'true');
+            this._overlayCanvas.style.position = 'absolute';
+            this._overlayCanvas.style.left = '0';
+            this._overlayCanvas.style.top = '0';
+            this._overlayCanvas.style.width = '100%';
+            this._overlayCanvas.style.height = '100%';
+            this._overlayCanvas.style.pointerEvents = 'none';
+            this._overlayCanvas.style.zIndex = '2';
+            container.appendChild(this._overlayCanvas);
+        }
+        this._overlayCanvas.width = this.displayWidth * dpr;
+        this._overlayCanvas.height = this.displayHeight * dpr;
+        this._overlayCanvas.style.width = this.displayWidth + 'px';
+        this._overlayCanvas.style.height = this.displayHeight + 'px';
+        this._overlayCtx = this._overlayCanvas.getContext('2d', { alpha: true });
+        this._overlayCtx.setTransform(1, 0, 0, 1, 0, 0);
+        this._overlayCtx.scale(dpr, dpr);
+
         this._cfg = getConfig();
         if (this.zoom < 0.5) this.zoom = this._cfg.defaultZoom;
 
@@ -462,6 +482,49 @@
             tick += frac;
         }
         return tick;
+    };
+
+    PianoRoll.prototype.redrawPlaybackOverlay = function() {
+        if (!this._overlayCtx) return;
+        var ctx = this._overlayCtx;
+        var w = this.displayWidth;
+        var h = this.displayHeight;
+        var cfg = this._cfg;
+        var pw = this._currentPanelWidth;
+        ctx.clearRect(0, 0, w, h);
+        if (!this.isPlaying || this.playheadTick === null || this.playheadTick === undefined) return;
+
+        var displayTick = this._getDisplayTick();
+        var x = this.smoothScrollEnabled ? pw + (w - pw) / 3 : this._tickToScreen(displayTick);
+        if (x >= pw && x <= w) {
+            ctx.save();
+            ctx.strokeStyle = '#e94560';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x, cfg.timelineHeight);
+            ctx.lineTo(x, h);
+            ctx.stroke();
+            ctx.strokeStyle = 'rgba(255, 100, 130, 0.4)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x - 1, cfg.timelineHeight);
+            ctx.lineTo(x - 1, h);
+            ctx.stroke();
+            ctx.fillStyle = '#e94560';
+            ctx.beginPath();
+            ctx.moveTo(x, cfg.timelineHeight);
+            ctx.lineTo(x - 6, cfg.timelineHeight - 8);
+            ctx.lineTo(x + 6, cfg.timelineHeight - 8);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        }
+
+        if (this.totalTicks > 0) {
+            var px = (displayTick / this.totalTicks) * w;
+            ctx.fillStyle = 'rgba(233, 69, 96, 0.85)';
+            ctx.fillRect(px - 1, 2, 2, cfg.progressBarHeight - 4);
+        }
     };
 
     // ============ 事件绑定 ============
@@ -1154,7 +1217,7 @@
             _lastAnimFrame = timestamp;
             self._processNoteAnims();
             self._processPlayHighlights();
-            self.render();
+            if (!self.isPlaying) self.render();
             if (self._noteAnims.length > 0 || self._hasActiveHighlights()) {
                 self._animLoopRAF = requestAnimationFrame(step);
             } else {
@@ -3996,8 +4059,8 @@
         // (信息栏透明时, 音符透过半透明背景可见并逐渐滑出屏幕; 不透明时音符被完全遮挡)
         this._drawTrackPanel();
 
-        // 播放头指示器 (canvas内绘制, 跟随滚动)
-        this._drawPlayhead();
+        if (!this._overlayCanvas) this._drawPlayhead();
+        if (this._overlayCanvas) this.redrawPlaybackOverlay();
 
         // 长按时的扩散脉冲指示 (大灰白环, 见 _drawPulseIndicator)
         this._drawPulseIndicator();

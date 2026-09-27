@@ -2138,6 +2138,39 @@
         if (Object.prototype.hasOwnProperty.call(_fittingLevelI18n, _nl)) Object.assign(UI_TEXT[_nl], _fittingLevelI18n[_nl]);
     }
 
+    var _fpsI18n = {
+        'en-US': {
+            '画面 FPS:': 'Display FPS:', '30 FPS': '30 FPS', '60 FPS': '60 FPS', '垂直同步': 'VSync', 'FPS: ': 'FPS: '
+        },
+        'es-ES': {
+            '画面 FPS:': 'FPS de pantalla:', '30 FPS': '30 FPS', '60 FPS': '60 FPS', '垂直同步': 'Sincronización vertical', 'FPS: ': 'FPS: '
+        },
+        'pt-BR': {
+            '画面 FPS:': 'FPS da tela:', '30 FPS': '30 FPS', '60 FPS': '60 FPS', '垂直同步': 'Sincronização vertical', 'FPS: ': 'FPS: '
+        },
+        'ru-RU': {
+            '画面 FPS:': 'FPS экрана:', '30 FPS': '30 FPS', '60 FPS': '60 FPS', '垂直同步': 'Вертикальная синхронизация', 'FPS: ': 'FPS: '
+        },
+        'de-DE': {
+            '画面 FPS:': 'Anzeige-FPS:', '30 FPS': '30 FPS', '60 FPS': '60 FPS', '垂直同步': 'V-Sync', 'FPS: ': 'FPS: '
+        },
+        'fr-FR': {
+            '画面 FPS:': 'FPS d’affichage :', '30 FPS': '30 FPS', '60 FPS': '60 FPS', '垂直同步': 'Synchronisation verticale', 'FPS: ': 'FPS : '
+        },
+        'ja-JP': {
+            '画面 FPS:': '表示 FPS:', '30 FPS': '30 FPS', '60 FPS': '60 FPS', '垂直同步': '垂直同期', 'FPS: ': 'FPS: '
+        },
+        'ko-KR': {
+            '画面 FPS:': '화면 FPS:', '30 FPS': '30 FPS', '60 FPS': '60 FPS', '垂直同步': '수직 동기화', 'FPS: ': 'FPS: '
+        },
+        'id-ID': {
+            '画面 FPS:': 'FPS tampilan:', '30 FPS': '30 FPS', '60 FPS': '60 FPS', '垂直同步': 'Sinkronisasi vertikal', 'FPS: ': 'FPS: '
+        }
+    };
+    for (_nl in _fpsI18n) {
+        if (Object.prototype.hasOwnProperty.call(_fpsI18n, _nl)) Object.assign(UI_TEXT[_nl], _fpsI18n[_nl]);
+    }
+
     // has(key): 当前语言是否已有该词条 (不含回退)。供覆盖率自检用。
     function has(key) {
         var dictionary = UI_TEXT[current] || {};

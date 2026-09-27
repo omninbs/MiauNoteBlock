@@ -38,6 +38,12 @@
 
         // 平滑翻页开关: false=超出后翻页, true=播放头始终居中
         smoothScroll: false,
+        renderFpsLimit: 60,
+        showFps: false,
+        _fpsFrames: 0,
+        _fpsLastTime: 0,
+        _fpsValue: 0,
+        _fpsDisplayTimer: null,
 
         // 当前文件的持久 ID (用于自动保存覆盖, 而非产生重复)
         currentFileId: null,
@@ -1287,14 +1293,31 @@
             });
         }
 
+        var renderFpsSel = $('settings-render-fps');
+        if (renderFpsSel) {
+            try {
+                var savedFps = localStorage.getItem('render_fps_limit');
+                if (savedFps === '30' || savedFps === '60' || savedFps === '0') {
+                    state.renderFpsLimit = parseInt(savedFps, 10);
+                }
+            } catch(e) {}
+            renderFpsSel.value = String(state.renderFpsLimit);
+            renderFpsSel.addEventListener('change', function() {
+                var value = parseInt(this.value, 10);
+                state.renderFpsLimit = value === 30 || value === 60 ? value : 0;
+                try { localStorage.setItem('render_fps_limit', String(state.renderFpsLimit)); } catch(e) {}
+            });
+        }
+
         // 音符播放高亮动画开关
         var highlightChk = $('settings-highlight-animation');
         if (highlightChk) {
-            // 从 localStorage 恢复设置
             try {
                 var saved = localStorage.getItem('highlight_animation');
-                if (saved !== null) highlightChk.checked = (saved === '1');
-            } catch(e) {}
+                highlightChk.checked = saved === null ? true : saved === '1';
+            } catch(e) {
+                highlightChk.checked = true;
+            }
             state.highlightAnimationEnabled = highlightChk.checked;
             highlightChk.addEventListener('change', function() {
                 state.highlightAnimationEnabled = this.checked;
@@ -2117,6 +2140,7 @@
 
         // 键盘快捷键
         initKeyboardShortcuts();
+        startFpsDisplayTimer();
 
         // 创作辅助悬浮窗 + 音符查找/替换浮层
         initCreativeAssist();
@@ -4526,9 +4550,45 @@
         playBtn.setAttribute('title', state.performanceMode ? '播放/暂停试听' : '播放/暂停 (Space)');
     }
 
+    function getFpsText(value) {
+        var prefix = window.WebNBSI18n && window.WebNBSI18n.t
+            ? window.WebNBSI18n.t('FPS: ')
+            : 'FPS: ';
+        return prefix + value;
+    }
+
+    function updateFpsIndicator() {
+        if (!state.showFps) return;
+        var now = performance.now();
+        var elapsed = state._fpsLastTime ? now - state._fpsLastTime : 0;
+        state._fpsValue = elapsed > 0 ? state._fpsFrames * 1000 / elapsed : 0;
+        state._fpsFrames = 0;
+        state._fpsLastTime = now;
+        var fpsEl = $('fps-indicator');
+        if (fpsEl) fpsEl.textContent = getFpsText(Math.round(state._fpsValue));
+    }
+
+    function startFpsDisplayTimer() {
+        if (state._fpsDisplayTimer) return;
+        state._fpsDisplayTimer = setInterval(updateFpsIndicator, 500);
+    }
+
     // ============ 键盘快捷键 ============
     function initKeyboardShortcuts() {
         document.addEventListener('keydown', function(e) {
+            if (e.code === 'F3') {
+                e.preventDefault();
+                state.showFps = !state.showFps;
+                state._fpsFrames = 0;
+                state._fpsLastTime = performance.now();
+                var fpsEl = $('fps-indicator');
+                if (fpsEl) {
+                    fpsEl.style.display = state.showFps ? 'block' : 'none';
+                    fpsEl.textContent = getFpsText('--');
+                }
+                return;
+            }
+
             var editableTarget = isEditableTarget(e.target);
             var pianoKey = getPianoKeyFromKeyboardEvent(e);
             var allowedEditShortcut = isAllowedPianoEditShortcut(e);
@@ -5095,6 +5155,8 @@
         // 同步平滑翻页开关
         var smoothChk = $('settings-smooth-scroll');
         if (smoothChk) smoothChk.checked = !!state.smoothScroll;
+        var renderFpsSel = $('settings-render-fps');
+        if (renderFpsSel) renderFpsSel.value = String(state.renderFpsLimit);
         // 同步音效开关
         var audioChk = $('settings-audio-enhance');
         if (audioChk && window.AudioEngine && typeof AudioEngine.isEnhanceEnabled === 'function') {
@@ -5280,6 +5342,11 @@
         if (state.pianoRoll) state.pianoRoll._smoothedPlayheadTick = state.currentTick;
 
         var tickMs = Math.max(10, Math.floor(1000 / Math.max(1, state.tempo)));
+        var totalTicks = getSongLengthTicks();
+        var trackByLayer = {};
+        for (var trackIndex = 0; trackIndex < state.tracks.length; trackIndex++) {
+            trackByLayer[state.tracks[trackIndex].layer] = state.tracks[trackIndex];
+        }
         if (state.pianoRoll) {
             state.pianoRoll._tickDuration = tickMs;
             state.pianoRoll._lastTickTime = performance.now();
@@ -5287,7 +5354,8 @@
 
         var _accumulator = 0;
         var _lastFrameTime = performance.now();
-        var _tickCounter = 0;
+        var _nextVisualFrame = 0;
+        var _lastProgressUI = -Infinity;
 
         function playbackFrame(now) {
             if (!state.isPlaying) return;
@@ -5299,7 +5367,6 @@
 
             while (_accumulator >= tickMs) {
                 _accumulator -= tickMs;
-                _tickCounter++;
 
                 var tick = state.currentTick;
 
@@ -5307,7 +5374,7 @@
                 for (var i = 0; i < notesAtTick.length; i++) {
                     var n = notesAtTick[i];
                     var audible = true;
-                    var track = findTrackByLayer(n.layer);
+                    var track = trackByLayer[n.layer];
                     if (track) {
                         audible = isTrackAudible(track);
                     }
@@ -5333,15 +5400,17 @@
                     state.pianoRoll.playheadTick = tick;
                 }
 
-                var timeEl = $('progress-time');
-                if (timeEl) {
-                    timeEl.textContent = Math.floor(tick) + ' / ' + Math.floor(getSongLengthTicks()) + ' tick';
-                }
-
                 state.currentTick = tick + 1;
                 if (state.currentTick > state.maxTick + 4) state.currentTick = 0;
 
-                $setText('current-pos', '位置: ' + state.currentTick);
+                if (tick - _lastProgressUI >= 2 || state.currentTick === 0) {
+                    var timeEl = $('progress-time');
+                    if (timeEl) {
+                        timeEl.textContent = Math.floor(tick) + ' / ' + Math.floor(totalTicks) + ' tick';
+                    }
+                    $setText('current-pos', '位置: ' + state.currentTick);
+                    _lastProgressUI = tick;
+                }
             }
 
             // 更新 _lastTickTime 用于播放头平滑插值
@@ -5349,10 +5418,30 @@
                 state.pianoRoll._lastTickTime = now - _accumulator;
             }
 
-            if (_tickCounter % 2 === 0) {
-                if (state.pianoRoll) {
-                    state.pianoRoll.render();
+            var visualFrameMs = state.renderFpsLimit > 0 ? 1000 / state.renderFpsLimit : 0;
+            var shouldRenderVisual = visualFrameMs === 0 || now >= _nextVisualFrame;
+            if (state.pianoRoll && shouldRenderVisual) {
+                if (state.pianoRoll.smoothScrollEnabled) {
+                    var visibleWidth = state.pianoRoll.displayWidth - state.pianoRoll._currentPanelWidth;
+                    var playheadX = state.pianoRoll._currentPanelWidth + visibleWidth / 3;
+                    var cellW = state.pianoRoll._cfg.cellW * state.pianoRoll.zoom;
+                    var targetScrollX = state.pianoRoll._getDisplayTick() * cellW + state.pianoRoll._currentPanelWidth - playheadX;
+                    state.pianoRoll.scrollX = Math.max(0, Math.min(targetScrollX, state.pianoRoll._getMaxScrollX()));
+                    state.pianoRoll._fullRedrawNeeded = true;
                 }
+                if (state.pianoRoll.redrawPlaybackOverlay) {
+                    state.pianoRoll.redrawPlaybackOverlay();
+                }
+                state.pianoRoll.render();
+                if (visualFrameMs > 0) {
+                    if (_nextVisualFrame === 0) {
+                        _nextVisualFrame = now + visualFrameMs;
+                    } else {
+                        _nextVisualFrame += visualFrameMs;
+                        if (_nextVisualFrame < now) _nextVisualFrame = now + visualFrameMs;
+                    }
+                }
+                state._fpsFrames++;
             }
 
             state._playbackRAF = requestAnimationFrame(playbackFrame);
@@ -5367,6 +5456,9 @@
         }
         if (state.pianoRoll) {
             state.pianoRoll.clearPlayHighlights();
+            if (state.pianoRoll.redrawPlaybackOverlay) {
+                state.pianoRoll.redrawPlaybackOverlay();
+            }
         }
     }
 

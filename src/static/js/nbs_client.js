@@ -1,4 +1,4 @@
-﻿/**
+/**
  * NBSClient - 客户端 NBS/MIDI 解析与转换
  *
  * 替代服务端 API:
@@ -811,10 +811,10 @@ function _writeNBS(songData) {
             });
         }
         if (_negTickCount > 0 && typeof console !== 'undefined' && console.warn) {
-            console.warn('[WebNBS] _writeNBS: 过滤了 ' + _negTickCount + ' 个负 tick 音符');
+            console.warn('[MiauNoteBlock] _writeNBS: 过滤了 ' + _negTickCount + ' 个负 tick 音符');
         }
         if (_dupCount > 0 && typeof console !== 'undefined' && console.warn) {
-            console.warn('[WebNBS] _writeNBS: 检测到 ' + _dupCount + ' 个 (tick,layer) 冲突, 已自动分配新 layer');
+            console.warn('[MiauNoteBlock] _writeNBS: 检测到 ' + _dupCount + ' 个 (tick,layer) 冲突, 已自动分配新 layer');
         }
 
         // 按 (tick, layer) 排序
@@ -920,7 +920,7 @@ function _writeNBS(songData) {
 function _parseMidiWithToneJS(arrayBuffer) {
     if (typeof window.__ToneMidi === 'undefined') {
         if (typeof console !== 'undefined' && console.warn) {
-            console.warn('[WebNBS] @tonejs/midi 未加载, 使用回退 MIDI 解析器 (精度可能降低)');
+            console.warn('[MiauNoteBlock] @tonejs/midi 未加载, 使用回退 MIDI 解析器 (精度可能降低)');
         }
         return null;
     }
@@ -1770,7 +1770,7 @@ function _convertMidiToNBS(arrayBuffer, settings) {
                 events = _filteredEvents;
                 var _removed = _origCount - events.length;
                 if (typeof console !== 'undefined' && console.warn) {
-                    console.warn('[WebNBS] 检测到异常远端音符，已过滤 ' + _removed +
+                    console.warn('[MiauNoteBlock] 检测到异常远端音符，已过滤 ' + _removed +
                         ' 个 (P95=' + _p95 + ', 阈值=' + _filterMax +
                         ', 原 maxTick=' + maxTick + ', 新 maxTick=' +
                         events[events.length - 1].tick + ')');

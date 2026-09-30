@@ -1,5 +1,5 @@
 /* ================================================================
-   WebNBS - WinUI 3 / Fluent Design 风格
+   MiauNoteBlock - WinUI 3 / Fluent Design 风格
    Mica 半透明 · 圆角控件 · Segoe UI 排版 · 4px 网格
    ================================================================ */
 
@@ -1622,7 +1622,7 @@ input[type="number"]:hover::-webkit-outer-spin-button {
     border: 1px solid transparent;
     user-select: none;
     line-height: 1.3;
-    /* 默认暗色背景: 无修饰类 (如"关于 NoteBlockWeb") 时不显示白色 */
+    /* 默认暗色背景: 无修饰类 (如"关于 MiauNoteBlock") 时不显示白色 */
     background: var(--ctrl-fill-default);
     color: var(--text-primary);
     border-color: var(--ctrl-stroke-default);

@@ -1,5 +1,5 @@
 /**
- * WebNBS 音频引擎 - 基于 Minecraft Java 版音符盒播放逻辑
+ * MiauNoteBlock 音频引擎 - 基于 Minecraft Java 版音符盒播放逻辑
  * 参考 Note Block Studio 源码 (dat_instrument, dat_pitch, audio_sound_add)
  */
 

@@ -1,5 +1,5 @@
 /**
- * WebNBS 主控制器
+ * MiauNoteBlock 主控制器
  * 管理普通模式、进度条、快捷键、轨道、上下文菜单、钢琴键盘、撤销重做
  */
 (function() {
@@ -4814,11 +4814,11 @@
                     showSmallTip('Clipboard has no readable MIDI notes.');
                 }
             }).catch(function() {
-                showSmallTip('Use Ctrl+V to paste external MIDI data, or copy notes inside WebNBS first.');
+                showSmallTip('Use Ctrl+V to paste external MIDI data, or copy notes inside MiauNoteBlock first.');
             });
             return;
         }
-        showSmallTip('Use Ctrl+V to paste external MIDI data, or copy notes inside WebNBS first.');
+        showSmallTip('Use Ctrl+V to paste external MIDI data, or copy notes inside MiauNoteBlock first.');
     }
 
     // 监听系统剪贴板，支持粘贴外部 MIDI 数据（桌面端 DAW 复制）
@@ -13662,7 +13662,7 @@
                     }
                 } catch (e) {
                     if (typeof console !== 'undefined' && console.warn) {
-                        console.warn('[WebNBS] parseMidiFileForPlayback: @tonejs/midi 解析失败, 回退到自包含解析器', e);
+                        console.warn('[MiauNoteBlock] parseMidiFileForPlayback: @tonejs/midi 解析失败, 回退到自包含解析器', e);
                     }
                 }
             }

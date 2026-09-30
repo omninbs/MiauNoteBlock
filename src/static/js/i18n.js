@@ -1,4 +1,4 @@
-/* WebNBS interface locale selection. Only the supported, well-formed locales are accepted. */
+/* MiauNoteBlock interface locale selection. Only the supported, well-formed locales are accepted. */
 (function() {
     'use strict';
 
@@ -12,22 +12,22 @@
 
     var TEXT = {
         'zh-CN': {
-            page_title: 'NoteBlockWeb - Minecraft 音符盒编辑器', language: '语言', settings: '设置', about: '关于', functions: '功能',
+            page_title: 'MiauNoteBlock - Minecraft 音符盒编辑器', language: '语言', settings: '设置', about: '关于', functions: '功能',
             privacy_title: '隐私声明', privacy_message: '本服务仅在当前会话中临时处理您选择的 MIDI 或 NBS 文件。文件内容不会被永久保存，也不会收集个人隐私信息。',
             agree: '同意', feedback: '反馈邮箱', open_source: '开源库', update_notes: '更新日志', close: '关闭', file: '文件', keyboard_piano: '钢琴键盘', midi_import: 'MIDI 导入'
         },
         'en-US': {
-            page_title: 'NoteBlockWeb - Minecraft Note Block Editor', language: 'Language', settings: 'Settings', about: 'About', functions: 'Tools',
+            page_title: 'MiauNoteBlock - Minecraft Note Block Editor', language: 'Language', settings: 'Settings', about: 'About', functions: 'Tools',
             privacy_title: 'Privacy Notice', privacy_message: 'This service processes the MIDI or NBS file you choose only for the current session. File contents are not stored permanently and no personal data is collected.',
             agree: 'Agree', feedback: 'Feedback', open_source: 'Open-source libraries', update_notes: "What's new", close: 'Close', file: 'File', keyboard_piano: 'Piano keyboard', midi_import: 'Import MIDI'
         },
         'pt-BR': {
-            page_title: 'NoteBlockWeb - Editor de Blocos de Nota do Minecraft', language: 'Idioma', settings: 'Configurações', about: 'Sobre', functions: 'Ferramentas',
+            page_title: 'MiauNoteBlock - Editor de Blocos de Nota do Minecraft', language: 'Idioma', settings: 'Configurações', about: 'Sobre', functions: 'Ferramentas',
             privacy_title: 'Aviso de privacidade', privacy_message: 'Este serviço processa o arquivo MIDI ou NBS escolhido apenas durante a sessão atual. O conteúdo não é armazenado permanentemente e nenhum dado pessoal é coletado.',
             agree: 'Concordo', feedback: 'Contato', open_source: 'Bibliotecas de código aberto', update_notes: 'Novidades', close: 'Fechar', file: 'Arquivo', keyboard_piano: 'Teclado de piano', midi_import: 'Importar MIDI'
         },
         'id-ID': {
-            page_title: 'NoteBlockWeb - Editor Blok Nada Minecraft', language: 'Bahasa', settings: 'Pengaturan', about: 'Tentang', functions: 'Alat',
+            page_title: 'MiauNoteBlock - Editor Blok Nada Minecraft', language: 'Bahasa', settings: 'Pengaturan', about: 'Tentang', functions: 'Alat',
             privacy_title: 'Pemberitahuan privasi', privacy_message: 'Layanan ini memproses berkas MIDI atau NBS yang Anda pilih hanya selama sesi saat ini. Isi berkas tidak disimpan secara permanen dan data pribadi tidak dikumpulkan.',
             agree: 'Setuju', feedback: 'Umpan balik', open_source: 'Pustaka sumber terbuka', update_notes: 'Catatan pembaruan', close: 'Tutup', file: 'Berkas', keyboard_piano: 'Keyboard piano', midi_import: 'Impor MIDI'
         }
@@ -87,7 +87,7 @@
     Object.assign(UI_TEXT['en-US'], {
         '平滑翻页 (播放头居中)': 'Smooth follow (center playhead)', '音符播放高亮动画': 'Note playback highlight', '录制时显示音符动画 (关闭可提升录制性能)': 'Show note animation while recording',
         '音效优化 (混响/立体声)': 'Audio enhancement (reverb/stereo)', 'NBS 导出版本:': 'NBS export version:', '含铜号角乐器时自动 V6': 'Use V6 automatically for copper horn instruments',
-        '关于 NoteBlockWeb': 'About NoteBlockWeb', '调节速度': 'Adjust tempo', '基于 Web 的 Minecraft 音符盒编辑器': 'A web-based Minecraft note block editor',
+        '关于 MiauNoteBlock': 'About MiauNoteBlock', '调节速度': 'Adjust tempo', '基于 Web 的 Minecraft 音符盒编辑器': 'A web-based Minecraft note block editor',
         '支持 NBS 格式导入/导出, MIDI 导入, 钢琴卷帘编辑': 'Supports NBS import/export, MIDI import, and piano-roll editing', '版本:': 'Version:', '开发者:': 'Developer:', '反馈邮箱:': 'Feedback:',
         '演奏模式设置': 'Performance mode settings', '节拍器:': 'Metronome:', '启用': 'Enable', '延音录制': 'Sustain recording', '外部 MIDI 设备输入': 'External MIDI input', '未连接': 'Not connected',
         '开始演奏': 'Start performance', '文件:': 'File:', '类型:': 'Type:', '时长:': 'Duration:', '轨道:': 'Tracks:', '基本设置': 'Basic', '通道映射': 'Channel mapping',
@@ -107,7 +107,7 @@
     Object.assign(UI_TEXT['pt-BR'], {
         '平滑翻页 (播放头居中)': 'Rolagem suave (cabeçote central)', '音符播放高亮动画': 'Destaque de nota ao tocar', '录制时显示音符动画 (关闭可提升录制性能)': 'Mostrar animação de notas ao gravar',
         '音效优化 (混响/立体声)': 'Aprimoramento de áudio (reverberação/estéreo)', 'NBS 导出版本:': 'Versão de exportação NBS:', '含铜号角乐器时自动 V6': 'Usar V6 automaticamente com instrumentos de trompa de cobre',
-        '关于 NoteBlockWeb': 'Sobre o NoteBlockWeb', '调节速度': 'Ajustar andamento', '基于 Web 的 Minecraft 音符盒编辑器': 'Editor web de blocos de nota do Minecraft',
+        '关于 MiauNoteBlock': 'Sobre o MiauNoteBlock', '调节速度': 'Ajustar andamento', '基于 Web 的 Minecraft 音符盒编辑器': 'Editor web de blocos de nota do Minecraft',
         '支持 NBS 格式导入/导出, MIDI 导入, 钢琴卷帘编辑': 'Compatível com importação/exportação NBS, MIDI e editor piano roll', '版本:': 'Versão:', '开发者:': 'Desenvolvedor:', '反馈邮箱:': 'Contato:',
         '演奏模式设置': 'Configurações do modo de apresentação', '节拍器:': 'Metrônomo:', '启用': 'Ativar', '延音录制': 'Gravação de sustain', '外部 MIDI 设备输入': 'Entrada MIDI externa', '未连接': 'Desconectado',
         '开始演奏': 'Iniciar apresentação', '文件:': 'Arquivo:', '类型:': 'Tipo:', '时长:': 'Duração:', '轨道:': 'Faixas:', '通道映射': 'Mapeamento de canais',
@@ -127,7 +127,7 @@
     Object.assign(UI_TEXT['id-ID'], {
         '平滑翻页 (播放头居中)': 'Gulir halus (kepala putar di tengah)', '音符播放高亮动画': 'Sorotan not saat dimainkan', '录制时显示音符动画 (关闭可提升录制性能)': 'Tampilkan animasi not saat merekam',
         '音效优化 (混响/立体声)': 'Penyempurnaan audio (reverb/stereo)', 'NBS 导出版本:': 'Versi ekspor NBS:', '含铜号角乐器时自动 V6': 'Gunakan V6 otomatis untuk instrumen terompet tembaga',
-        '关于 NoteBlockWeb': 'Tentang NoteBlockWeb', '调节速度': 'Atur tempo', '基于 Web 的 Minecraft 音符盒编辑器': 'Editor blok nada Minecraft berbasis web',
+        '关于 MiauNoteBlock': 'Tentang MiauNoteBlock', '调节速度': 'Atur tempo', '基于 Web 的 Minecraft 音符盒编辑器': 'Editor blok nada Minecraft berbasis web',
         '支持 NBS 格式导入/导出, MIDI 导入, 钢琴卷帘编辑': 'Mendukung impor/ekspor NBS, impor MIDI, dan editor piano roll', '版本:': 'Versi:', '开发者:': 'Pengembang:', '反馈邮箱:': 'Umpan balik:',
         '演奏模式设置': 'Pengaturan mode pertunjukan', '节拍器:': 'Metronom:', '启用': 'Aktifkan', '延音录制': 'Rekam sustain', '外部 MIDI 设备输入': 'Input MIDI eksternal', '未连接': 'Tidak terhubung',
         '开始演奏': 'Mulai pertunjukan', '文件:': 'Berkas:', '类型:': 'Jenis:', '时长:': 'Durasi:', '轨道:': 'Trek:', '通道映射': 'Pemetaan kanal',
@@ -313,7 +313,7 @@
     }
 
     addLocale('es-ES', {
-        page_title: 'NoteBlockWeb - Editor de bloques de notas de Minecraft', language: 'Idioma', settings: 'Configuración', about: 'Acerca de', functions: 'Herramientas',
+        page_title: 'MiauNoteBlock - Editor de bloques de notas de Minecraft', language: 'Idioma', settings: 'Configuración', about: 'Acerca de', functions: 'Herramientas',
         privacy_title: 'Aviso de privacidad', privacy_message: 'Este servicio procesa el archivo MIDI o NBS que selecciones solo durante la sesión actual. El contenido no se guarda de forma permanente y no se recopilan datos personales.',
         agree: 'Aceptar', feedback: 'Comentarios', open_source: 'Bibliotecas de código abierto', update_notes: 'Novedades', close: 'Cerrar', file: 'Archivo', keyboard_piano: 'Teclado de piano', midi_import: 'Importar MIDI'
     }, {
@@ -329,7 +329,7 @@
     }, ['Arpa', 'Contrabajo', 'Bombo', 'Caja', 'Chasquido', 'Guitarra', 'Flauta', 'Campana', 'Campanillas', 'Xilófono', 'Xilófono de hierro', 'Cencerro', 'Didgeridoo', 'Bit', 'Banjo', 'Pling', 'Cuerno de cobre', 'Cuerno de cobre expuesto', 'Cuerno de cobre erosionado', 'Cuerno de cobre oxidado']);
 
     addLocale('ru-RU', {
-        page_title: 'NoteBlockWeb - Редактор нотных блоков Minecraft', language: 'Язык', settings: 'Настройки', about: 'О программе', functions: 'Инструменты',
+        page_title: 'MiauNoteBlock - Редактор нотных блоков Minecraft', language: 'Язык', settings: 'Настройки', about: 'О программе', functions: 'Инструменты',
         privacy_title: 'Уведомление о конфиденциальности', privacy_message: 'Сервис обрабатывает выбранный MIDI- или NBS-файл только в текущем сеансе. Содержимое файла не хранится постоянно, персональные данные не собираются.',
         agree: 'Принять', feedback: 'Обратная связь', open_source: 'Библиотеки с открытым исходным кодом', update_notes: 'Что нового', close: 'Закрыть', file: 'Файл', keyboard_piano: 'Клавиатура пианино', midi_import: 'Импорт MIDI'
     }, {
@@ -345,7 +345,7 @@
     }, ['Арфа', 'Контрабас', 'Большой барабан', 'Малый барабан', 'Щелчок', 'Гитара', 'Флейта', 'Колокол', 'Перезвон', 'Ксилофон', 'Железный ксилофон', 'Коровий колокольчик', 'Диджериду', 'Бит', 'Банджо', 'Плинг', 'Медный рог', 'Открытый медный рог', 'Потемневший медный рог', 'Окисленный медный рог']);
 
     addLocale('de-DE', {
-        page_title: 'NoteBlockWeb - Minecraft-Notenblock-Editor', language: 'Sprache', settings: 'Einstellungen', about: 'Info', functions: 'Werkzeuge',
+        page_title: 'MiauNoteBlock - Minecraft-Notenblock-Editor', language: 'Sprache', settings: 'Einstellungen', about: 'Info', functions: 'Werkzeuge',
         privacy_title: 'Datenschutzhinweis', privacy_message: 'Dieser Dienst verarbeitet die ausgewählte MIDI- oder NBS-Datei nur während der aktuellen Sitzung. Der Dateiinhalt wird nicht dauerhaft gespeichert und es werden keine personenbezogenen Daten erfasst.',
         agree: 'Zustimmen', feedback: 'Feedback', open_source: 'Open-Source-Bibliotheken', update_notes: 'Neuigkeiten', close: 'Schließen', file: 'Datei', keyboard_piano: 'Klaviatur', midi_import: 'MIDI importieren'
     }, {
@@ -361,7 +361,7 @@
     }, ['Harfe', 'Kontrabass', 'Basstrommel', 'Snare Drum', 'Klick', 'Gitarre', 'Flöte', 'Glocke', 'Klangspiel', 'Xylophon', 'Eisenxylophon', 'Kuhglocke', 'Didgeridoo', 'Bit', 'Banjo', 'Pling', 'Kupferhorn', 'Freiliegendes Kupferhorn', 'Verwittertes Kupferhorn', 'Oxidiertes Kupferhorn']);
 
     addLocale('fr-FR', {
-        page_title: 'NoteBlockWeb - Éditeur de blocs musicaux Minecraft', language: 'Langue', settings: 'Paramètres', about: 'À propos', functions: 'Outils',
+        page_title: 'MiauNoteBlock - Éditeur de blocs musicaux Minecraft', language: 'Langue', settings: 'Paramètres', about: 'À propos', functions: 'Outils',
         privacy_title: 'Avis de confidentialité', privacy_message: 'Ce service traite le fichier MIDI ou NBS choisi uniquement pendant la session en cours. Le contenu du fichier n’est pas conservé et aucune donnée personnelle n’est collectée.',
         agree: 'Accepter', feedback: 'Commentaires', open_source: 'Bibliothèques open source', update_notes: 'Nouveautés', close: 'Fermer', file: 'Fichier', keyboard_piano: 'Clavier de piano', midi_import: 'Importer un MIDI'
     }, {
@@ -377,7 +377,7 @@
     }, ['Harpe', 'Contrebasse', 'Grosse caisse', 'Caisse claire', 'Clic', 'Guitare', 'Flûte', 'Cloche', 'Carillon', 'Xylophone', 'Xylophone en fer', 'Cloche de vache', 'Didgeridoo', 'Bit', 'Banjo', 'Pling', 'Corne de cuivre', 'Corne de cuivre exposée', 'Corne de cuivre altérée', 'Corne de cuivre oxydée']);
 
     addLocale('ja-JP', {
-        page_title: 'NoteBlockWeb - Minecraft 音符ブロックエディター', language: '言語', settings: '設定', about: '情報', functions: 'ツール',
+        page_title: 'MiauNoteBlock - Minecraft 音符ブロックエディター', language: '言語', settings: '設定', about: '情報', functions: 'ツール',
         privacy_title: 'プライバシーに関するお知らせ', privacy_message: 'このサービスは、選択した MIDI または NBS ファイルを現在のセッション中にのみ処理します。ファイル内容を恒久的に保存したり、個人情報を収集したりすることはありません。',
         agree: '同意する', feedback: 'フィードバック', open_source: 'オープンソースライブラリ', update_notes: '更新情報', close: '閉じる', file: 'ファイル', keyboard_piano: 'ピアノ鍵盤', midi_import: 'MIDI をインポート'
     }, {
@@ -393,7 +393,7 @@
     }, ['ハープ', 'コントラバス', 'バスドラム', 'スネアドラム', 'クリック', 'ギター', 'フルート', 'ベル', 'チャイム', 'シロフォン', '鉄のシロフォン', 'カウベル', 'ディジュリドゥ', 'ビット', 'バンジョー', 'プリング', '銅の角笛', '風化していない銅の角笛', '風化した銅の角笛', '酸化した銅の角笛']);
 
     addLocale('ko-KR', {
-        page_title: 'NoteBlockWeb - Minecraft 노트 블록 편집기', language: '언어', settings: '설정', about: '정보', functions: '도구',
+        page_title: 'MiauNoteBlock - Minecraft 노트 블록 편집기', language: '언어', settings: '설정', about: '정보', functions: '도구',
         privacy_title: '개인정보 보호 안내', privacy_message: '이 서비스는 선택한 MIDI 또는 NBS 파일을 현재 세션에서만 처리합니다. 파일 내용은 영구적으로 저장되지 않으며 개인 정보도 수집하지 않습니다.',
         agree: '동의', feedback: '피드백', open_source: '오픈 소스 라이브러리', update_notes: '새로운 기능', close: '닫기', file: '파일', keyboard_piano: '피아노 건반', midi_import: 'MIDI 가져오기'
     }, {
@@ -969,7 +969,7 @@
         translateStaticText();
         translateAttributes();
         setText('#settings-popup .settings-header h4', t('settings'));
-        setText('#about-popup .settings-header h4', t('about') + ' NoteBlockWeb');
+        setText('#about-popup .settings-header h4', t('about') + ' MiauNoteBlock');
         setText('.privacy-popup-title', t('privacy_title'));
         setText('#privacy-popup-agree', t('agree'));
         setText('#privacy-popup-message', t('privacy_message'));
@@ -1221,7 +1221,7 @@
         '展开/折叠钢琴键盘': 'ピアノ鍵盤の表示/非表示', '设置小键盘弹奏音域': 'テンキー演奏音域の設定', '超出范围': '範囲外', '音符:': '音符:', '位置:': '位置:',
         '平滑翻页 (播放头居中)': 'スムーズ追従 (再生ヘッド中央)', '音符播放高亮动画': 'ノート再生ハイライト', '录制时显示音符动画 (关闭可提升录制性能)': '録音中にノートアニメを表示 (オフで録音性能向上)',
         '音效优化 (混响/立体声)': 'オーディオ強化 (リバーブ/ステレオ)', 'NBS 导出版本:': 'NBS エクスポート版:', '含铜号角乐器时自动 V6': '銅の角笛があるとき自動で V6 に',
-        '关于 NoteBlockWeb': 'NoteBlockWeb について', '调节速度': 'テンポを調整', '基于 Web 的 Minecraft 音符盒编辑器': 'Web ベースの Minecraft 音符ブロックエディター',
+        '关于 MiauNoteBlock': 'MiauNoteBlock について', '调节速度': 'テンポを調整', '基于 Web 的 Minecraft 音符盒编辑器': 'Web ベースの Minecraft 音符ブロックエディター',
         '支持 NBS 格式导入/导出, MIDI 导入, 钢琴卷帘编辑': 'NBS のインポート/エクスポート、MIDI インポート、ピアノロール編集に対応', '版本:': 'バージョン:', '开发者:': '開発者:', '反馈邮箱:': 'フィードバック:',
         '演奏模式设置': '演奏モード設定', '节拍器:': 'メトロノーム:', '启用': '有効', '延音录制': 'サステイン録音', '外部 MIDI 设备输入': '外部 MIDI デバイス入力', '未连接': '未接続',
         '开始演奏': '演奏を開始', '文件:': 'ファイル:', '类型:': 'タイプ:', '时长:': '長さ:', '轨道:': 'トラック:', '通道映射': 'チャンネルマッピング',
@@ -1832,7 +1832,7 @@
             '音符音量透明度 (音量越低越透明)': 'Transparencia del volumen de las notas (menor volumen = más transparente)',
             'NBS 导出版本:': 'Versión de exportación NBS:',
             '含铜号角乐器时自动 V6': 'Usar V6 automáticamente con instrumentos de cuerno de cobre',
-            '关于 NoteBlockWeb': 'Acerca de NoteBlockWeb',
+            '关于 MiauNoteBlock': 'Acerca de MiauNoteBlock',
             '通用': 'General', '个性化': 'Personalización', '清除': 'Borrar', '平铺': 'Mosaico', '拉伸': 'Estirar',
             '缩放适配': 'Ajustar escala', '普通半透明': 'Semitransparente normal', '毛玻璃': 'Vidrio esmerilado', '亚克力': 'Acrílico',
             '背景图片:': 'Imagen de fondo:', '背景透明度:': 'Transparencia de fondo:', '背景模式:': 'Modo de fondo:',
@@ -1852,7 +1852,7 @@
             '音符音量透明度 (音量越低越透明)': 'Прозрачность по громкости ноты (тише = прозрачнее)',
             'NBS 导出版本:': 'Версия экспорта NBS:',
             '含铜号角乐器时自动 V6': 'Автоматически переключаться на V6 при наличии медных горнов',
-            '关于 NoteBlockWeb': 'О NoteBlockWeb',
+            '关于 MiauNoteBlock': 'О MiauNoteBlock',
             '通用': 'Общие', '个性化': 'Персонализация', '清除': 'Очистить', '平铺': 'Замостить', '拉伸': 'Растянуть',
             '缩放适配': 'Вписать по размеру', '普通半透明': 'Обычный полупрозрачный', '毛玻璃': 'Матовое стекло', '亚克力': 'Акрил',
             '背景图片:': 'Фоновая картинка:', '背景透明度:': 'Прозрачность фона:', '背景模式:': 'Режим фона:',
@@ -1872,7 +1872,7 @@
             '音符音量透明度 (音量越低越透明)': 'Notentransparenz nach Lautstärke (leiser = transparenter)',
             'NBS 导出版本:': 'NBS-Exportversion:',
             '含铜号角乐器时自动 V6': 'Automatisch V6 bei Kupferhorn-Instrumenten verwenden',
-            '关于 NoteBlockWeb': 'Über NoteBlockWeb',
+            '关于 MiauNoteBlock': 'Über MiauNoteBlock',
             '通用': 'Allgemein', '个性化': 'Personalisierung', '清除': 'Löschen', '平铺': 'Kacheln', '拉伸': 'Strecken',
             '缩放适配': 'Skalieren', '普通半透明': 'Normales halbtransparentes', '毛玻璃': 'Mattglas', '亚克力': 'Acryl',
             '背景图片:': 'Hintergrundbild:', '背景透明度:': 'Hintergrundtransparenz:', '背景模式:': 'Hintergrundmodus:',
@@ -1892,7 +1892,7 @@
             '音符音量透明度 (音量越低越透明)': 'Transparence du volume des notes (volume plus bas = plus transparent)',
             'NBS 导出版本:': 'Version d’exportation NBS :',
             '含铜号角乐器时自动 V6': 'Utiliser V6 automatiquement avec les instruments à cor de cuivre',
-            '关于 NoteBlockWeb': 'À propos de NoteBlockWeb',
+            '关于 MiauNoteBlock': 'À propos de MiauNoteBlock',
             '通用': 'Général', '个性化': 'Personnalisation', '清除': 'Effacer', '平铺': 'Mosaïque', '拉伸': 'Étirer',
             '缩放适配': 'Ajuster à l’échelle', '普通半透明': 'Semi-transparent normal', '毛玻璃': 'Verre dépoli', '亚克力': 'Acrylique',
             '背景图片:': 'Image de fond :', '背景透明度:': 'Transparence du fond :', '背景模式:': 'Mode de fond :',
@@ -1912,7 +1912,7 @@
             '音符音量透明度 (音量越低越透明)': '노트 음량 투명도 (음량이 낮을수록 투명)',
             'NBS 导出版本:': 'NBS 내보내기 버전:',
             '含铜号角乐器时自动 V6': '구리 호른 악기가 있으면 자동으로 V6 사용',
-            '关于 NoteBlockWeb': 'NoteBlockWeb 정보',
+            '关于 MiauNoteBlock': 'MiauNoteBlock 정보',
             '通用': '일반', '个性化': '개인화', '清除': '지우기', '平铺': '바둑판식 반복', '拉伸': '늘리기',
             '缩放适配': '크기에 맞춤', '普通半透明': '일반 반투명', '毛玻璃': '매트 글라스', '亚克力': '아크릴',
             '背景图片:': '배경 이미지:', '背景透明度:': '배경 투명도:', '背景模式:': '배경 모드:',

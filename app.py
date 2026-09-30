@@ -1,5 +1,5 @@
 """
-WebNBS - 基于网页的 NBS 音符块编曲工具
+MiauNoteBlock - 基于网页的 NBS 音符块编曲工具
 FastAPI 静态托管服务
 
 说明: NBS/MIDI 的解析、转换与播放已全部在浏览器端完成 (static/js/nbs_client.js),
@@ -16,7 +16,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 
 # ============ 加载配置文件 ============
 # 默认配置文件模板 (带注释, 首次启动时自动写入 config.yaml)
-_DEFAULT_CONFIG_YAML = """# WebNBS 配置文件
+_DEFAULT_CONFIG_YAML = """# MiauNoteBlock 配置文件
 # 修改后需重启服务生效
 
 # 服务器监听配置
@@ -81,7 +81,7 @@ seo:
   # 留空则分享卡片使用相对地址 (部分平台可能需要绝对地址才能显示图片)
   site_url: ""
   # SEO 标题 (浏览器标签 + 搜索结果标题 + 分享卡片标题)
-  # 默认: NoteBlockWeb - 在线 Minecraft 音符盒 (NBS) 编曲编辑器
+  # 默认: MiauNoteBlock - 在线 Minecraft 音符盒 (NBS) 编曲编辑器
   title: ""
   # SEO 描述 (搜索结果摘要 + 分享卡片描述), 建议 60~120 个字符
   # 默认: 免费在线 Minecraft 音符盒 (Note Block / NBS) 编曲工具：支持 NBS 导入导出、MIDI 导入、钢琴卷帘编辑、音色拟合与音频渲染，无需安装即可在浏览器中使用。
@@ -100,7 +100,7 @@ _DEFAULT_CONFIG_YAML += "\n" + _SEO_CONFIG_YAML
 # 配置 seo.title/site_url/description/keywords 留空时使用的默认值。
 SEO_DEFAULTS = {
     'site_url': '',
-    'title': 'NoteBlockWeb - 在线 Minecraft 音符盒 (NBS) 编曲编辑器',
+    'title': 'MiauNoteBlock - 在线 Minecraft 音符盒 (NBS) 编曲编辑器',
     'description': '免费在线 Minecraft 音符盒 (Note Block / NBS) 编曲工具：支持 NBS 导入导出、MIDI 导入、钢琴卷帘编辑、音色拟合与音频渲染，无需安装即可在浏览器中使用。',
     'keywords': 'Minecraft, 音符盒, Note Block, NBS, 编曲, 编辑器, 音乐制作, MIDI, 在线工具, Music, Editor, Note block music',
 }
@@ -117,7 +117,7 @@ def _ensure_seo_in_config(config_path):
             return
         with open(config_path, 'a', encoding='utf-8') as f:
             f.write('\n' + _SEO_CONFIG_YAML)
-        print('[WebNBS] 已在 config.yaml 末尾写入默认 SEO 配置 (可自行修改关键词/标题/描述)')
+        print('[MiauNoteBlock] 已在 config.yaml 末尾写入默认 SEO 配置 (可自行修改关键词/标题/描述)')
     except Exception as e:
         print(f'[警告] 写入默认 SEO 配置到 config.yaml 失败: {e}')
 
@@ -148,7 +148,7 @@ def load_config():
             import yaml
             with open(config_path, 'w', encoding='utf-8') as f:
                 f.write(_DEFAULT_CONFIG_YAML)
-            print(f"[WebNBS] 已自动创建默认配置文件: {config_path}")
+            print(f"[MiauNoteBlock] 已自动创建默认配置文件: {config_path}")
         except ImportError:
             print("[警告] 未安装 PyYAML, 无法写入默认配置文件, 使用内存默认配置. pip install pyyaml")
         except Exception as e:
@@ -210,15 +210,15 @@ def _inject_seo(html):
     tags.append('<meta name="keywords" content="' + ek + '">')
     tags.append('<meta name="description" content="' + ed + '">')
     tags.append('<meta name="robots" content="index, follow, max-image-preview:large">')
-    tags.append('<meta name="author" content="NoteBlockWeb">')
-    tags.append('<meta name="copyright" content="NoteBlockWeb">')
-    tags.append('<meta name="application-name" content="NoteBlockWeb">')
+    tags.append('<meta name="author" content="MiauNoteBlock">')
+    tags.append('<meta name="copyright" content="MiauNoteBlock">')
+    tags.append('<meta name="application-name" content="MiauNoteBlock">')
     if base_url:
         tags.append('<link rel="canonical" href="' + esc(page_url) + '">')
 
     # ---- Open Graph (Facebook / WhatsApp / QQ / 微信 / 微博 / 知乎等社交平台) ----
     tags.append('<meta property="og:type" content="website">')
-    tags.append('<meta property="og:site_name" content="NoteBlockWeb">')
+    tags.append('<meta property="og:site_name" content="MiauNoteBlock">')
     tags.append('<meta property="og:locale" content="zh_CN">')
     tags.append('<meta property="og:title" content="' + et + '">')
     tags.append('<meta property="og:description" content="' + ed + '">')
@@ -243,7 +243,7 @@ def _inject_seo(html):
     json_ld = {
         '@context': 'https://schema.org',
         '@type': 'WebApplication',
-        'name': 'NoteBlockWeb',
+        'name': 'MiauNoteBlock',
         'url': page_url,
         'description': description,
         'applicationCategory': 'MusicApplication',
@@ -263,7 +263,7 @@ def _inject_seo(html):
 
 
 # 创建 FastAPI 应用
-app = FastAPI(title="WebNBS", description="基于网页的 NBS 音符块编曲工具")
+app = FastAPI(title="MiauNoteBlock", description="基于网页的 NBS 音符块编曲工具")
 
 # 启用 GZip 压缩 (小响应不压缩, 大响应自动压缩, 显著降低 JSON 体积)
 # 客户端需带 Accept-Encoding: gzip
@@ -329,7 +329,7 @@ async def get_config():
 # 启动服务器
 if __name__ == "__main__":
     import uvicorn
-    print(f"[WebNBS] 启动服务器: http://{SERVER_HOST}:{SERVER_PORT}")
-    print(f"[WebNBS] 公开模式: {IS_PUBLIC}")
-    print(f"[WebNBS] 前端目录: {STATIC_DIR}")
+    print(f"[MiauNoteBlock] 启动服务器: http://{SERVER_HOST}:{SERVER_PORT}")
+    print(f"[MiauNoteBlock] 公开模式: {IS_PUBLIC}")
+    print(f"[MiauNoteBlock] 前端目录: {STATIC_DIR}")
     uvicorn.run(app, host=SERVER_HOST, port=SERVER_PORT, workers=1)

@@ -1,4 +1,4 @@
-# WebNBS 配置文件
+# MiauNoteBlock 配置文件
 # 修改后需重启服务生效
 
 # 服务器监听配置
@@ -58,7 +58,7 @@ seo:
   # 留空则分享卡片使用相对地址 (部分平台可能需要绝对地址才能显示图片)
   site_url: ""
   # SEO 标题 (浏览器标签 + 搜索结果标题 + 分享卡片标题)
-  # 默认: NoteBlockWeb - 在线 Minecraft 音符盒 (NBS) 编曲编辑器
+  # 默认: MiauNoteBlock - 在线 Minecraft 音符盒 (NBS) 编曲编辑器
   title: ""
   # SEO 描述 (搜索结果摘要 + 分享卡片描述), 建议 60~120 个字符
   # 默认: 免费在线 Minecraft 音符盒 (Note Block / NBS) 编曲工具：支持 NBS 导入导出、MIDI 导入、钢琴卷帘编辑、音色拟合与音频渲染，无需安装即可在浏览器中使用。

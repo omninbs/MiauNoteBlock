@@ -1,9 +1,9 @@
 @echo off
-title NoteBlockWeb Local Build
+title MiauNoteBlock Local Build
 cd /d "%~dp0"
 
 echo ============================================================
-echo   NoteBlockWeb Local Offline Build
+echo   MiauNoteBlock Local Offline Build
 echo   src/  -^>  blbl-toy/   (embedded base64 sounds, file:// ready)
 echo ============================================================
 echo.

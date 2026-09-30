@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#202020">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>NoteBlockWeb - Minecraft Note Block Studio</title>
+    <title>MiauNoteBlock - Minecraft Note Block Studio</title>
     <script defer src="https://analytics.xozet.com/script.js" data-website-id="b89726f0-3b37-4bfe-8b8d-69f6cb487cfa"></script>
     <script>
         // 路径基址: 用 file:// 直接打开 index.html 时, 以 "/" 开头的绝对路径会被
@@ -39,7 +39,7 @@
             </button>
             <span class="toolbar-divider"></span>
             <span class="toolbar-title" id="toolbar-title" style="font-size:14px;font-weight:600;color:var(--text-primary);margin:0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;">
-                <span id="song-name">NoteBlockWeb</span>
+                <span id="song-name">MiauNoteBlock</span>
             </span>
         </div>
 
@@ -550,7 +550,7 @@
                             <option value="id-ID">🇮🇩 Bahasa Indonesia</option>
                         </select>
                     </div>
-                    <button class="popup-btn" id="settings-about-btn" style="margin-top:8px;width:100%;">关于 NoteBlockWeb</button>
+                    <button class="popup-btn" id="settings-about-btn" style="margin-top:8px;width:100%;">关于 MiauNoteBlock</button>
                 </div>
                 <div class="settings-tab-panel" id="settings-tab-personal">
                     <div class="settings-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -648,12 +648,12 @@
         <div class="popup-content" style="max-width:380px;">
             <div class="settings-header">
                 <i class="fa-solid fa-circle-info"></i>
-                <h4>关于 NoteBlockWeb</h4>
+                <h4>关于 MiauNoteBlock</h4>
                 <button class="settings-close-btn" id="about-close-x">&times;</button>
             </div>
             <div class="settings-body" style="text-align:center;padding:20px 16px;">
-                <img src="static/logo.png" alt="NoteBlockWeb" style="width:64px;height:64px;margin-bottom:12px;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,0.35);">
-                <h3 style="margin:0 0 4px;font-size:16px;">NoteBlockWeb</h3>
+                <img src="static/logo.png" alt="MiauNoteBlock" style="width:64px;height:64px;margin-bottom:12px;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,0.35);">
+                <h3 style="margin:0 0 4px;font-size:16px;">MiauNoteBlock</h3>
                 <p style="margin:0 0 12px;font-size:12px;color:var(--text-secondary);">基于 Web 的 Minecraft 音符盒编辑器</p>
                 <p style="margin:0 0 4px;font-size:11px;color:var(--text-tertiary);">支持 NBS 格式导入/导出, MIDI 导入, 钢琴卷帘编辑</p>
                 <p style="margin:0 0 8px;font-size:12px;color:var(--text-secondary);">版本: <strong id="about-version">2.4.9</strong></p>
@@ -661,8 +661,8 @@
                 <p style="margin:0 0 4px;font-size:12px;color:var(--text-secondary);">QQ交流群: <strong>2156069838</strong></p>
                 <p style="margin:0 0 8px;font-size:12px;color:var(--text-secondary);">反馈邮箱: <a href="mailto:3451392772@qq.com" style="color:var(--accent);text-decoration:none;">3451392772@qq.com</a></p>
                 <p style="margin:0;font-size:12px;color:var(--text-secondary);">开源地址:
-                    <a href="https://github.com/COM1919/NoteBlockWeb" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:none;">
-                        github.com/COM1919/NoteBlockWeb <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:10px;"></i>
+                    <a href="https://github.com/COM1919/MiauNoteBlock" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:none;">
+                        github.com/COM1919/MiauNoteBlock <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:10px;"></i>
                     </a>
                 </p>
             </div>
@@ -1295,7 +1295,7 @@
         const { Midi } = await import("https://esm.run/@tonejs/midi@2.0.28");
         window.__ToneMidi = Midi;
     } catch (e) {
-        console.warn("[WebNBS] @tonejs/midi 加载失败, 将使用回退 MIDI 解析器:", e);
+        console.warn("[MiauNoteBlock] @tonejs/midi 加载失败, 将使用回退 MIDI 解析器:", e);
         window.__ToneMidiLoadError = true;
     }
 </script>
@@ -1304,21 +1304,21 @@
 <script src="static/js/compress_est.js?v=20260926b"></script>
 <script src="static/js/api_client.js?v=20260905a"></script>
 <script src="static/js/custom_dropdown.js?v=20260913f"></script>
-<script src="static/js/i18n.js?v=20260926h"></script>
+<script src="static/js/i18n.js?v=20260930a"></script>
 <script src="static/js/audio_engine.js?v=20260919c"></script>
 <script src="static/js/custom_instruments.js?v=20260905a"></script>
 <script src="static/js/audio_fix_utils.js?v=20260905a"></script>
 <script src="static/js/sf3_player.js?v=20260808a"></script>
 <script src="static/js/spessa_player.js?v=20260918a"></script>
 <script src="static/js/soundfont_loader.js?v=20260808b"></script>
-<script src="static/js/piano_roll.js?v=20260927c"></script>
+<script src="static/js/piano_roll.js?v=20260930a"></script>
 <!-- 本地化第三方库: ZIP 打包 (jszip) / MP3 编码 (lamejs) -->
 <script src="static/vendor/jszip.min.js?v=20260905a"></script>
 <script src="static/vendor/lame.min.js?v=20260905a"></script>
 <!-- 离线渲染引擎: audio_render.js 必须在 main.js 之前加载 -->
 <script src="static/js/render_jsmix.js?v=20260906e"></script>
 <script src="static/js/audio_render.js?v=20260919c"></script>
-<script src="static/js/main.js?v=20260926i"></script>
+<script src="static/js/main.js?v=20260930a"></script>
 
 </body>
 </html>

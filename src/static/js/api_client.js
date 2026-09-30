@@ -1,5 +1,5 @@
 /**
- * WebNBS API 客户端
+ * MiauNoteBlock API 客户端
  */
 
 // 统一格式化后端返回的错误，避免 Error.message 变成 [object Object]

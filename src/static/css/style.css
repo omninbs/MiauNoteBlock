@@ -3179,6 +3179,75 @@ input[type="number"]:hover::-webkit-outer-spin-button {
     flex: 1 1 auto;
     min-height: 0;
 }
+.about-body {
+    padding: 18px 20px 16px;
+    gap: 14px;
+}
+.about-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+.about-logo {
+    flex: 0 0 64px;
+    width: 64px;
+    height: 64px;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+.about-brand-copy {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    min-width: 0;
+    text-align: left;
+}
+.about-brand-copy h3,
+.about-brand-copy p,
+.about-details p {
+    margin: 0;
+}
+.about-brand-copy h3 {
+    font-size: 16px;
+    line-height: 1.2;
+}
+.about-brand-copy p {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.35;
+}
+.about-details {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    text-align: left;
+}
+.about-details .about-capabilities {
+    margin-bottom: 3px;
+    color: var(--text-tertiary);
+    font-size: 11px;
+}
+.about-details a {
+    color: var(--accent);
+    text-decoration: none;
+}
+.about-details a:hover {
+    text-decoration: underline;
+}
+.about-details .fa-arrow-up-right-from-square {
+    font-size: 10px;
+}
+@media (max-width: 420px) {
+    .about-body { padding: 14px 16px; }
+    .about-brand { gap: 10px; }
+}
 .settings-row {
     display: flex;
     align-items: center;

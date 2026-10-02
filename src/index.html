@@ -22,7 +22,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="static/css/style.css?v=20261001g">
+    <link rel="stylesheet" href="static/css/style.css?v=20261001h">
 </head>
 <body>
 
@@ -683,20 +683,22 @@
                 <h4>关于 MiauNoteBlock</h4>
                 <button class="settings-close-btn" id="about-close-x">&times;</button>
             </div>
-            <div class="settings-body" style="text-align:center;padding:20px 16px;">
-                <img src="static/logo.png" alt="MiauNoteBlock" style="width:64px;height:64px;margin-bottom:12px;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,0.35);">
-                <h3 style="margin:0 0 4px;font-size:16px;">MiauNoteBlock</h3>
-                <p style="margin:0 0 12px;font-size:12px;color:var(--text-secondary);">基于 Web 的 Minecraft 音符盒编辑器</p>
-                <p style="margin:0 0 4px;font-size:11px;color:var(--text-tertiary);">支持 NBS 格式导入/导出, MIDI 导入, 钢琴卷帘编辑</p>
-                <p style="margin:0 0 8px;font-size:12px;color:var(--text-secondary);">版本: <strong id="about-version">2.4.9</strong></p>
-                <p style="margin:0 0 4px;font-size:12px;color:var(--text-secondary);">开发者: <strong>COM1919</strong></p>
-                <p style="margin:0 0 4px;font-size:12px;color:var(--text-secondary);">QQ交流群: <strong>2156069838</strong></p>
-                <p style="margin:0 0 8px;font-size:12px;color:var(--text-secondary);">反馈邮箱: <a href="mailto:3451392772@qq.com" style="color:var(--accent);text-decoration:none;">3451392772@qq.com</a></p>
-                <p style="margin:0;font-size:12px;color:var(--text-secondary);">开源地址:
-                    <a href="https://github.com/COM1919/MiauNoteBlock" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:none;">
-                        github.com/COM1919/MiauNoteBlock <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:10px;"></i>
-                    </a>
-                </p>
+            <div class="settings-body about-body">
+                <div class="about-brand">
+                    <img src="static/logo.png" alt="MiauNoteBlock" class="about-logo">
+                    <div class="about-brand-copy">
+                        <h3>MiauNoteBlock</h3>
+                        <p>基于 Web 的 Minecraft 音符盒编辑器</p>
+                    </div>
+                </div>
+                <div class="about-details">
+                    <p class="about-capabilities">支持 NBS 格式导入/导出、MIDI 导入和钢琴卷帘编辑</p>
+                    <p>版本: <strong id="about-version">2.4.9</strong></p>
+                    <p>开发者: <strong>COM1919</strong></p>
+                    <p>QQ群: <strong>2156069838</strong></p>
+                    <p>反馈邮箱: <a href="mailto:3451392772@qq.com">3451392772@qq.com</a></p>
+                    <p>开源地址: <a href="https://github.com/COM1919/MiauNoteBlock" target="_blank" rel="noopener noreferrer">github.com/COM1919/MiauNoteBlock <i class="fa-solid fa-arrow-up-right-from-square"></i></a></p>
+                </div>
             </div>
             <div class="popup-actions">
                 <button class="popup-btn popup-btn-primary" id="about-close-btn" style="margin:0 auto;">关闭</button>

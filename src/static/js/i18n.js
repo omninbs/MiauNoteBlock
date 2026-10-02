@@ -2138,6 +2138,333 @@
         if (Object.prototype.hasOwnProperty.call(_fittingLevelI18n, _nl)) Object.assign(UI_TEXT[_nl], _fittingLevelI18n[_nl]);
     }
 
+    // ============ 歌词标注 (测试版) 文案 (9 种非中文语言) ============
+    var _lyricsI18n = {
+        'en-US': {
+            '歌词标注': 'Lyrics annotation',
+            '测试版': 'Beta',
+            '歌词编辑模式：点击顶部时间轴的刻度即可为该 tick 添加 / 修改歌词': 'Lyrics edit mode: click a tick on the top timeline to add / edit its lyric',
+            '退出': 'Exit',
+            '条歌词': 'lyrics',
+            '当前 tick': 'Current tick',
+            '歌词文字': 'Lyric text',
+            '留空表示删除该 tick 的歌词': 'Leave empty to delete the lyric of this tick',
+            '持续时间 (tick)': 'Duration (ticks)',
+            '0 = 持续显示到下一句歌词': '0 = show until the next lyric',
+            '本作品包含歌词标注': 'This work contains lyrics',
+            '同时导出歌词 (打包为 zip：歌曲 + lyrics.json)': 'Also export lyrics (zip: song + lyrics.json)',
+            '歌词作品包已导出，包含歌曲与歌词数据 (lyrics.json)。': 'Lyrics pack exported, containing the song and lyric data (lyrics.json).'
+        },
+        'ja-JP': {
+            '歌词标注': '歌詞の注釈',
+            '测试版': 'ベータ版',
+            '歌词编辑模式：点击顶部时间轴的刻度即可为该 tick 添加 / 修改歌词': '歌詞編集モード：上部タイムラインの目盛りをクリックすると、その tick の歌詞を追加 / 編集できます',
+            '退出': '終了',
+            '条歌词': '件の歌詞',
+            '当前 tick': '現在の tick',
+            '歌词文字': '歌詞テキスト',
+            '留空表示删除该 tick 的歌词': '空欄にするとこの tick の歌詞を削除します',
+            '持续时间 (tick)': '表示時間 (tick)',
+            '0 = 持续显示到下一句歌词': '0 = 次の歌詞まで表示',
+            '本作品包含歌词标注': 'この作品には歌詞が含まれています',
+            '同时导出歌词 (打包为 zip：歌曲 + lyrics.json)': '歌詞も一緒に書き出す (zip：曲 + lyrics.json)',
+            '歌词作品包已导出，包含歌曲与歌词数据 (lyrics.json)。': '歌詞パッケージを書き出しました (曲と歌詞データ lyrics.json を含む)。'
+        },
+        'ko-KR': {
+            '歌词标注': '가사 표기',
+            '测试版': '베타',
+            '歌词编辑模式：点击顶部时间轴的刻度即可为该 tick 添加 / 修改歌词': '가사 편집 모드: 상단 타임라인의 눈금을 클릭하면 해당 tick의 가사를 추가 / 편집할 수 있습니다',
+            '退出': '종료',
+            '条歌词': '개 가사',
+            '当前 tick': '현재 tick',
+            '歌词文字': '가사 텍스트',
+            '留空表示删除该 tick 的歌词': '비워 두면 이 tick의 가사가 삭제됩니다',
+            '持续时间 (tick)': '표시 시간 (tick)',
+            '0 = 持续显示到下一句歌词': '0 = 다음 가사까지 표시',
+            '本作品包含歌词标注': '이 작품에는 가사가 포함되어 있습니다',
+            '同时导出歌词 (打包为 zip：歌曲 + lyrics.json)': '가사도 함께 내보내기 (zip: 곡 + lyrics.json)',
+            '歌词作品包已导出，包含歌曲与歌词数据 (lyrics.json)。': '가사 패키지를 내보냈습니다 (곡과 가사 데이터 lyrics.json 포함).'
+        },
+        'es-ES': {
+            '歌词标注': 'Anotación de letras',
+            '测试版': 'Beta',
+            '歌词编辑模式：点击顶部时间轴的刻度即可为该 tick 添加 / 修改歌词': 'Modo de edición de letras: haz clic en una marca de la línea de tiempo superior para añadir / editar la letra de ese tick',
+            '退出': 'Salir',
+            '条歌词': 'letras',
+            '当前 tick': 'Tick actual',
+            '歌词文字': 'Texto de la letra',
+            '留空表示删除该 tick 的歌词': 'Déjalo vacío para eliminar la letra de este tick',
+            '持续时间 (tick)': 'Duración (ticks)',
+            '0 = 持续显示到下一句歌词': '0 = mostrar hasta la siguiente letra',
+            '本作品包含歌词标注': 'Esta obra contiene letras',
+            '同时导出歌词 (打包为 zip：歌曲 + lyrics.json)': 'Exportar también las letras (zip: canción + lyrics.json)',
+            '歌词作品包已导出，包含歌曲与歌词数据 (lyrics.json)。': 'Paquete de letras exportado, con la canción y los datos de letras (lyrics.json).'
+        },
+        'pt-BR': {
+            '歌词标注': 'Anotação de letras',
+            '测试版': 'Beta',
+            '歌词编辑模式：点击顶部时间轴的刻度即可为该 tick 添加 / 修改歌词': 'Modo de edição de letras: clique em uma marca da linha do tempo superior para adicionar / editar a letra desse tick',
+            '退出': 'Sair',
+            '条歌词': 'letras',
+            '当前 tick': 'Tick atual',
+            '歌词文字': 'Texto da letra',
+            '留空表示删除该 tick 的歌词': 'Deixe vazio para excluir a letra deste tick',
+            '持续时间 (tick)': 'Duração (ticks)',
+            '0 = 持续显示到下一句歌词': '0 = exibir até a próxima letra',
+            '本作品包含歌词标注': 'Esta obra contém letras',
+            '同时导出歌词 (打包为 zip：歌曲 + lyrics.json)': 'Exportar também as letras (zip: música + lyrics.json)',
+            '歌词作品包已导出，包含歌曲与歌词数据 (lyrics.json)。': 'Pacote de letras exportado, contendo a música e os dados das letras (lyrics.json).'
+        },
+        'ru-RU': {
+            '歌词标注': 'Разметка текста песни',
+            '测试版': 'Бета',
+            '歌词编辑模式：点击顶部时间轴的刻度即可为该 tick 添加 / 修改歌词': 'Режим редактирования текста: нажмите на деление верхней шкалы, чтобы добавить / изменить текст для этого tick',
+            '退出': 'Выход',
+            '条歌词': 'строк текста',
+            '当前 tick': 'Текущий tick',
+            '歌词文字': 'Текст песни',
+            '留空表示删除该 tick 的歌词': 'Оставьте пустым, чтобы удалить текст этого tick',
+            '持续时间 (tick)': 'Длительность (tick)',
+            '0 = 持续显示到下一句歌词': '0 = показывать до следующей строки',
+            '本作品包含歌词标注': 'Эта работа содержит текст песни',
+            '同时导出歌词 (打包为 zip：歌曲 + lyrics.json)': 'Также экспортировать текст (zip: песня + lyrics.json)',
+            '歌词作品包已导出，包含歌曲与歌词数据 (lyrics.json)。': 'Пакет с текстом экспортирован: песня и данные текста (lyrics.json).'
+        },
+        'de-DE': {
+            '歌词标注': 'Liedtext-Anmerkung',
+            '测试版': 'Beta',
+            '歌词编辑模式：点击顶部时间轴的刻度即可为该 tick 添加 / 修改歌词': 'Liedtext-Bearbeitungsmodus: Klicke auf eine Markierung der oberen Zeitleiste, um den Liedtext dieses Ticks hinzuzufügen / zu bearbeiten',
+            '退出': 'Beenden',
+            '条歌词': 'Liedtexte',
+            '当前 tick': 'Aktueller Tick',
+            '歌词文字': 'Liedtext',
+            '留空表示删除该 tick 的歌词': 'Leer lassen, um den Liedtext dieses Ticks zu löschen',
+            '持续时间 (tick)': 'Dauer (Ticks)',
+            '0 = 持续显示到下一句歌词': '0 = bis zum nächsten Liedtext anzeigen',
+            '本作品包含歌词标注': 'Dieses Werk enthält Liedtexte',
+            '同时导出歌词 (打包为 zip：歌曲 + lyrics.json)': 'Liedtexte ebenfalls exportieren (zip: Song + lyrics.json)',
+            '歌词作品包已导出，包含歌曲与歌词数据 (lyrics.json)。': 'Liedtext-Paket exportiert, mit Song und Liedtextdaten (lyrics.json).'
+        },
+        'fr-FR': {
+            '歌词标注': 'Annotation des paroles',
+            '测试版': 'Bêta',
+            '歌词编辑模式：点击顶部时间轴的刻度即可为该 tick 添加 / 修改歌词': 'Mode d\'édition des paroles : cliquez sur une graduation de la timeline supérieure pour ajouter / modifier les paroles de ce tick',
+            '退出': 'Quitter',
+            '条歌词': 'paroles',
+            '当前 tick': 'Tick actuel',
+            '歌词文字': 'Texte des paroles',
+            '留空表示删除该 tick 的歌词': 'Laisser vide pour supprimer les paroles de ce tick',
+            '持续时间 (tick)': 'Durée (ticks)',
+            '0 = 持续显示到下一句歌词': '0 = afficher jusqu\'aux paroles suivantes',
+            '本作品包含歌词标注': 'Cette œuvre contient des paroles',
+            '同时导出歌词 (打包为 zip：歌曲 + lyrics.json)': 'Exporter aussi les paroles (zip : morceau + lyrics.json)',
+            '歌词作品包已导出，包含歌曲与歌词数据 (lyrics.json)。': 'Pack de paroles exporté, contenant le morceau et les données de paroles (lyrics.json).'
+        },
+        'id-ID': {
+            '歌词标注': 'Anotasi lirik',
+            '测试版': 'Beta',
+            '歌词编辑模式：点击顶部时间轴的刻度即可为该 tick 添加 / 修改歌词': 'Mode edit lirik: klik tanda pada timeline atas untuk menambah / mengubah lirik tick tersebut',
+            '退出': 'Keluar',
+            '条歌词': 'lirik',
+            '当前 tick': 'Tick saat ini',
+            '歌词文字': 'Teks lirik',
+            '留空表示删除该 tick 的歌词': 'Biarkan kosong untuk menghapus lirik tick ini',
+            '持续时间 (tick)': 'Durasi (tick)',
+            '0 = 持续显示到下一句歌词': '0 = tampilkan hingga lirik berikutnya',
+            '本作品包含歌词标注': 'Karya ini berisi lirik',
+            '同时导出歌词 (打包为 zip：歌曲 + lyrics.json)': 'Ekspor juga lirik (zip: lagu + lyrics.json)',
+            '歌词作品包已导出，包含歌曲与歌词数据 (lyrics.json)。': 'Paket lirik telah diekspor, berisi lagu dan data lirik (lyrics.json).'
+        }
+    };
+    for (_nl in _lyricsI18n) {
+        if (Object.prototype.hasOwnProperty.call(_lyricsI18n, _nl)) Object.assign(UI_TEXT[_nl], _lyricsI18n[_nl]);
+    }
+
+    // ============ 歌词临时轨道 (剪映风格) 文案 (9 种非中文语言) ============
+    var _lyricsLaneI18n = {
+        'en-US': {
+            '歌词': 'Lyrics',
+            '歌词编辑模式：双击空白处新建歌词片段，双击片段编辑文字，拖动片段可移动或拉伸': 'Lyrics edit mode: double-click empty space to add a clip, double-click a clip to edit its text, drag a clip to move or stretch it',
+            '＋轨1': '＋Lane 1', '＋轨2': '＋Lane 2', '＋轨3': '＋Lane 3',
+            '在播放头位置新建歌词片段': 'Add a lyric clip at the playhead',
+            '请输入文本': 'Please enter text'
+        },
+        'es-ES': {
+            '歌词': 'Letra',
+            '歌词编辑模式：双击空白处新建歌词片段，双击片段编辑文字，拖动片段可移动或拉伸': 'Modo de edición de letra: haz doble clic en un espacio vacío para añadir un fragmento, doble clic en un fragmento para editar su texto, arrastra un fragmento para moverlo o estirarlo',
+            '＋轨1': '＋Pista 1', '＋轨2': '＋Pista 2', '＋轨3': '＋Pista 3',
+            '在播放头位置新建歌词片段': 'Añadir un fragmento de letra en el cursor de reproducción',
+            '请输入文本': 'Introduce el texto'
+        },
+        'pt-BR': {
+            '歌词': 'Letra',
+            '歌词编辑模式：双击空白处新建歌词片段，双击片段编辑文字，拖动片段可移动或拉伸': 'Modo de edição de letra: clique duas vezes em um espaço vazio para adicionar um trecho, clique duas vezes em um trecho para editar o texto, arraste um trecho para movê-lo ou esticá-lo',
+            '＋轨1': '＋Faixa 1', '＋轨2': '＋Faixa 2', '＋轨3': '＋Faixa 3',
+            '在播放头位置新建歌词片段': 'Adicionar um trecho de letra na posição do cursor',
+            '请输入文本': 'Digite o texto'
+        },
+        'ru-RU': {
+            '歌词': 'Текст',
+            '歌词编辑模式：双击空白处新建歌词片段，双击片段编辑文字，拖动片段可移动或拉伸': 'Режим редактирования текста: двойной щелчок по пустому месту — добавить фрагмент, двойной щелчок по фрагменту — изменить текст, перетащите фрагмент, чтобы переместить или растянуть',
+            '＋轨1': '＋Дорожка 1', '＋轨2': '＋Дорожка 2', '＋轨3': '＋Дорожка 3',
+            '在播放头位置新建歌词片段': 'Добавить фрагмент текста на позиции курсора',
+            '请输入文本': 'Введите текст'
+        },
+        'de-DE': {
+            '歌词': 'Songtext',
+            '歌词编辑模式：双击空白处新建歌词片段，双击片段编辑文字，拖动片段可移动或拉伸': 'Songtext-Bearbeitungsmodus: Doppelklick auf leeren Bereich fügt ein Segment hinzu, Doppelklick auf ein Segment bearbeitet den Text, Ziehen verschiebt oder streckt das Segment',
+            '＋轨1': '＋Spur 1', '＋轨2': '＋Spur 2', '＋轨3': '＋Spur 3',
+            '在播放头位置新建歌词片段': 'Ein Songtext-Segment an der Abspielposition hinzufügen',
+            '请输入文本': 'Text eingeben'
+        },
+        'fr-FR': {
+            '歌词': 'Paroles',
+            '歌词编辑模式：双击空白处新建歌词片段，双击片段编辑文字，拖动片段可移动或拉伸': 'Mode d\'édition des paroles : double-cliquez sur un espace vide pour ajouter un segment, double-cliquez sur un segment pour modifier le texte, faites glisser un segment pour le déplacer ou l\'étirer',
+            '＋轨1': '＋Piste 1', '＋轨2': '＋Piste 2', '＋轨3': '＋Piste 3',
+            '在播放头位置新建歌词片段': 'Ajouter un segment de paroles à la position de lecture',
+            '请输入文本': 'Saisir le texte'
+        },
+        'ja-JP': {
+            '歌词': '歌詞',
+            '歌词编辑模式：双击空白处新建歌词片段，双击片段编辑文字，拖动片段可移动或拉伸': '歌詞編集モード：空白をダブルクリックでセグメントを追加、セグメントをダブルクリックでテキスト編集、ドラッグで移動・伸縮できます',
+            '＋轨1': '＋トラック1', '＋轨2': '＋トラック2', '＋轨3': '＋トラック3',
+            '在播放头位置新建歌词片段': '再生位置に歌詞セグメントを追加',
+            '请输入文本': 'テキストを入力'
+        },
+        'ko-KR': {
+            '歌词': '가사',
+            '歌词编辑模式：双击空白处新建歌词片段，双击片段编辑文字，拖动片段可移动或拉伸': '가사 편집 모드: 빈 곳을 두 번 클릭하여 구간 추가, 구간을 두 번 클릭하여 텍스트 편집, 드래그하여 이동하거나 늘릴 수 있습니다',
+            '＋轨1': '＋트랙 1', '＋轨2': '＋트랙 2', '＋轨3': '＋트랙 3',
+            '在播放头位置新建歌词片段': '재생 위치에 가사 구간 추가',
+            '请输入文本': '텍스트 입력'
+        },
+        'id-ID': {
+            '歌词': 'Lirik',
+            '歌词编辑模式：双击空白处新建歌词片段，双击片段编辑文字，拖动片段可移动或拉伸': 'Mode edit lirik: klik dua kali ruang kosong untuk menambah segmen, klik dua kali segmen untuk mengedit teks, seret segmen untuk memindahkan atau meregangkannya',
+            '＋轨1': '＋Trek 1', '＋轨2': '＋Trek 2', '＋轨3': '＋Trek 3',
+            '在播放头位置新建歌词片段': 'Tambah segmen lirik di posisi pemutaran',
+            '请输入文本': 'Masukkan teks'
+        }
+    };
+    for (_nl in _lyricsLaneI18n) {
+        if (Object.prototype.hasOwnProperty.call(_lyricsLaneI18n, _nl)) Object.assign(UI_TEXT[_nl], _lyricsLaneI18n[_nl]);
+    }
+
+    // ============ 歌词导入还原 (测试版) 文案 (9 种非中文语言) ============
+    var _lyricsImportI18n = {
+        'en-US': {
+            '导入歌词 (JSON)': 'Import lyrics (JSON)',
+            '导入歌词': 'Import lyrics',
+            '读取歌词数据…': 'Reading lyric data…',
+            '歌词导入失败': 'Lyrics import failed',
+            '歌词文件中没有有效的歌词数据。': 'The lyrics file contains no valid lyric data.',
+            '当前已有歌词标注': 'Existing lyrics',
+            '导入将覆盖当前歌词标注，是否继续？': 'Importing will overwrite the current lyrics. Continue?',
+            '已导入歌词标注': 'Lyrics imported',
+            '已还原歌词标注': 'Lyrics restored',
+            '歌词数据解析失败，已跳过。': 'Failed to parse lyric data, skipped.'
+        },
+        'ja-JP': {
+            '导入歌词 (JSON)': '歌詞をインポート (JSON)',
+            '导入歌词': '歌詞のインポート',
+            '读取歌词数据…': '歌詞データを読み込み中…',
+            '歌词导入失败': '歌詞のインポートに失敗しました',
+            '歌词文件中没有有效的歌词数据。': '歌詞ファイルに有効な歌詞データがありません。',
+            '当前已有歌词标注': '現在の歌詞',
+            '导入将覆盖当前歌词标注，是否继续？': 'インポートすると現在の歌詞が上書きされます。続行しますか？',
+            '已导入歌词标注': '歌詞をインポートしました',
+            '已还原歌词标注': '歌詞を復元しました',
+            '歌词数据解析失败，已跳过。': '歌詞データの解析に失敗したため、スキップしました。'
+        },
+        'ko-KR': {
+            '导入歌词 (JSON)': '가사 가져오기 (JSON)',
+            '导入歌词': '가사 가져오기',
+            '读取歌词数据…': '가사 데이터 읽는 중…',
+            '歌词导入失败': '가사 가져오기 실패',
+            '歌词文件中没有有效的歌词数据。': '가사 파일에 유효한 가사 데이터가 없습니다.',
+            '当前已有歌词标注': '현재 가사',
+            '导入将覆盖当前歌词标注，是否继续？': '가져오면 현재 가사가 덮어써집니다. 계속할까요?',
+            '已导入歌词标注': '가사를 가져왔습니다',
+            '已还原歌词标注': '가사를 복원했습니다',
+            '歌词数据解析失败，已跳过。': '가사 데이터를 해석하지 못해 건너뛰었습니다.'
+        },
+        'es-ES': {
+            '导入歌词 (JSON)': 'Importar letras (JSON)',
+            '导入歌词': 'Importar letras',
+            '读取歌词数据…': 'Leyendo datos de letras…',
+            '歌词导入失败': 'Error al importar las letras',
+            '歌词文件中没有有效的歌词数据。': 'El archivo de letras no contiene datos de letras válidos.',
+            '当前已有歌词标注': 'Letras actuales',
+            '导入将覆盖当前歌词标注，是否继续？': 'La importación sobrescribirá las letras actuales. ¿Continuar?',
+            '已导入歌词标注': 'Letras importadas',
+            '已还原歌词标注': 'Letras restauradas',
+            '歌词数据解析失败，已跳过。': 'No se pudieron analizar los datos de letras; se omitieron.'
+        },
+        'pt-BR': {
+            '导入歌词 (JSON)': 'Importar letras (JSON)',
+            '导入歌词': 'Importar letras',
+            '读取歌词数据…': 'Lendo dados das letras…',
+            '歌词导入失败': 'Falha ao importar as letras',
+            '歌词文件中没有有效的歌词数据。': 'O arquivo de letras não contém dados de letras válidos.',
+            '当前已有歌词标注': 'Letras atuais',
+            '导入将覆盖当前歌词标注，是否继续？': 'A importação substituirá as letras atuais. Continuar?',
+            '已导入歌词标注': 'Letras importadas',
+            '已还原歌词标注': 'Letras restauradas',
+            '歌词数据解析失败，已跳过。': 'Não foi possível analisar os dados das letras; ignorado.'
+        },
+        'ru-RU': {
+            '导入歌词 (JSON)': 'Импорт текста (JSON)',
+            '导入歌词': 'Импорт текста',
+            '读取歌词数据…': 'Чтение данных текста…',
+            '歌词导入失败': 'Не удалось импортировать текст',
+            '歌词文件中没有有效的歌词数据。': 'Файл не содержит допустимых данных текста.',
+            '当前已有歌词标注': 'Текущий текст',
+            '导入将覆盖当前歌词标注，是否继续？': 'Импорт перезапишет текущий текст. Продолжить?',
+            '已导入歌词标注': 'Текст импортирован',
+            '已还原歌词标注': 'Текст восстановлен',
+            '歌词数据解析失败，已跳过。': 'Не удалось разобрать данные текста, пропущено.'
+        },
+        'de-DE': {
+            '导入歌词 (JSON)': 'Liedtext importieren (JSON)',
+            '导入歌词': 'Liedtext importieren',
+            '读取歌词数据…': 'Liedtextdaten werden gelesen…',
+            '歌词导入失败': 'Liedtext-Import fehlgeschlagen',
+            '歌词文件中没有有效的歌词数据。': 'Die Datei enthält keine gültigen Liedtextdaten.',
+            '当前已有歌词标注': 'Vorhandene Liedtexte',
+            '导入将覆盖当前歌词标注，是否继续？': 'Der Import überschreibt die vorhandenen Liedtexte. Fortfahren?',
+            '已导入歌词标注': 'Liedtexte importiert',
+            '已还原歌词标注': 'Liedtexte wiederhergestellt',
+            '歌词数据解析失败，已跳过。': 'Liedtextdaten konnten nicht gelesen werden, übersprungen.'
+        },
+        'fr-FR': {
+            '导入歌词 (JSON)': 'Importer les paroles (JSON)',
+            '导入歌词': 'Importer les paroles',
+            '读取歌词数据…': 'Lecture des données de paroles…',
+            '歌词导入失败': 'Échec de l\'import des paroles',
+            '歌词文件中没有有效的歌词数据。': 'Le fichier de paroles ne contient aucune donnée valide.',
+            '当前已有歌词标注': 'Paroles actuelles',
+            '导入将覆盖当前歌词标注，是否继续？': 'L\'import va remplacer les paroles actuelles. Continuer ?',
+            '已导入歌词标注': 'Paroles importées',
+            '已还原歌词标注': 'Paroles restaurées',
+            '歌词数据解析失败，已跳过。': 'Impossible d\'analyser les données de paroles, ignoré.'
+        },
+        'id-ID': {
+            '导入歌词 (JSON)': 'Impor lirik (JSON)',
+            '导入歌词': 'Impor lirik',
+            '读取歌词数据…': 'Membaca data lirik…',
+            '歌词导入失败': 'Gagal mengimpor lirik',
+            '歌词文件中没有有效的歌词数据。': 'Berkas lirik tidak berisi data lirik yang valid.',
+            '当前已有歌词标注': 'Lirik saat ini',
+            '导入将覆盖当前歌词标注，是否继续？': 'Impor akan menimpa lirik saat ini. Lanjutkan?',
+            '已导入歌词标注': 'Lirik diimpor',
+            '已还原歌词标注': 'Lirik dipulihkan',
+            '歌词数据解析失败，已跳过。': 'Gagal mengurai data lirik, dilewati.'
+        }
+    };
+    for (_nl in _lyricsImportI18n) {
+        if (Object.prototype.hasOwnProperty.call(_lyricsImportI18n, _nl)) Object.assign(UI_TEXT[_nl], _lyricsImportI18n[_nl]);
+    }
+
     var _fpsI18n = {
         'en-US': {
             '画面 FPS:': 'Display FPS:', '30 FPS': '30 FPS', '60 FPS': '60 FPS', '垂直同步': 'VSync', 'FPS: ': 'FPS: '

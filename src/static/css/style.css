@@ -742,6 +742,253 @@ input[type="number"]:hover::-webkit-outer-spin-button {
     width: 16px;
     text-align: center;
 }
+/* 测试版标记 (歌词标注等实验性功能) */
+.functions-beta-badge {
+    margin-left: auto;
+    flex-shrink: 0;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 10px;
+    line-height: 15px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--accent-orange, #ffb43c);
+    background: rgba(255, 180, 60, 0.14);
+    border: 1px solid rgba(255, 180, 60, 0.42);
+}
+
+/* ============ 歌词功能 ============ */
+/* 播放时屏幕中间偏下的歌词浮层: 背景透明度跟随面板透明度 (--surface-bg-alpha) */
+.lyrics-overlay {
+    position: fixed;
+    left: 50%;
+    bottom: 13%;
+    transform: translateX(-50%);
+    max-width: 82vw;
+    padding: 10px 22px;
+    border-radius: 12px;
+    background: rgba(18, 18, 42, var(--surface-bg-alpha, 1));
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.38);
+    color: #fff;
+    font-size: clamp(20px, 3.4vw, 34px);
+    font-weight: 600;
+    line-height: 1.35;
+    text-align: center;
+    white-space: pre-wrap;
+    word-break: break-word;
+    pointer-events: none;
+    z-index: 9990;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+}
+.lyrics-overlay-text {
+    display: inline-block;
+}
+/* 多轨歌词同时触发时, 每条歌词独占一行 */
+.lyrics-overlay-line {
+    display: block;
+}
+
+/* 歌词编辑模式提示条 (顶部居中) */
+.lyrics-edit-bar {
+    position: fixed;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 92vw;
+    padding: 7px 10px 7px 14px;
+    border-radius: 999px;
+    background: rgba(22, 33, 62, 0.96);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(78, 205, 196, 0.5);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+    color: var(--text-primary);
+    font-size: 12px;
+    z-index: 9999;
+}
+.lyrics-edit-bar > i {
+    color: var(--accent, #4ecdc4);
+}
+.lyrics-edit-bar-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-secondary);
+}
+.lyrics-edit-bar-count {
+    flex-shrink: 0;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    color: var(--accent, #4ecdc4);
+    background: rgba(78, 205, 196, 0.14);
+    white-space: nowrap;
+}
+.lyrics-edit-bar-exit {
+    flex-shrink: 0;
+    padding: 4px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--ctrl-stroke-default, #555);
+    background: var(--ctrl-fill-default, #1c1c1c);
+    color: var(--text-primary);
+    font-size: 12px;
+    cursor: pointer;
+}
+.lyrics-edit-bar-exit:hover {
+    background: var(--ctrl-fill-secondary, #262626);
+}
+/* 工具栏: 轨道新建 / 剪切复制粘贴 */
+.lyrics-edit-bar-lanes,
+.lyrics-edit-bar-ops {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+.lyrics-lane-add,
+.lyrics-op-btn {
+    padding: 4px 9px;
+    border-radius: 999px;
+    border: 1px solid rgba(78, 205, 196, 0.4);
+    background: rgba(78, 205, 196, 0.12);
+    color: var(--text-primary);
+    font-size: 11px;
+    line-height: 1.1;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.lyrics-lane-add:hover,
+.lyrics-op-btn:hover {
+    background: rgba(78, 205, 196, 0.26);
+}
+.lyrics-op-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+@media (max-width: 768px) {
+    .lyrics-edit-bar-text { display: none; }
+    .lyrics-overlay { bottom: 17%; }
+    /* 手机端: 允许换行, 避免工具栏溢出屏幕 */
+    .lyrics-edit-bar {
+        gap: 6px;
+        row-gap: 5px;
+        padding: 6px 8px;
+        max-width: 96vw;
+        flex-wrap: wrap;
+        justify-content: center;
+        border-radius: 16px;
+    }
+    .lyrics-lane-add,
+    .lyrics-op-btn { padding: 5px 8px; }
+}
+
+/* 歌词编辑小悬浮窗 (剪映风格: 位置跟随鼠标) */
+.lyric-editor-pop {
+    position: fixed;
+    z-index: 10050;
+    width: 232px;
+    padding: 8px;
+    border-radius: 10px;
+    background: rgba(22, 33, 62, 0.98);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(233, 69, 96, 0.55);
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.5);
+    color: var(--text-primary);
+    font-size: 12px;
+}
+.lyric-editor-pop-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+.lyric-editor-pop-title {
+    color: var(--accent, #4ecdc4);
+    font-size: 11px;
+    font-weight: 600;
+}
+.lyric-editor-pop-close {
+    width: 18px;
+    height: 18px;
+    line-height: 1;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 15px;
+    cursor: pointer;
+}
+.lyric-editor-pop-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+.lyric-editor-pop-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 6px 8px;
+    border: 1px solid var(--ctrl-stroke-default, #444);
+    border-radius: 6px;
+    background: var(--ctrl-fill-default, #1c1c1c);
+    color: var(--text-primary, #fff);
+    font-size: 13px;
+    outline: none;
+}
+.lyric-editor-pop-input:focus {
+    border-color: var(--accent, #4ecdc4);
+}
+.lyric-editor-pop-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+}
+.lyric-editor-pop-spacer {
+    flex: 1;
+}
+.lyric-editor-pop-btn {
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--ctrl-stroke-default, #555);
+    background: var(--ctrl-fill-default, #1c1c1c);
+    color: var(--text-primary);
+    font-size: 12px;
+    cursor: pointer;
+}
+.lyric-editor-pop-btn:hover {
+    background: var(--ctrl-fill-secondary, #262626);
+}
+.lyric-editor-pop-btn.is-primary {
+    border-color: transparent;
+    background: var(--accent, #4ecdc4);
+    color: #08211f;
+    font-weight: 600;
+}
+.lyric-editor-pop-btn.is-danger {
+    border-color: rgba(233, 69, 96, 0.6);
+    color: #e94560;
+}
+.lyric-editor-pop-btn.is-danger:hover {
+    background: rgba(233, 69, 96, 0.16);
+}
+/* 剪切/复制/粘贴 图标按钮 (紧凑) */
+.lyric-editor-pop-icon {
+    width: 26px;
+    padding: 4px 0;
+    text-align: center;
+    font-size: 11px;
+}
+.lyric-editor-pop-icon:disabled {
+    opacity: 0.38;
+    cursor: default;
+}
 
 /* Light visual polish only: keep layout and behavior unchanged. */
 .toolbar,

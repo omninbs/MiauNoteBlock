@@ -22,7 +22,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="static/css/style.css?v=20260926g">
+    <link rel="stylesheet" href="static/css/style.css?v=20261001g">
 </head>
 <body>
 
@@ -124,6 +124,16 @@
             <i class="fa-solid fa-magnifying-glass"></i>
             <span>查找音符</span>
         </div>
+        <div class="functions-menu-item" data-action="lyrics-edit">
+            <i class="fa-solid fa-microphone-lines"></i>
+            <span>歌词标注</span>
+            <span class="functions-beta-badge">测试版</span>
+        </div>
+        <div class="functions-menu-item" data-action="lyrics-import">
+            <i class="fa-solid fa-file-import"></i>
+            <span>导入歌词 (JSON)</span>
+            <span class="functions-beta-badge">测试版</span>
+        </div>
         <div class="functions-menu-item" data-action="remove-empty-tracks">
             <i class="fa-solid fa-trash-can"></i>
             <span>清除空轨道</span>
@@ -180,8 +190,30 @@
         </div>
     </div>
 
+    <!-- ========== 歌词播放浮层 (屏幕中间偏下) ========== -->
+    <div class="lyrics-overlay" id="lyrics-overlay" style="display:none;"><span class="lyrics-overlay-text" id="lyrics-overlay-text"></span></div>
+
+    <!-- ========== 歌词编辑模式提示条 ========== -->
+    <div class="lyrics-edit-bar" id="lyrics-edit-bar" style="display:none;">
+        <i class="fa-solid fa-microphone-lines"></i>
+        <span class="lyrics-edit-bar-text">歌词编辑模式：双击空白处新建歌词片段，双击片段编辑文字，拖动片段可移动或拉伸</span>
+        <div class="lyrics-edit-bar-lanes">
+            <button class="lyrics-lane-add" id="lyrics-add-0" type="button" data-lane="0" title="在播放头位置新建歌词片段">＋轨1</button>
+            <button class="lyrics-lane-add" id="lyrics-add-1" type="button" data-lane="1" title="在播放头位置新建歌词片段">＋轨2</button>
+            <button class="lyrics-lane-add" id="lyrics-add-2" type="button" data-lane="2" title="在播放头位置新建歌词片段">＋轨3</button>
+        </div>
+        <div class="lyrics-edit-bar-ops">
+            <button class="lyrics-op-btn" id="lyrics-cut" type="button">剪切</button>
+            <button class="lyrics-op-btn" id="lyrics-copy" type="button">复制</button>
+            <button class="lyrics-op-btn" id="lyrics-paste" type="button">粘贴</button>
+        </div>
+        <span class="lyrics-edit-bar-count"><span id="lyrics-edit-bar-count">0</span> 条歌词</span>
+        <button class="lyrics-edit-bar-exit" id="lyrics-edit-bar-exit" type="button">退出</button>
+    </div>
+
     <!-- ========== 隐藏的文件输入 ========== -->
     <input type="file" id="file-input" accept=".nbs,.mid,.midi,.zip" style="display:none;">
+    <input type="file" id="lyrics-file-input" accept=".json,application/json" style="display:none;">
 
     <!-- ========== 移动端 FAB (竖屏) ========== -->
     <div class="mobile-fab-deselect" id="mobile-fab-deselect" style="display:none;position:fixed;bottom:84px;right:72px;z-index:9997;width:40px;height:40px;border-radius:50%;background:rgba(30,30,46,0.92);border:1px solid rgba(255,255,255,0.12);color:#eaeaea;cursor:pointer;font-size:15px;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,0.3);">
@@ -1304,21 +1336,21 @@
 <script src="static/js/compress_est.js?v=20260926b"></script>
 <script src="static/js/api_client.js?v=20260905a"></script>
 <script src="static/js/custom_dropdown.js?v=20260913f"></script>
-<script src="static/js/i18n.js?v=20260930a"></script>
+<script src="static/js/i18n.js?v=20261001g"></script>
 <script src="static/js/audio_engine.js?v=20260919c"></script>
 <script src="static/js/custom_instruments.js?v=20260905a"></script>
 <script src="static/js/audio_fix_utils.js?v=20260905a"></script>
 <script src="static/js/sf3_player.js?v=20260808a"></script>
 <script src="static/js/spessa_player.js?v=20260918a"></script>
 <script src="static/js/soundfont_loader.js?v=20260808b"></script>
-<script src="static/js/piano_roll.js?v=20260930a"></script>
+<script src="static/js/piano_roll.js?v=20261001g"></script>
 <!-- 本地化第三方库: ZIP 打包 (jszip) / MP3 编码 (lamejs) -->
 <script src="static/vendor/jszip.min.js?v=20260905a"></script>
 <script src="static/vendor/lame.min.js?v=20260905a"></script>
 <!-- 离线渲染引擎: audio_render.js 必须在 main.js 之前加载 -->
 <script src="static/js/render_jsmix.js?v=20260906e"></script>
 <script src="static/js/audio_render.js?v=20260919c"></script>
-<script src="static/js/main.js?v=20260930a"></script>
+<script src="static/js/main.js?v=20261001g"></script>
 
 </body>
 </html>

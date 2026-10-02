@@ -131,4 +131,28 @@ for (const loc of nineLocales) {
   if (missing.length) fail++;
 }
 console.log('\n=== 最终失败:', fail, '| ja-JP 可疑:', warn, '===');
+
+// ===== 歌词标注 / 歌词导入还原文案 : 覆盖全部 9 种非中文语言 =====
+const lyricsKeys = [
+  '歌词标注', '测试版', '退出', '条歌词', '当前 tick', '歌词文字',
+  '留空表示删除该 tick 的歌词', '持续时间 (tick)', '0 = 持续显示到下一句歌词',
+  '本作品包含歌词标注', '同时导出歌词 (打包为 zip：歌曲 + lyrics.json)',
+  '歌词作品包已导出，包含歌曲与歌词数据 (lyrics.json)。',
+  '导入歌词 (JSON)', '导入歌词', '读取歌词数据…', '歌词导入失败',
+  '歌词文件中没有有效的歌词数据。', '当前已有歌词标注',
+  '导入将覆盖当前歌词标注，是否继续？', '已导入歌词标注',
+  '已还原歌词标注', '歌词数据解析失败，已跳过。',
+  '歌词', '歌词编辑模式：双击空白处新建歌词片段，双击片段编辑文字，拖动片段可移动或拉伸',
+  '＋轨1', '＋轨2', '＋轨3', '在播放头位置新建歌词片段',
+  '请输入文本',
+];
+console.log('\n== 歌词标注/导入文案 (9 种非中文语言) ==');
+for (const loc of nineLocales) {
+  I18n.apply(loc);
+  const missing = lyricsKeys.filter((k) => !I18n.has(k));
+  console.log(`  [${loc}] ${lyricsKeys.length - missing.length}/${lyricsKeys.length}` +
+    (missing.length ? ' 缺: ' + missing.join(' / ') : ' OK'));
+  if (missing.length) fail++;
+}
+console.log('\n=== 最终失败:', fail, '| ja-JP 可疑:', warn, '===');
 process.exit(fail ? 1 : 0);

@@ -694,13 +694,28 @@ function _parseNBS(arrayBuffer) {
     }
     var songLen = notes.length > 0 ? maxTick + 1 : 0;
 
+    var soloLayers = [];
+    var soloMatch = /\[NoteBlockWeb:solo=v1:([^\]]*)\]/.exec(description || '');
+    if (soloMatch) {
+        var soloParts = soloMatch[1].split(',');
+        for (var si = 0; si < soloParts.length; si++) {
+            var soloLayer = parseInt(soloParts[si], 10);
+            if (isFinite(soloLayer) && soloLayer >= 0) soloLayers.push(soloLayer);
+        }
+    }
+    // 剥离本项目专有标记, 避免界面显示与再次导出时残留/重复
+    var cleanDescription = String(description || '')
+        .replace(/\s*\[NoteBlockWeb:solo=v1:[^\]]*\]/g, '')
+        .replace(/\s+$/, '');
+
     // ---- 返回 (匹配 Song.to_dict() 格式) ----
     return {
         name: name,
         song_name: name,
         author: author,
         original_author: originalAuthor,
-        description: description,
+        description: cleanDescription,
+        solo_layers: soloLayers,
         tempo: tempo,
         auto_save: autoSave === 1,
         auto_save_minutes: autoSaveDuration,

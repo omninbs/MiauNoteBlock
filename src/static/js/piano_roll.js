@@ -4740,9 +4740,9 @@
             }
         }
 
-        // ============ 歌词标记 (测试版) ============
-        // 非编辑模式: 标尺上画细标记, 提示该 tick 有歌词 (编辑模式下由歌词轨道呈现, 不重复绘制)
-        // 空间允许时显示歌词文字(过长省略), 文字宽度受「下一个歌词 tick」限制, 不会覆盖后续 UI 元素。
+        // ============ 歌词标记 ============
+        // 非编辑模式: 标尺上按持续时间绘制歌词条 (编辑模式下由歌词轨道呈现, 不重复绘制)
+        // 条宽 = 片段持续时间对应的像素宽度, 文字过长时省略显示。
         if (!this.lyricsEditMode && this.lyricTicks && this.lyricTicks.length) {
             var bandH = Math.min(11, Math.max(8, th - ph - 16));
             var bandTop = th - bandH - 2;
@@ -4756,38 +4756,26 @@
                 var lx = this._tickToScreen(ly.tick);
                 if (lx < pw - 2 || lx > w) continue;
 
-                // 下一个歌词 tick 的屏幕位置 (用于限制文字宽度)
-                var limitX = w;
-                for (var lj = li + 1; lj < lyr.length; lj++) {
-                    var nx = this._tickToScreen(lyr[lj].tick);
-                    if (nx > lx + 1) { limitX = Math.min(w, nx); break; }
-                }
-
-                var availW = limitX - lx - 3;
+                // 方块长度与片段持续时间对应 (受屏幕右边界限制), 文字裁剪显示在方块内
+                var durW = Math.min(w, this._tickToScreen(this._lyricClipEndTick(ly))) - lx;
+                if (durW < 2) durW = 2;
                 var label = String(ly.text || '');
-                var chipW = 0;
-                if (availW >= 16 && label) {
-                    if (ctx.measureText(label).width > availW - 6) {
-                        var cut = label;
-                        while (cut.length > 1 && ctx.measureText(cut + '…').width > availW - 6) cut = cut.slice(0, -1);
-                        label = cut + '…';
-                    }
-                    chipW = Math.min(availW, ctx.measureText(label).width + 6);
-                }
+                var chipW = durW;
 
                 ctx.textAlign = 'left';
-                if (chipW > 0) {
-                    ctx.fillStyle = 'rgba(233, 69, 96, 0.9)';
-                    this._roundRect(ctx, lx + 1, bandTop, chipW, bandH, 3);
-                    ctx.fill();
+                ctx.fillStyle = 'rgba(233, 69, 96, 0.9)';
+                this._roundRect(ctx, lx, bandTop + 1, chipW, bandH - 2, 1.5);
+                ctx.fill();
+
+                var textAvail = chipW - 8;
+                if (textAvail >= 8 && label) {
+                    if (ctx.measureText(label).width > textAvail) {
+                        var cut = label;
+                        while (cut.length > 1 && ctx.measureText(cut + '…').width > textAvail) cut = cut.slice(0, -1);
+                        label = cut + '…';
+                    }
                     ctx.fillStyle = '#fff';
                     ctx.fillText(label, lx + 4, bandTop + bandH / 2 + 0.5);
-                } else {
-                    // 空间不足: 只绘制小块标记表示该 tick 有歌词
-                    var barW = Math.min(4, Math.max(2, cellW));
-                    ctx.fillStyle = 'rgba(233, 69, 96, 0.9)';
-                    this._roundRect(ctx, lx, bandTop + 1, barW, bandH - 2, 1.5);
-                    ctx.fill();
                 }
             }
             ctx.textAlign = 'left';

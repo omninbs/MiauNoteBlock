@@ -344,7 +344,7 @@ function resumeAudioContext() {
  * @param {number} velocity - 力度/音量 (0-100)
  * @param {number} pan - 声像 (0-100, 50=居中)
  */
-function playMinecraftNote(instrument, key, velocity, pan, pitch) {
+function playMinecraftNote(instrument, key, velocity, pan, pitch, layer) {
     if (velocity === undefined) velocity = 100;
     if (pan === undefined) pan = 50;
     pitch = pitch || 0;
@@ -366,7 +366,7 @@ function playMinecraftNote(instrument, key, velocity, pan, pitch) {
             playBuffer(custom.buffer, key, velocity, pan, null, {
                 baseKey: (typeof custom.baseKey === 'number') ? custom.baseKey : 33,
                 gain: ((typeof custom.gain === 'number' ? custom.gain : 100) / 100) * 0.7
-            }, pitch);
+            }, pitch, layer);
         }
         // 未注册或缓冲未就绪: 静音 (缺失提示由上层负责)
         return;
@@ -381,7 +381,7 @@ function playMinecraftNote(instrument, key, velocity, pan, pitch) {
         return;
     }
 
-    playBuffer(buffer, key, velocity, pan, soundName, null, pitch);
+    playBuffer(buffer, key, velocity, pan, soundName, null, pitch, layer);
 }
 
 /**
@@ -390,7 +390,7 @@ function playMinecraftNote(instrument, key, velocity, pan, pitch) {
  *   这完全匹配 NoteBlockStudio 的行为: 每个音符就是一个 OGG 样本按音高播放
  * - 原始模式 (audioEnhanceEnabled=false): 使用 ADSR 包络 + 混响 + 压缩
  */
-function playBuffer(buffer, key, velocity, pan, soundName, customOpt, pitch) {
+function playBuffer(buffer, key, velocity, pan, soundName, customOpt, pitch, layer) {
     if (!audioContext || !masterGain) return;
 
     // 速率 = Minecraft playsound pitch (基于 key)
@@ -448,9 +448,10 @@ function playBuffer(buffer, key, velocity, pan, soundName, customOpt, pitch) {
         source.start(now);
         source.stop(now + fullDuration + 0.05);
 
-        _activeSources.push(source);
+        var sourceEntry = { source: source, layer: layer };
+        _activeSources.push(sourceEntry);
         source.onended = function() {
-            var idx = _activeSources.indexOf(source);
+            var idx = _activeSources.indexOf(sourceEntry);
             if (idx >= 0) _activeSources.splice(idx, 1);
         };
     } else {
@@ -475,9 +476,10 @@ function playBuffer(buffer, key, velocity, pan, soundName, customOpt, pitch) {
         source.start(now);
         source.stop(now + Math.max(0.4, buffer.duration / Math.max(0.5, rate)) + 0.05);
 
-        _activeSources.push(source);
+        var sourceEntry = { source: source, layer: layer };
+        _activeSources.push(sourceEntry);
         source.onended = function() {
-            var idx = _activeSources.indexOf(source);
+            var idx = _activeSources.indexOf(sourceEntry);
             if (idx >= 0) _activeSources.splice(idx, 1);
         };
     }
@@ -535,9 +537,10 @@ function playSynthesizedNote(key, velocity) {
     osc.stop(now + 0.55);
 
     // 跟踪活动音源, 用于 stopAll 立即停止
-    _activeSources.push(osc);
+    var sourceEntry = { source: osc, layer: undefined };
+    _activeSources.push(sourceEntry);
     osc.onended = function() {
-        var idx = _activeSources.indexOf(osc);
+        var idx = _activeSources.indexOf(sourceEntry);
         if (idx >= 0) _activeSources.splice(idx, 1);
     };
 }
@@ -573,12 +576,23 @@ function audioReady() {
  * 立即停止所有正在发声的音符并切断音频图
  * 用于暂停/停止时立即静音, 消除回声/混响尾音
  */
+function stopLayerAudio(layer) {
+    if (!audioContext) return;
+    for (var i = _activeSources.length - 1; i >= 0; i--) {
+        var entry = _activeSources[i];
+        if (entry.layer !== layer) continue;
+        try { entry.source.stop(); } catch(e) {}
+        try { entry.source.disconnect(); } catch(e) {}
+        _activeSources.splice(i, 1);
+    }
+}
+
 function stopAllAudio() {
     if (!audioContext) return;
     // 1. 停止并断开所有活动音源节点
     for (var i = 0; i < _activeSources.length; i++) {
-        try { _activeSources[i].stop(); } catch(e) {}
-        try { _activeSources[i].disconnect(); } catch(e) {}
+        try { _activeSources[i].source.stop(); } catch(e) {}
+        try { _activeSources[i].source.disconnect(); } catch(e) {}
     }
     _activeSources = [];
     // 2. 重建干净的实时路由 (按当前整体风格/增强模式)
@@ -619,6 +633,7 @@ window.AudioEngine = {
     setEnhance: setAudioEnhance,
     isEnhanceEnabled: isAudioEnhanceEnabled,
     stopAll: stopAllAudio,
+    stopLayer: stopLayerAudio,
     getContext: function() { return audioContext; },
     registerCustomInstrument: registerCustomInstrument,
     unregisterCustomInstrument: unregisterCustomInstrument,

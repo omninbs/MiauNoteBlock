@@ -36,7 +36,7 @@
         // 歌曲
         song: null,
 
-        // 歌词标注 (测试版): [{ id, tick, text, duration, lane }]
+        // 歌词标注: [{ id, tick, text, duration, lane }]
         //   lane: 0..2 三条歌词轨道 (允许不同轨道在同一 tick 重叠)
         //   duration: 固定时长(tick), 恒 >= 1; 新建默认 LYRIC_DEFAULT_DURATION
         lyrics: [],
@@ -46,6 +46,9 @@
         activeLyricId: null,
         _activeLyric: null,
         lyricClipboard: [],   // 歌词片段剪贴板: [{ text, duration, lane, relTick }]
+        streamingLyrics: true,
+        _streamingLyricLanes: ['', '', ''],
+        _streamingLyricEndTick: [null, null, null],
 
         // 平滑翻页开关: false=超出后翻页, true=播放头始终居中
         smoothScroll: false,
@@ -616,7 +619,7 @@
                 body.appendChild(warnWrap);
             }
 
-            // ---------- 歌词导出选项 (测试版) ----------
+            // ---------- 歌词导出选项 ----------
             var lyricsChk = null;
             if (hasLyrics) {
                 var lyWrap = document.createElement('div');
@@ -1085,6 +1088,8 @@
             original_author: '',
             description: '',
             tempo: 20,
+            solo_layers: [],
+            lyrics: [],
             notes: state.notes,
             layers: createDefaultLayers(8)
         };
@@ -1171,7 +1176,7 @@
         initMobileToolSwitcher();
         // 初始化功能菜单
         createFunctionsMenu();
-        // 初始化歌词标注 UI (测试版)
+        // 初始化歌词标注 UI
         initLyricsUI();
         // 初始化外部 MIDI 数据粘贴
         initClipboardPaste();
@@ -1326,6 +1331,21 @@
                     state.pianoRoll.smoothScrollEnabled = state.smoothScroll;
                 }
                 markDirty();
+            });
+        }
+
+        var streamingLyricsChk = $('settings-streaming-lyrics');
+        if (streamingLyricsChk) {
+            try {
+                var savedStreamingLyrics = localStorage.getItem('streaming_lyrics');
+                state.streamingLyrics = savedStreamingLyrics === null ? true : savedStreamingLyrics === '1';
+            } catch(e) {}
+            streamingLyricsChk.checked = !!state.streamingLyrics;
+            streamingLyricsChk.addEventListener('change', function() {
+                state.streamingLyrics = this.checked;
+                resetStreamingLyrics();
+                try { localStorage.setItem('streaming_lyrics', this.checked ? '1' : '0'); } catch(e) {}
+                if (!this.checked) hideLyricsOverlay();
             });
         }
 
@@ -2575,6 +2595,8 @@
                 }
                 // 同步到 state.song.layers 的 lock 字段
                 setLayerLock(layer, mutedSoloToLock(!!updatedInfo.muted, !!updatedInfo.solo));
+                stopUnaudibleTrackAudio();
+                syncSoloLayersToSong();
                 // 判断是否有 solo 激活
                 state.soloActive = false;
                 for (var ti = 0; ti < state.tracks.length; ti++) {
@@ -2650,7 +2672,7 @@
                 seekToTick(tick);
             };
 
-            // 歌词临时轨道 (测试版): 片段双击编辑 / 空白双击新建 / 拖动结束提交
+            // 歌词轨道: 片段双击编辑 / 空白双击新建 / 拖动结束提交
             state.pianoRoll.onLyricClipEdit = function(id, clientX, clientY) {
                 showLyricEditorPop(id, clientX, clientY);
             };
@@ -5159,6 +5181,8 @@
         pushUndo();
         track.muted = !track.muted;
         setLayerLock(layer, mutedSoloToLock(track.muted, track.solo));
+        stopUnaudibleTrackAudio();
+        syncSoloLayersToSong();
         syncPianoRollTrackInfo();
         updateTrackPanelUI();
         markDirty();
@@ -5183,6 +5207,8 @@
         } else {
             setLayerLock(layer, mutedSoloToLock(track.muted, track.solo));
         }
+        stopUnaudibleTrackAudio();
+        syncSoloLayersToSong();
         syncPianoRollTrackInfo();
         updateTrackPanelUI();
         markDirty();
@@ -5237,6 +5263,8 @@
         // 同步平滑翻页开关
         var smoothChk = $('settings-smooth-scroll');
         if (smoothChk) smoothChk.checked = !!state.smoothScroll;
+        var streamingChk = $('settings-streaming-lyrics');
+        if (streamingChk) streamingChk.checked = !!state.streamingLyrics;
         var renderFpsSel = $('settings-render-fps');
         if (renderFpsSel) renderFpsSel.value = String(state.renderFpsLimit);
         // 同步音效开关
@@ -5425,10 +5453,6 @@
 
         var tickMs = Math.max(10, Math.floor(1000 / Math.max(1, state.tempo)));
         var totalTicks = getSongLengthTicks();
-        var trackByLayer = {};
-        for (var trackIndex = 0; trackIndex < state.tracks.length; trackIndex++) {
-            trackByLayer[state.tracks[trackIndex].layer] = state.tracks[trackIndex];
-        }
         if (state.pianoRoll) {
             state.pianoRoll._tickDuration = tickMs;
             state.pianoRoll._lastTickTime = performance.now();
@@ -5441,6 +5465,13 @@
 
         function playbackFrame(now) {
             if (!state.isPlaying) return;
+
+            // 每帧重建轨道映射: 播放中切换静音/独奏需立即生效
+            // (rebuildTracks 会替换 state.tracks 中的对象, 缓存引用会导致状态滞后, 独奏时全部静音)
+            var trackByLayer = {};
+            for (var trackIndex = 0; trackIndex < state.tracks.length; trackIndex++) {
+                trackByLayer[state.tracks[trackIndex].layer] = state.tracks[trackIndex];
+            }
 
             var elapsed = now - _lastFrameTime;
             _lastFrameTime = now;
@@ -5470,7 +5501,7 @@
                         var trackVolume = track && track.volume !== undefined ? Number(track.volume) : 100;
                         trackVolume = isFinite(trackVolume) ? Math.max(0, Math.min(100, trackVolume)) : 100;
                         var noteVelocity = n.velocity === undefined ? 100 : n.velocity;
-                        AudioEngine.playNote(n.instrument, n.key, noteVelocity * trackVolume / 100, n.pan || 50, n.pitch);
+                        AudioEngine.playNote(n.instrument, n.key, noteVelocity * trackVolume / 100, n.pan || 50, n.pitch, n.layer);
                     }
                 }
 
@@ -5488,7 +5519,7 @@
                 state.currentTick = tick + 1;
                 if (state.currentTick > state.maxTick + 4) {
                     state.currentTick = 0;
-                    // 循环回到开头时清除残留歌词
+                    resetStreamingLyrics();
                     hideLyricsOverlay();
                 }
 
@@ -5543,7 +5574,8 @@
             cancelAnimationFrame(state._playbackRAF);
             state._playbackRAF = null;
         }
-        // 停止/暂停时清除歌词浮层
+        // 停止/暂停时清除歌词浮层与流式累积 (避免再次播放时残留上一段文字)
+        resetStreamingLyrics();
         hideLyricsOverlay();
         if (state.pianoRoll) {
             state.pianoRoll.clearPlayHighlights();
@@ -5565,18 +5597,37 @@
         return null;
     }
 
-    // 将 lock 值转换为 muted/solo 状态
-    // 0=unlocked, 1=locked(muted), 2=solo
+    // NBS lock 只表达静音，独奏由歌曲扩展字段单独保存
     function lockToMutedSolo(lock) {
         lock = parseInt(lock) || 0;
-        return { muted: lock === 1, solo: lock === 2 };
+        return { muted: lock === 1, solo: false };
     }
 
-    // 将 muted/solo 状态转换为 lock 值
     function mutedSoloToLock(muted, solo) {
-        if (solo) return 2;
-        if (muted) return 1;
-        return 0;
+        return muted ? 1 : 0;
+    }
+
+    function getSoloLayerMap() {
+        var map = {};
+        var layers = state.song && Array.isArray(state.song.solo_layers) ? state.song.solo_layers : [];
+        for (var i = 0; i < layers.length; i++) map[parseInt(layers[i], 10)] = true;
+        return map;
+    }
+
+    function syncSoloLayersToSong() {
+        if (!state.song) state.song = {};
+        state.song.solo_layers = [];
+        for (var i = 0; i < state.tracks.length; i++) {
+            if (state.tracks[i].solo) state.song.solo_layers.push(state.tracks[i].layer);
+        }
+        state.soloActive = state.song.solo_layers.length > 0;
+    }
+
+    function stopUnaudibleTrackAudio() {
+        if (!window.AudioEngine || !AudioEngine.stopLayer) return;
+        for (var i = 0; i < state.tracks.length; i++) {
+            if (!isTrackAudible(state.tracks[i])) AudioEngine.stopLayer(state.tracks[i].layer);
+        }
     }
 
     // 从 state.song.layers 读取指定 layer 的 lock 值
@@ -5647,7 +5698,7 @@
                 name: existing ? existing.name : fallbackName,
                 layer: l,
                 muted: existing ? !!existing.muted : lockToMutedSolo(getLayerLock(l)).muted,
-                solo: existing ? !!existing.solo : lockToMutedSolo(getLayerLock(l)).solo,
+                solo: existing ? !!existing.solo : !!getSoloLayerMap()[l],
                 volume: (existing && existing.volume !== undefined)
                     ? existing.volume
                     : ((savedLayer && savedLayer.volume !== undefined) ? savedLayer.volume : 100),
@@ -5664,7 +5715,7 @@
                 name: (saved0 && saved0.name) ? saved0.name : 'Track 1',
                 layer: 0,
                 muted: ms0.muted,
-                solo: ms0.solo,
+                solo: !!getSoloLayerMap()[0],
                 volume: (saved0 && saved0.volume !== undefined) ? saved0.volume : 100,
                 instrument: 0,
                 noteCount: 0
@@ -5672,6 +5723,13 @@
         }
 
         state.tracks = newTracks;
+
+        // 同步独奏激活状态: 从 NBS / 缓存恢复独奏轨道后, 播放判定才能生效
+        var anySolo = false;
+        for (var sk = 0; sk < newTracks.length; sk++) {
+            if (newTracks[sk].solo) { anySolo = true; break; }
+        }
+        state.soloActive = anySolo;
     }
 
     function updateTrackPanelUI() {
@@ -7947,7 +8005,7 @@
         updateRadioTempoSlider();
     });
 
-    // ============ 歌词标注 (测试版) ============
+    // ============ 歌词标注 ============
     // 数据模型: state.lyrics = [{ id, tick, text, duration, lane }]
     //   - lane: 0..2 三条歌词轨道, 允许不同轨道在同一 tick 重叠 (播放时多行显示)
     //   - duration 单位为 tick, 长度固定, 不随相邻片段变化
@@ -8017,6 +8075,7 @@
             return (a.lane || 0) - (b.lane || 0);
         });
         state.lyrics = out;
+        if (state.song) state.song.lyrics = JSON.parse(JSON.stringify(out));
         state.pianoRoll.lyricTicks = out;
         state.pianoRoll._fullRedrawNeeded = true;
         state.pianoRoll.render();
@@ -8044,6 +8103,7 @@
         state.lyrics.push(clip);
         lyricRebuildIndex();
         syncLyricsToRoll();
+        markDirty();
         return clip;
     }
 
@@ -8061,6 +8121,7 @@
         }
         lyricRebuildIndex();
         syncLyricsToRoll();
+        markDirty();
     }
 
     // 当前选中的歌词片段 (优先取轨道选中态)
@@ -8101,6 +8162,7 @@
         }
         lyricRebuildIndex();
         syncLyricsToRoll();
+        markDirty();
     }
 
     // ---- 歌词片段剪切 / 复制 / 粘贴 ----
@@ -8156,6 +8218,7 @@
         }
         lyricRebuildIndex();
         syncLyricsToRoll();
+        markDirty();
         return true;
     }
 
@@ -8249,6 +8312,7 @@
                     state.activeLyricId = clip.id;
                     lyricRebuildIndex();
                     syncLyricsToRoll();
+                    markDirty();
                 }
             } else {
                 if (remove) {
@@ -8260,6 +8324,7 @@
                     clip.text = v || LYRIC_DEFAULT_TEXT;
                     lyricRebuildIndex();
                     syncLyricsToRoll();
+                    markDirty();
                 }
             }
             closeLyricEditorPop(true);
@@ -8382,8 +8447,69 @@
         state._activeLyric = null;
     }
 
-    // 播放推进到某 tick 时调用: 汇总「当前仍在显示」的歌词 (多轨 → 多行)
+    function resetStreamingLyrics() {
+        state._streamingLyricLanes = ['', '', ''];
+        state._streamingLyricEndTick = [null, null, null];
+    }
+
+    // 拼接流式歌词: 中文等非 ASCII 字符直接相连, 拉丁字母/数字之间补空格, 避免单词粘连
+    function joinStreamingText(prev, next) {
+        if (!prev) return next;
+        if (!next) return prev;
+        var a = prev.charAt(prev.length - 1);
+        var b = next.charAt(0);
+        var isWordChar = /[0-9A-Za-z]/.test(a) && /[0-9A-Za-z]/.test(b);
+        return prev + (isWordChar ? ' ' : '') + next;
+    }
+
+    // 单轨流式文字的最大长度, 超过则清空当前累积后从新片段重新开始
+    var STREAMING_LYRIC_MAX = 40;
+
+    // 取歌词片段的结束 tick (tick + duration), duration 非法时回退默认时长
+    function streamingLyricEndTick(clip) {
+        var dur = parseInt(clip && clip.duration, 10);
+        if (!isFinite(dur) || dur < 1) dur = LYRIC_DEFAULT_DURATION;
+        return clip.tick + dur;
+    }
+
+    function processStreamingLyricsAtTick(tick) {
+        var incoming = getLyricsAt(tick);
+        var incomingLanes = [false, false, false];
+        for (var i = 0; i < incoming.length; i++) {
+            var clip = incoming[i];
+            var text = String(clip && clip.text ? clip.text : '');
+            if (!text) continue;
+            var lane = Math.max(0, Math.min(LYRIC_LANE_COUNT - 1, parseInt(clip.lane, 10) || 0));
+            incomingLanes[lane] = true;
+            var prevEnd = state._streamingLyricEndTick[lane];
+            if (prevEnd !== null && clip.tick !== prevEnd) {
+                state._streamingLyricLanes[lane] = '';
+            }
+            var merged = joinStreamingText(state._streamingLyricLanes[lane], text);
+            if (merged.length > STREAMING_LYRIC_MAX) merged = text;
+            state._streamingLyricLanes[lane] = merged;
+            state._streamingLyricEndTick[lane] = streamingLyricEndTick(clip);
+        }
+        for (var li = 0; li < LYRIC_LANE_COUNT; li++) {
+            var endTick = state._streamingLyricEndTick[li];
+            if (!incomingLanes[li] && endTick !== null && tick >= endTick) {
+                state._streamingLyricLanes[li] = '';
+                state._streamingLyricEndTick[li] = null;
+            }
+        }
+        var lines = [];
+        for (var lineIndex = 0; lineIndex < LYRIC_LANE_COUNT; lineIndex++) {
+            if (state._streamingLyricLanes[lineIndex]) lines.push(state._streamingLyricLanes[lineIndex]);
+        }
+        if (lines.length) showLyricsOverlay(lines);
+        else hideLyricsOverlay();
+    }
+
     function processLyricsAtTick(tick) {
+        if (state.streamingLyrics) {
+            processStreamingLyricsAtTick(tick);
+            return;
+        }
         var lines = [];
         for (var i = 0; i < state.lyrics.length; i++) {
             var c = state.lyrics[i];
@@ -8484,8 +8610,10 @@
     function applyLyricsData(list) {
         pushUndo();
         state.lyrics = list || [];
+        if (state.song) state.song.lyrics = JSON.parse(JSON.stringify(state.lyrics));
         lyricRebuildIndex();
         syncLyricsToRoll();
+        markDirty();
     }
 
     // 单独导入 lyrics.json 文件
@@ -8603,9 +8731,6 @@
                         else openFindPanel();
                     } else if (action === 'lyrics-edit') {
                         enterLyricsEditMode();
-                    } else if (action === 'lyrics-import') {
-                        var lfi = $('lyrics-file-input');
-                        if (lfi) lfi.click();
                     }
                 });
             })(items[i]);
@@ -10896,8 +11021,9 @@
         // 保存导入文件名（去掉扩展名）
         state.importedFileName = file.name.replace(/\.[^.]+$/, '');
         // 切换歌曲: 清空上一首的歌词标注 (NBS 不含歌词字段, 歌词为内存数据)
-        state.lyrics = [];
+        state.lyrics = Array.isArray(song.lyrics) ? song.lyrics.slice() : [];
         lyricRebuildIndex();
+        resetStreamingLyrics();
         exitLyricsEditMode();
         syncLyricsToRoll();
         // NBS 文件没有 MIDI 映射，清除残留的 MIDI 音轨状态
@@ -10961,8 +11087,8 @@
             }
         }
 
-        // 保存时根据当前轨道状态写入 lock 字段
-        // pynbs 1.0.0-beta.0 仅支持 bool 类型的 lock, 因此只持久化静音(1), 不持久化独奏
+        // 保存时根据当前轨道状态写入 lock 字段 (NBS 只表达静音)
+        // 独奏不在标准 NBS 中, 以描述尾部标记 + solo_layers 字段承载
         for (var li = 0; li < song.layers.length; li++) {
             if (song.layers[li].lock === undefined) song.layers[li].lock = 0;
             var t = findTrackByLayer(li);
@@ -10971,9 +11097,23 @@
             }
         }
 
+        var soloLayers = [];
+        for (var si = 0; si < state.tracks.length; si++) {
+            if (state.tracks[si].solo) soloLayers.push(state.tracks[si].layer);
+        }
+        // 独奏标记 / solo_layers 只写入导出副本, 不改动 state.song (避免界面描述显示标记)
+        var baseDesc = String(song.description || '').replace(/\s*\[NoteBlockWeb:solo=v1:[^\]]*\]/g, '');
+        if (soloLayers.length) baseDesc += (baseDesc ? '\n' : '') + '[NoteBlockWeb:solo=v1:' + soloLayers.join(',') + ']';
+        var payload = {};
+        for (var pk in song) {
+            if (Object.prototype.hasOwnProperty.call(song, pk)) payload[pk] = song[pk];
+        }
+        payload.description = baseDesc;
+        payload.solo_layers = soloLayers;
+
         var saveName = (state.importedFileName || song.name || song.song_name || 'Untitled') + '.nbs';
         showTaskProgress(saveName, '保存 NBS');
-        API.saveSong(song, function(loaded, total, speed, percent, eta, phase) {
+        API.saveSong(payload, function(loaded, total, speed, percent, eta, phase) {
             updateTaskProgress(loaded, total, speed, percent, eta, phase);
         }).then(function(result) {
             hideTaskProgress();
@@ -10988,7 +11128,7 @@
                 if (a.parentNode) a.parentNode.removeChild(a);
                 URL.revokeObjectURL(result.downloadUrl);
             }, 5000);
-            clearAutoSaveLocal();
+            autoSaveLocal();
         }).catch(function(err) {
             hideTaskProgress();
             showAppAlert('保存失败: ' + formatError(err, '无法保存文件'), {title: '保存失败', icon: 'fa-solid fa-triangle-exclamation'});
@@ -16206,6 +16346,10 @@ function buildTimbreFittingRows(info) {
         item0.addEventListener('click', function() { hideFileMenu(); createNewFile(); });
         menu.appendChild(item0);
 
+        var dividerOpen = document.createElement('div');
+        dividerOpen.className = 'file-menu-divider';
+        menu.appendChild(dividerOpen);
+
         // 保存
         var item1 = document.createElement('div');
         item1.className = 'file-menu-item';
@@ -16220,18 +16364,28 @@ function buildTimbreFittingRows(info) {
         item2.addEventListener('click', function() { hideFileMenu(); exportNBS(); });
         menu.appendChild(item2);
 
+        // 导入歌词
+        var itemLyrics = document.createElement('div');
+        itemLyrics.className = 'file-menu-item';
+        itemLyrics.innerHTML = '<i class="fa-solid fa-file-import"></i><span>' + t('导入歌词 (JSON)') + '</span>';
+        itemLyrics.addEventListener('click', function() {
+            hideFileMenu();
+            var lfi = $('lyrics-file-input');
+            if (lfi) lfi.click();
+        });
+        menu.appendChild(itemLyrics);
+
         // 导出为音频 (MP3/WAV + 音效风格)
         var itemAudio = document.createElement('div');
         itemAudio.className = 'file-menu-item';
         itemAudio.innerHTML = '<i class="fa-solid fa-music"></i><span>' + t('导出为音频') + '</span>';
         itemAudio.addEventListener('click', function() { hideFileMenu(); showAudioExportDialog(); });
         menu.appendChild(itemAudio);
-        
-        // 分隔线
-        var divider = document.createElement('div');
-        divider.className = 'file-menu-divider';
-        menu.appendChild(divider);
-        
+
+        var dividerExport = document.createElement('div');
+        dividerExport.className = 'file-menu-divider';
+        menu.appendChild(dividerExport);
+
         // 历史文件 (带子菜单)
         var item3 = document.createElement('div');
         item3.className = 'file-menu-item file-menu-has-sub';
@@ -16399,10 +16553,14 @@ function buildTimbreFittingRows(info) {
                 description: songMeta.description || '',
                 tempo: state.tempo,
                 notes: state.notes,
-                layers: songMeta.layers || []
+                layers: songMeta.layers || [],
+                solo_layers: Array.isArray(songMeta.solo_layers) ? songMeta.solo_layers.slice() : [],
+                lyrics: JSON.parse(JSON.stringify(state.lyrics || []))
             },
             notes: state.notes,
-            tempo: state.tempo
+            tempo: state.tempo,
+            tracks: JSON.parse(JSON.stringify(state.tracks || [])),
+            solo_layers: Array.isArray(songMeta.solo_layers) ? songMeta.solo_layers.slice() : []
         };
         var history = getHistoryFiles();
         // 使用当前文件的持久 ID (多次保存覆盖同一文件, 不产生重复)
@@ -16491,6 +16649,16 @@ function buildTimbreFittingRows(info) {
             state.currentFileId = id;
             state.song = song;
             if (!state.song.layers) state.song.layers = [];
+            state.tracks = Array.isArray(data.tracks)
+                ? JSON.parse(JSON.stringify(data.tracks))
+                : [];
+            if (Array.isArray(data.solo_layers)) state.song.solo_layers = data.solo_layers.slice();
+            state.lyrics = Array.isArray(data.lyrics)
+                ? data.lyrics.slice()
+                : (Array.isArray(song.lyrics) ? song.lyrics.slice() : []);
+            resetStreamingLyrics();
+            lyricRebuildIndex();
+            syncLyricsToRoll();
             state.notes = notes;
             // 从历史记录加载，清除残留的 MIDI 音轨状态
             state.layerChannelMap = {};
@@ -16673,12 +16841,20 @@ function buildTimbreFittingRows(info) {
             }
         }
 
+        var soloLayers = [];
+        for (var si = 0; si < state.tracks.length; si++) {
+            if (state.tracks[si].solo) soloLayers.push(state.tracks[si].layer);
+        }
+        var baseDescription = String(input.description || '').replace(/\s*\[NoteBlockWeb:solo=v1:[^\]]*\]/g, '');
+        if (soloLayers.length) baseDescription += (baseDescription ? '\n' : '') + '[NoteBlockWeb:solo=v1:' + soloLayers.join(',') + ']';
+
         var song = {
             name: input.name,
             song_name: input.name,
             author: input.author,
             original_author: input.author,
-            description: input.description,
+            description: baseDescription,
+            solo_layers: soloLayers,
             tempo: state.tempo,
             length: state.maxTick + 4,
             time_signature: (state.song && state.song.time_signature) || 4,
@@ -16760,6 +16936,11 @@ function buildTimbreFittingRows(info) {
             description: (state.song && state.song.description) || ''
         });
         var styleId = (window.AudioRender && AudioRender.STYLES[opts.styleId]) ? opts.styleId : 'dry';
+        // 导出音频沿用当前轨道可听性: 独奏时仅渲染独奏轨道, 静音轨道由 layers.lock 排除
+        var renderSoloLayers = [];
+        for (var rsi = 0; rsi < state.tracks.length; rsi++) {
+            if (state.tracks[rsi].solo) renderSoloLayers.push(state.tracks[rsi].layer);
+        }
         return collectCustomBuffers(song.notes || []).then(function(customMap) {
             if (opts.onProgress) opts.onProgress('渲染中…', 10);
             return AudioRender.renderSong({
@@ -16767,6 +16948,7 @@ function buildTimbreFittingRows(info) {
                 tempo: state.tempo,
                 layers: song.layers || [],
                 style: styleId,
+                solo: { active: renderSoloLayers.length > 0, layer: renderSoloLayers },
                 customInstruments: customMap,
                 useJsMix: true, // 高速 JS 预混路径 (音符密集时提升 5~10 倍, 效果链等价)
                 onProgress: function(p, label) {
@@ -16836,7 +17018,7 @@ function buildTimbreFittingRows(info) {
             NBSClient.saveNBS(song).then(function(nbsBlob) {
                 var zip = new JSZip();
                 zip.file('song.nbs', nbsBlob);
-                // 歌词数据 (测试版): 勾选导出歌词时写入 lyrics.json
+                // 歌词数据: 勾选导出歌词时写入 lyrics.json
                 var hasLyrics = !!(input.lyricsZip && state.lyrics && state.lyrics.length);
                 if (hasLyrics) zip.file('lyrics.json', JSON.stringify(buildLyricsJson(), null, 2));
                 var metaInstruments = [];
@@ -17111,14 +17293,14 @@ function buildTimbreFittingRows(info) {
                         song.customInstruments = [];
                         applyParsedSong(song, nbsName);
                         renderCustomInstList();
-                        // 歌词还原 (测试版): 作品包内含 lyrics.json 时自动载入
+                        // 歌词还原: 作品包内含 lyrics.json 时自动载入
                         // 注意必须在 applyParsedSong 之后 (载入歌曲会清空歌词)
                         return importLyricsFromZip(ctx.zipFile, ctx.meta).then(function(lyrCount) {
                             var msg = changed
                                 ? '作品包导入完成，自定义音色已装载并重映射。'
                                 : '作品包导入完成，歌曲已载入。';
-                            if (lyrCount > 0) msg += '\n' + i18nText('已还原歌词标注') + ': ' + lyrCount;
-                            else if (lyrCount < 0) msg += '\n' + i18nText('歌词数据解析失败，已跳过。');
+                            if (lyrCount >= 0) msg += '\n' + i18nText('已还原歌词标注') + ': ' + lyrCount;
+                            else msg += '\n' + i18nText('歌词数据解析失败，已跳过。');
                             showAppAlert(msg, {title: '导入作品包', icon: 'fa-solid fa-circle-check'});
                         });
                     });
@@ -17306,8 +17488,11 @@ function buildTimbreFittingRows(info) {
                     author: state.song.author || '',
                     original_author: state.song.original_author || '',
                     description: state.song.description || '',
-                    layers: state.song.layers || []
+                    layers: state.song.layers || [],
+                    solo_layers: Array.isArray(state.song.solo_layers) ? state.song.solo_layers.slice() : [],
+                    lyrics: JSON.parse(JSON.stringify(state.lyrics || []))
                 } : null,
+                lyrics: JSON.parse(JSON.stringify(state.lyrics || [])),
                 savedAt: Date.now()
             };
             // 使用 safeSetItem, 配额超限时自动清理旧历史文件
@@ -17346,7 +17531,9 @@ function buildTimbreFittingRows(info) {
                     description: data.song.description || '',
                     tempo: state.tempo,
                     notes: state.notes,
-                    layers: data.song.layers || []
+                    layers: data.song.layers || [],
+                    solo_layers: Array.isArray(data.song.solo_layers) ? data.song.solo_layers.slice() : [],
+                    lyrics: Array.isArray(data.song.lyrics) ? data.song.lyrics.slice() : []
                 };
             }
             if (!state.song) {
@@ -17388,6 +17575,12 @@ function buildTimbreFittingRows(info) {
             $setValue('settings-tempo-input', state.tempo);
             $setText('settings-tempo-value', (state.tempo).toFixed(1));
 
+            state.lyrics = Array.isArray(data.lyrics)
+                ? data.lyrics.slice()
+                : (data.song && Array.isArray(data.song.lyrics) ? data.song.lyrics.slice() : []);
+            resetStreamingLyrics();
+            lyricRebuildIndex();
+            syncLyricsToRoll();
             updateSongInfo();
             updateInstrumentSelectorUI();
             updateAutoScrollBtnIcon();

@@ -742,20 +742,7 @@ input[type="number"]:hover::-webkit-outer-spin-button {
     width: 16px;
     text-align: center;
 }
-/* 测试版标记 (歌词标注等实验性功能) */
-.functions-beta-badge {
-    margin-left: auto;
-    flex-shrink: 0;
-    padding: 1px 6px;
-    border-radius: 999px;
-    font-size: 10px;
-    line-height: 15px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    color: var(--accent-orange, #ffb43c);
-    background: rgba(255, 180, 60, 0.14);
-    border: 1px solid rgba(255, 180, 60, 0.42);
-}
+
 
 /* ============ 歌词功能 ============ */
 /* 播放时屏幕中间偏下的歌词浮层: 背景透明度跟随面板透明度 (--surface-bg-alpha) */
@@ -842,6 +829,12 @@ input[type="number"]:hover::-webkit-outer-spin-button {
     background: var(--ctrl-fill-secondary, #262626);
 }
 /* 工具栏: 轨道新建 / 剪切复制粘贴 */
+@media (min-width: 769px) {
+    .lyrics-edit-bar-lanes,
+    .lyrics-edit-bar-ops {
+        display: none;
+    }
+}
 .lyrics-edit-bar-lanes,
 .lyrics-edit-bar-ops {
     display: flex;

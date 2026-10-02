@@ -1771,46 +1771,55 @@
     var _noteExtraI18n = {
         'en-US': {
             '音调文字显示八度数字': 'Keyboard labels show octave number',
+            '流式歌词': 'Streaming lyrics',
             '音符上显示音符盒点击次数': 'Show note-block click count on notes',
             '音符上显示方块名': 'Show block name on notes'
         },
         'ja-JP': {
             '音调文字显示八度数字': '鍵盤ラベルにオクターブ数字を表示',
+            '流式歌词': 'ストリーミング歌詞',
             '音符上显示音符盒点击次数': '音符に音符ブロックのクリック回数を表示',
             '音符上显示方块名': '音符にブロック名を表示'
         },
         'ko-KR': {
             '音调文字显示八度数字': '키보드 라벨에 옥타브 숫자 표시',
+            '流式歌词': '스트리밍 가사',
             '音符上显示音符盒点击次数': '노트에 노트 블록 클릭 횟수 표시',
             '音符上显示方块名': '노트에 블록 이름 표시'
         },
         'pt-BR': {
             '音调文字显示八度数字': 'Rótulos do teclado mostram o número da oitava',
+            '流式歌词': 'Letras em streaming',
             '音符上显示音符盒点击次数': 'Mostrar o número de cliques do bloco musical nas notas',
             '音符上显示方块名': 'Mostrar o nome do bloco nas notas'
         },
         'id-ID': {
             '音调文字显示八度数字': 'Label keyboard menampilkan angka oktaf',
+            '流式歌词': 'Lirik streaming',
             '音符上显示音符盒点击次数': 'Tampilkan jumlah klik blok nada pada not',
             '音符上显示方块名': 'Tampilkan nama blok pada not'
         },
         'es-ES': {
             '音调文字显示八度数字': 'Las etiquetas del teclado muestran el número de octava',
+            '流式歌词': 'Letras en streaming',
             '音符上显示音符盒点击次数': 'Mostrar el número de clics del bloque musical en las notas',
             '音符上显示方块名': 'Mostrar el nombre del bloque en las notas'
         },
         'ru-RU': {
             '音调文字显示八度数字': 'Показывать октаву на подписях клавиш',
+            '流式歌词': 'Потоковая лирика',
             '音符上显示音符盒点击次数': 'Показывать количество кликов музыкального блока на нотах',
             '音符上显示方块名': 'Показывать название блока на нотах'
         },
         'de-DE': {
             '音调文字显示八度数字': 'Tastaturbeschriftungen zeigen Oktavnummer',
+            '流式歌词': 'Fließende Songtexte',
             '音符上显示音符盒点击次数': 'Klickanzahl des Notenblocks auf Noten anzeigen',
             '音符上显示方块名': 'Blocknamen auf Noten anzeigen'
         },
         'fr-FR': {
             '音调文字显示八度数字': 'Les libellés du clavier affichent l\'octave',
+            '流式歌词': 'Paroles en streaming',
             '音符上显示音符盒点击次数': 'Afficher le nombre de clics du bloc de notes sur les notes',
             '音符上显示方块名': 'Afficher le nom du bloc sur les notes'
         }
@@ -2138,7 +2147,7 @@
         if (Object.prototype.hasOwnProperty.call(_fittingLevelI18n, _nl)) Object.assign(UI_TEXT[_nl], _fittingLevelI18n[_nl]);
     }
 
-    // ============ 歌词标注 (测试版) 文案 (9 种非中文语言) ============
+    // ============ 歌词标注文案 (9 种非中文语言) ============
     var _lyricsI18n = {
         'en-US': {
             '歌词标注': 'Lyrics annotation',
@@ -2350,7 +2359,7 @@
         if (Object.prototype.hasOwnProperty.call(_lyricsLaneI18n, _nl)) Object.assign(UI_TEXT[_nl], _lyricsLaneI18n[_nl]);
     }
 
-    // ============ 歌词导入还原 (测试版) 文案 (9 种非中文语言) ============
+    // ============ 歌词导入还原文案 (9 种非中文语言) ============
     var _lyricsImportI18n = {
         'en-US': {
             '导入歌词 (JSON)': 'Import lyrics (JSON)',

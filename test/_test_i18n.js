@@ -155,4 +155,48 @@ for (const loc of nineLocales) {
   if (missing.length) fail++;
 }
 console.log('\n=== 最终失败:', fail, '| ja-JP 可疑:', warn, '===');
+
+// ===== 欢迎引导界面文案 : 覆盖全部 9 种非中文语言 =====
+const welcomeKeys = [
+  '版本', '已为最新版本！', '一个开源的 Minecraft 音乐制作软件',
+  '关注 MiauNoteBlock：', '反馈邮箱', '要做什么？',
+  '创建歌曲', '打开歌曲', '最近歌曲：', '从 MIDI 文件生成',
+  '打开上一次的项目', '进入编辑器', '欢迎使用 MiauNoteBlock',
+  '刚刚', '分钟前', '小时前', '天前', '周前', '个月前', '年前',
+  '暂无记录', '暂无最近打开的项目', '暂无可恢复的项目', '新建歌曲', '音符',
+  '红石音乐社区', '前往 bbs.webnbs.com', '本地数据已被清理',
+  '检测到上一次的编辑内容，新建歌曲会将其清空且无法恢复。是否继续？',
+  '本地存储空间不足，自动保存未成功。请及时「导出 NBS」备份当前作品。',
+  '自动保存失败',
+];
+console.log('\n== 欢迎引导界面文案 (9 种非中文语言) ==');
+for (const loc of nineLocales) {
+  I18n.apply(loc);
+  const missing = welcomeKeys.filter((k) => !I18n.has(k));
+  console.log(`  [${loc}] ${welcomeKeys.length - missing.length}/${welcomeKeys.length}` +
+    (missing.length ? ' 缺: ' + missing.join(' / ') : ' OK'));
+  if (missing.length) fail++;
+}
+// ===== 本地缓存清理弹窗文案 : 覆盖全部 9 种非中文语言 =====
+const storageCleanKeys = [
+  '本地缓存占用提醒',
+  '本地缓存占用已超过 100 MB，可勾选下方内容进行清理，或选择忽略。',
+  '历史歌曲数据', '自定义音色音频',
+  '清理后自定义音色会被移除，内置音色不受影响。',
+  '音色库文件',
+  '清理后需要重新下载音色库，且可能导致 MIDI 音色不准确或丢失。',
+  '背景图片', '当前总占用', '忽略', '立即清理',
+  '清理完成', '清理失败', '已清理所选内容。',
+  '清理过程中出现异常，请重试。',
+  '已清理所选内容。部分内容需要刷新页面后才会生效，是否立即刷新？',
+];
+console.log('\n== 本地缓存清理弹窗文案 (9 种非中文语言) ==');
+for (const loc of nineLocales) {
+  I18n.apply(loc);
+  const missing = storageCleanKeys.filter((k) => !I18n.has(k));
+  console.log(`  [${loc}] ${storageCleanKeys.length - missing.length}/${storageCleanKeys.length}` +
+    (missing.length ? ' 缺: ' + missing.join(' / ') : ' OK'));
+  if (missing.length) fail++;
+}
+console.log('\n=== 最终失败:', fail, '| ja-JP 可疑:', warn, '===');
 process.exit(fail ? 1 : 0);

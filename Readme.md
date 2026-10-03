@@ -1,7 +1,7 @@
 <div align="center">
 
 <!-- LOGO: replace the file at src/static/logo.png on the server, or swap this URL to your new asset -->
-<img src="https://webnbs.com/static/logo.png" alt="MiauNoteBlock" width="168" />
+<img src="/docs/logo.png" alt="MiauNoteBlock" width="168" />
 
 # MiauNoteBlock
 

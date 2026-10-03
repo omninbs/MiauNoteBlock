@@ -22,7 +22,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="static/css/style.css?v=20261002a">
+    <link rel="stylesheet" href="static/css/style.css?v=20261003c">
 </head>
 <body>
 
@@ -694,7 +694,7 @@
                     <p class="about-capabilities">支持 NBS 格式导入/导出、MIDI 导入和钢琴卷帘编辑</p>
                     <p>版本: <strong id="about-version">2.4.9</strong></p>
                     <p>开发者: <strong>COM1919</strong></p>
-                    <p>QQ群: <strong>2156069838</strong></p>
+                    <p>QQ群: <a href="https://qm.qq.com/q/HY3Wxsgy0" target="_blank" rel="noopener noreferrer"><strong>2156069838</strong></a></p>
                     <p>反馈邮箱: <a href="mailto:3451392772@qq.com">3451392772@qq.com</a></p>
                     <p>开源地址: <a href="https://github.com/COM1919/MiauNoteBlock" target="_blank" rel="noopener noreferrer">github.com/COM1919/MiauNoteBlock <i class="fa-solid fa-arrow-up-right-from-square"></i></a></p>
                 </div>
@@ -1304,6 +1304,75 @@
         </div>
     </div>
 
+    <!-- ========== 欢迎引导界面 (每次打开时显示) ========== -->
+    <div class="welcome-overlay" id="welcome-screen" style="display:none;">
+        <div class="welcome-card" role="dialog" aria-label="欢迎使用 MiauNoteBlock">
+            <!-- 左栏: 品牌与项目信息 -->
+            <div class="welcome-side">
+                <img src="static/logo.png" alt="MiauNoteBlock" class="welcome-logo">
+                <h2 class="welcome-title">MiauNoteBlock</h2>
+                <p class="welcome-version">
+                    <span class="welcome-version-label">版本</span>
+                    <span id="welcome-version">2.4.9</span>
+                </p>
+                <p class="welcome-version-state">已为最新版本！</p>
+                <p class="welcome-tagline">一个开源的 Minecraft 音乐制作软件</p>
+                <a class="welcome-link" href="https://webnbs.com" target="_blank" rel="noopener noreferrer">
+                    webnbs.com
+                </a>
+                <div class="welcome-social">
+                    <p class="welcome-social-title">关注 MiauNoteBlock：</p>
+                    <p class="welcome-social-row">
+                        <a href="https://github.com/COM1919/MiauNoteBlock" target="_blank" rel="noopener noreferrer">GitHub</a>
+                        <span class="welcome-sep">|</span>
+                        <a href="mailto:3451392772@qq.com">反馈邮箱</a>
+                        <span class="welcome-sep">|</span>
+                        <a class="welcome-social-text" href="https://qm.qq.com/q/HY3Wxsgy0" target="_blank" rel="noopener noreferrer">QQ 群 2156069838</a>
+                    </p>
+                </div>
+            </div>
+
+            <!-- 右栏: 操作入口 -->
+            <div class="welcome-main">
+                <p class="welcome-prompt">要做什么？</p>
+
+                <button class="welcome-action" id="welcome-new" type="button">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>创建歌曲</span>
+                </button>
+
+                <button class="welcome-action" id="welcome-open" type="button">
+                    <i class="fa-regular fa-folder-open"></i>
+                    <span>打开歌曲</span>
+                </button>
+
+                <div class="welcome-recent">
+                    <p class="welcome-recent-title">最近歌曲：</p>
+                    <div class="welcome-recent-list" id="welcome-recent-list"></div>
+                </div>
+
+                <a class="welcome-action" id="welcome-community" href="https://bbs.webnbs.com" target="_blank" rel="noopener noreferrer">
+                    <i class="fa-solid fa-comments"></i>
+                    <span class="welcome-action-text">
+                        <span class="welcome-action-title">红石音乐社区<span class="welcome-new-badge">NEW</span></span>
+                        <span class="welcome-action-sub">前往 bbs.webnbs.com</span>
+                    </span>
+                </a>
+
+                <button class="welcome-action" id="welcome-midi" type="button">
+                    <i class="fa-solid fa-file-audio"></i>
+                    <span>从 MIDI 文件生成</span>
+                </button>
+
+                <button class="welcome-action welcome-action-primary" id="welcome-resume" type="button">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                    <span>打开上一次的项目</span>
+                    <span class="welcome-resume-hint" id="welcome-resume-hint"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- ========== 横屏抽屉 (移动端) ========== -->
     <button id="landscape-menu-btn" class="landscape-menu-btn" style="position:fixed;top:4px;right:4px;z-index:1001;width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,0.08);border:1px solid var(--ctrl-stroke-default);color:var(--text-primary);cursor:pointer;font-size:16px;">
         <i class="fa-solid fa-bars"></i>
@@ -1337,7 +1406,7 @@
 <script src="static/js/compress_est.js?v=20260926b"></script>
 <script src="static/js/api_client.js?v=20260905a"></script>
 <script src="static/js/custom_dropdown.js?v=20260913f"></script>
-<script src="static/js/i18n.js?v=20261002b"></script>
+<script src="static/js/i18n.js?v=20261003b"></script>
 <script src="static/js/audio_engine.js?v=20260919c"></script>
 <script src="static/js/custom_instruments.js?v=20260905a"></script>
 <script src="static/js/audio_fix_utils.js?v=20260905a"></script>
@@ -1351,7 +1420,7 @@
 <!-- 离线渲染引擎: audio_render.js 必须在 main.js 之前加载 -->
 <script src="static/js/render_jsmix.js?v=20260906e"></script>
 <script src="static/js/audio_render.js?v=20260919c"></script>
-<script src="static/js/main.js?v=20261002e"></script>
+<script src="static/js/main.js?v=20261003b"></script>
 
 </body>
 </html>

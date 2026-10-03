@@ -1159,6 +1159,10 @@
             updatePianoKeyboardHighlight();
             if ($('file-menu')) showFileMenu();
             if (state.pianoRoll && state.pianoRoll.render) state.pianoRoll.render();
+            if ($('welcome-screen')) {
+                renderWelcomeRecent();
+                updateWelcomeResumeHint();
+            }
         });
         // 创建 DOM 元素
         createContextMenuDOM();
@@ -2455,17 +2459,30 @@
             syncTrackPanelToggleButton();
         }
 
-        // 尝试恢复本地保存的数据
-        if (!autoLoadLocal()) {
-            resetToNewFile(false);
-        }
+        // 建立干净的初始状态 (不自动恢复上次内容, 由欢迎引导层决定进入方式)
+        resetToNewFile(false);
         syncTrackPanelToggleButton();
 
-        // 清理孤儿历史文件, 释放 localStorage 空间
-        cleanupOrphanedFiles();
-
-        // 启动自动保存定时器 (每 30 秒)
+        // 启动自动保存定时器 (每 15 秒)
         startAutoSaveInterval();
+
+        // 显示欢迎引导界面 (每次打开都显示, 可从引导层恢复上一次的项目)
+        initWelcomeScreen();
+
+        // 迁移旧版 localStorage 历史数据到 IndexedDB, 再清理孤儿文件。
+        // 迁移完成后刷新最近歌曲列表, 之前被标记「已清理」的作品会重新可用。
+        migrateProjectsToIndexedDB().then(function(migrated) {
+            cleanupOrphanedFiles();
+            if (migrated && $('welcome-screen')) {
+                renderWelcomeRecent();
+                updateWelcomeResumeHint();
+            }
+        }).catch(function() {
+            cleanupOrphanedFiles();
+        });
+
+        // 本地缓存占用检查 (超过阈值时提示用户清理)
+        checkStorageUsage();
 
         // 初始化按钮 Tooltip 系统
         if (window.attachTooltips) window.attachTooltips();
@@ -10952,6 +10969,9 @@
     }
 
     function handleFileOpen(e) {
+        // 从欢迎引导层打开文件: 隐藏引导层并复位文件类型过滤
+        hideWelcomeScreen();
+        e.target.accept = '.nbs,.mid,.midi,.zip';
         var file = e.target.files[0];
         if (!file) return;
 
@@ -16488,6 +16508,13 @@ function buildTimbreFittingRows(info) {
             if (keysToRemove.length > 0) {
                 console.info('已清理 ' + keysToRemove.length + ' 个孤儿历史文件');
             }
+            // 同时清理 IndexedDB 中没有对应历史记录的孤儿文件
+            projectDbKeys().then(function(ids) {
+                var orphans = ids.filter(function(id) { return !validIds[id]; });
+                if (!orphans.length) return;
+                orphans.forEach(function(id) { projectDbDelete(id); });
+                console.info('已清理 ' + orphans.length + ' 个 IndexedDB 孤儿文件');
+            }).catch(function() {});
             return keysToRemove.length;
         } catch(e) {
             console.warn('清理孤儿文件失败:', e);
@@ -16502,26 +16529,23 @@ function buildTimbreFittingRows(info) {
             return true;
         } catch(e) {
             if (e && (e.name === 'QuotaExceededError' || e.code === 22)) {
-                // 配额超限: 清理最旧的历史文件后重试
-                var cleaned = 0;
+                // 历史文件已改存 IndexedDB, 这里的配额压力主要来自自动保存快照。
+                // 依次释放最旧的历史记录与快照, 尽量保住用户最新的工作内容。
                 try {
                     var history = getHistoryFiles();
-                    // 从最旧的开始删除 (数组末尾), 每次删一个就重试
                     while (history.length > 1) {
                         var oldest = history.pop();
+                        projectDbDelete(oldest.id);
                         try { localStorage.removeItem('nbs_file_' + oldest.id); } catch(e2) {}
-                        cleaned++;
                         try {
                             localStorage.setItem('nbs_history', JSON.stringify(history));
                             localStorage.setItem(key, value);
-                            console.info('配额超限, 已清理 ' + cleaned + ' 个旧文件后重试成功');
+                            console.info('配额超限, 已清理最旧的历史记录: ' + oldest.id);
                             return true;
                         } catch(e2) {
-                            // 仍然超限, 继续清理
                             continue;
                         }
                     }
-                    // 历史文件已全部清理, 仍然超限, 最后尝试清理 autoSave 数据
                     try { localStorage.removeItem('noteblockweb_data'); } catch(e3) {}
                     try {
                         localStorage.setItem(key, value);
@@ -16574,32 +16598,42 @@ function buildTimbreFittingRows(info) {
         for (var i = 0; i < history.length; i++) {
             if (history[i].id === id) { existingIdx = i; break; }
         }
-        var entry = { id: id, name: name, date: new Date().toLocaleString(), size: state.notes.length, tempo: state.tempo };
+        var entry = { id: id, name: name, date: new Date().toLocaleString(), ts: Date.now(), size: state.notes.length, tempo: state.tempo };
         if (existingIdx >= 0) {
             // 覆盖已有记录, 但保持在列表中的位置
             history[existingIdx] = entry;
         } else {
             history.unshift(entry);
-            // 降低上限为 20, 避免占用过多配额, 同时清理被截断的孤儿文件
-            if (history.length > 20) {
-                var removed = history.splice(20);
-                // 立即清理被截断的孤儿文件
+            // 上限 12 条 (与欢迎界面「最近歌曲」显示条数一致), 超出部分连同文件一起清理
+            if (history.length > 12) {
+                var removed = history.splice(12);
+                // 被截断的记录连同 IndexedDB 中的文件一起清理
                 for (var r = 0; r < removed.length; r++) {
+                    projectDbDelete(removed[r].id);
                     try { localStorage.removeItem('nbs_file_' + removed[r].id); } catch(e) {}
                 }
             }
         }
         var historyOk = safeSetItem('nbs_history', JSON.stringify(history));
-        var fileOk = safeSetItem('nbs_file_' + id, JSON.stringify(data));
-        if (historyOk && fileOk) {
+        // 歌曲数据写入 IndexedDB (容量远大于 localStorage, 不会再触发配额清理)
+        projectDbPut(id, data).then(function() {
             if (!silent) showAppAlert('保存成功', {title: '保存', icon: 'fa-solid fa-circle-check'});
-        } else {
-            if (!silent) showAppAlert('存储空间不足, 部分数据可能未保存', {title: '警告', icon: 'fa-solid fa-triangle-exclamation'});
-        }
+        }).catch(function() {
+            // IndexedDB 不可用时的回退: 仍尝试写入 localStorage
+            var fileOk = safeSetItem('nbs_file_' + id, JSON.stringify(data));
+            if (!silent) {
+                if (fileOk) {
+                    showAppAlert('保存成功', {title: '保存', icon: 'fa-solid fa-circle-check'});
+                } else {
+                    showAppAlert('存储空间不足, 部分数据可能未保存', {title: '警告', icon: 'fa-solid fa-triangle-exclamation'});
+                }
+            }
+        });
+        return historyOk;
     }
 
-    // 自动保存定时器 (每 30 秒保存一次)
-    var _autoSaveIntervalMs = 30000;
+    // 自动保存定时器 (每 15 秒保存一次)
+    var _autoSaveIntervalMs = 15000;
     var _autoSaveIntervalTimer = null;
 
     function startAutoSaveInterval() {
@@ -16624,63 +16658,267 @@ function buildTimbreFittingRows(info) {
         }
     }
 
+    // ============ 历史项目数据存储 (IndexedDB) ============
+    // 歌曲数据体积大 (单首常见 200KB~1MB), 而 localStorage 配额仅约 5MB。
+    // 早期把历史文件存在 localStorage, 配额超限后会被自动清理, 表现为
+    // 「本地数据已被清理」。现改为存 IndexedDB, localStorage 只保留轻量元数据。
+    var PROJECT_DB = 'webnbs_projects';
+    var PROJECT_STORE = 'files';
+    var PROJECT_MIGRATED_KEY = 'webnbs_projects_migrated_v1';
+    var _projectDbPromise = null;
+
+    function openProjectDB() {
+        if (_projectDbPromise) return _projectDbPromise;
+        _projectDbPromise = new Promise(function(resolve, reject) {
+            if (!window.indexedDB) { reject(new Error('IndexedDB unavailable')); return; }
+            var req;
+            try { req = indexedDB.open(PROJECT_DB, 1); }
+            catch (e) { reject(e); return; }
+            req.onupgradeneeded = function(e) {
+                var db = e.target.result;
+                if (!db.objectStoreNames.contains(PROJECT_STORE)) db.createObjectStore(PROJECT_STORE);
+            };
+            req.onsuccess = function(e) { resolve(e.target.result); };
+            req.onerror = function(e) { reject(e.target.error); };
+        });
+        // 打开失败时清掉缓存, 便于下次重试
+        _projectDbPromise.catch(function() { _projectDbPromise = null; });
+        return _projectDbPromise;
+    }
+
+    function projectDbPut(id, data) {
+        return openProjectDB().then(function(db) {
+            return new Promise(function(resolve, reject) {
+                var tx = db.transaction(PROJECT_STORE, 'readwrite');
+                tx.objectStore(PROJECT_STORE).put(data, String(id));
+                tx.oncomplete = function() { resolve(true); };
+                tx.onerror = function() { reject(tx.error); };
+                tx.onabort = function() { reject(tx.error || new Error('put aborted')); };
+            });
+        });
+    }
+
+    function projectDbGet(id) {
+        return openProjectDB().then(function(db) {
+            return new Promise(function(resolve, reject) {
+                var tx = db.transaction(PROJECT_STORE, 'readonly');
+                var rq = tx.objectStore(PROJECT_STORE).get(String(id));
+                rq.onsuccess = function() { resolve(rq.result || null); };
+                rq.onerror = function() { reject(rq.error); };
+            });
+        });
+    }
+
+    function projectDbDelete(id) {
+        return openProjectDB().then(function(db) {
+            return new Promise(function(resolve) {
+                try {
+                    var tx = db.transaction(PROJECT_STORE, 'readwrite');
+                    tx.objectStore(PROJECT_STORE).delete(String(id));
+                    tx.oncomplete = function() { resolve(true); };
+                    tx.onerror = function() { resolve(false); };
+                } catch (e) { resolve(false); }
+            });
+        }).catch(function() { return false; });
+    }
+
+    function projectDbKeys() {
+        return openProjectDB().then(function(db) {
+            return new Promise(function(resolve) {
+                try {
+                    var tx = db.transaction(PROJECT_STORE, 'readonly');
+                    var rq = tx.objectStore(PROJECT_STORE).getAllKeys();
+                    rq.onsuccess = function() { resolve((rq.result || []).map(String)); };
+                    rq.onerror = function() { resolve([]); };
+                } catch (e) { resolve([]); }
+            });
+        }).catch(function() { return []; });
+    }
+
+    function measureStoredValue(v) {
+        if (v === null || v === undefined) return 0;
+        if (typeof v === 'string') return v.length * 2;
+        if (typeof Blob !== 'undefined' && v instanceof Blob) return v.size || 0;
+        if (typeof ArrayBuffer !== 'undefined' && v instanceof ArrayBuffer) return v.byteLength || 0;
+        try { return JSON.stringify(v).length * 2; } catch (e) { return 0; }
+    }
+
+    // 估算 IndexedDB 中某个 objectStore 的占用字节数 (库不存在时返回 0)
+    function estimateStoreBytes(dbName, storeName) {
+        return new Promise(function(resolve) {
+            if (!window.indexedDB) { resolve(0); return; }
+            var req;
+            try { req = indexedDB.open(dbName); }
+            catch (e) { resolve(0); return; }
+            req.onupgradeneeded = function() {
+                // 库不存在会被隐式创建, 立即回滚避免留下空库
+                try { req.transaction.abort(); } catch (e) {}
+            };
+            req.onsuccess = function(e) {
+                var db = e.target.result;
+                if (!db.objectStoreNames.contains(storeName)) { db.close(); resolve(0); return; }
+                var total = 0;
+                try {
+                    var tx = db.transaction(storeName, 'readonly');
+                    var store = tx.objectStore(storeName);
+                    var keysReq = store.getAllKeys();
+                    keysReq.onsuccess = function() {
+                        var keys = keysReq.result || [];
+                        if (!keys.length) { db.close(); resolve(0); return; }
+                        var pending = keys.length;
+                        keys.forEach(function(k) {
+                            var vReq = store.get(k);
+                            vReq.onsuccess = function() {
+                                total += measureStoredValue(vReq.result);
+                                if (--pending === 0) { db.close(); resolve(total); }
+                            };
+                            vReq.onerror = function() {
+                                if (--pending === 0) { db.close(); resolve(total); }
+                            };
+                        });
+                    };
+                    keysReq.onerror = function() { db.close(); resolve(0); };
+                } catch (e) { db.close(); resolve(0); }
+            };
+            req.onerror = function() { resolve(0); };
+            req.onblocked = function() { resolve(0); };
+        });
+    }
+
+    // 迁移旧版数据: 把 localStorage 中的 nbs_file_* 搬到 IndexedDB (仅执行一次)
+    function migrateProjectsToIndexedDB() {
+        var already = false;
+        try { already = localStorage.getItem(PROJECT_MIGRATED_KEY) === '1'; } catch (e) { already = true; }
+        if (already) return Promise.resolve(false);
+
+        var legacyKeys = [];
+        try {
+            for (var i = 0; i < localStorage.length; i++) {
+                var key = localStorage.key(i);
+                if (key && key.indexOf('nbs_file_') === 0) legacyKeys.push(key);
+            }
+        } catch (e) { legacyKeys = []; }
+
+        if (!legacyKeys.length) {
+            try { localStorage.setItem(PROJECT_MIGRATED_KEY, '1'); } catch (e) {}
+            return Promise.resolve(false);
+        }
+
+        var moved = 0;
+        var jobs = legacyKeys.map(function(key) {
+            var id = key.substring('nbs_file_'.length);
+            var data = null;
+            try {
+                var raw = localStorage.getItem(key);
+                data = raw ? JSON.parse(raw) : null;
+            } catch (e) { data = null; }
+            if (!data) {
+                try { localStorage.removeItem(key); } catch (e) {}
+                return Promise.resolve();
+            }
+            return projectDbPut(id, data).then(function() {
+                moved++;
+                try { localStorage.removeItem(key); } catch (e) {}
+            }).catch(function() {});
+        });
+
+        return Promise.all(jobs).then(function() {
+            if (moved === legacyKeys.length) {
+                try { localStorage.setItem(PROJECT_MIGRATED_KEY, '1'); } catch (e) {}
+            }
+            if (moved === 0) return false;
+            // 迁移成功的历史条目解除「已清理」标记, 让用户之前的作品重新可用
+            return projectDbKeys().then(function(ids) {
+                var idSet = {};
+                ids.forEach(function(k) { idSet[k] = true; });
+                try {
+                    var history = getHistoryFiles();
+                    var changed = false;
+                    history.forEach(function(h) {
+                        if (h.missing && idSet[String(h.id)]) { delete h.missing; changed = true; }
+                    });
+                    if (changed) localStorage.setItem('nbs_history', JSON.stringify(history));
+                } catch (e) {}
+                return true;
+            });
+        });
+    }
+
     function getHistoryFiles() {
         try { return JSON.parse(localStorage.getItem('nbs_history') || '[]'); } catch(e) { return []; }
     }
 
+    // 应用已取出的存档数据 (来源可能是 IndexedDB, 也可能是 localStorage 回退)
+    function applyStoredFileData(data, id) {
+        // 兼容旧格式: 早期只保存了 data.song, 没有顶层 data.notes
+        var song = data && data.song ? data.song : {};
+        var notes = Array.isArray(data && data.notes) ? data.notes
+            : (Array.isArray(song.notes) ? song.notes : []);
+        if (!data || (!data.song && !Array.isArray(data.notes) && !Array.isArray(song.notes))) {
+            showAppAlert('文件数据不完整', {title: '加载失败', icon: 'fa-solid fa-triangle-exclamation'});
+            console.warn('[loadFileFromLocalStorage] id=' + id + ' 数据缺失:', data);
+            return;
+        }
+        // 设置当前文件 ID, 后续保存将覆盖此文件
+        state.currentFileId = id;
+        state.song = song;
+        if (!state.song.layers) state.song.layers = [];
+        state.tracks = Array.isArray(data.tracks)
+            ? JSON.parse(JSON.stringify(data.tracks))
+            : [];
+        if (Array.isArray(data.solo_layers)) state.song.solo_layers = data.solo_layers.slice();
+        state.lyrics = Array.isArray(data.lyrics)
+            ? data.lyrics.slice()
+            : (Array.isArray(song.lyrics) ? song.lyrics.slice() : []);
+        resetStreamingLyrics();
+        lyricRebuildIndex();
+        syncLyricsToRoll();
+        state.notes = notes;
+        // 从历史记录加载，清除残留的 MIDI 音轨状态
+        state.layerChannelMap = {};
+        _midiTrackStates = {};
+        state._channelTracks = {};
+        state.tempo = data.tempo || song.tempo || 20;
+        // 同步速度 UI
+        $setValue('tempo-slider', state.tempo);
+        $('tempo-value').value = state.tempo;
+        $setValue('settings-tempo-slider', Math.max(5, Math.min(655, state.tempo)));
+        $setValue('settings-tempo-input', state.tempo);
+        $setText('settings-tempo-value', (state.tempo).toFixed(1));
+        buildNoteIndex(state.notes);
+        state.undoStack = [];
+        state.redoStack = [];
+        updateUndoRedoButtons();
+        if (state.pianoRoll) state.pianoRoll.setNotes(state.notes);
+        updateSongInfo();
+        updateTrackPanelUI();
+        handleStop();
+        markDirty();
+    }
+
     function loadFileFromLocalStorage(id) {
-        try {
-            var raw = localStorage.getItem('nbs_file_' + id);
+        // localStorage 回退: 兼容尚未迁移的旧数据, 以及 IndexedDB 不可用的环境
+        var fromLocalStorage = function() {
+            var raw = null;
+            try { raw = localStorage.getItem('nbs_file_' + id); } catch (e) {}
             if (!raw) {
                 showAppAlert('文件数据不存在，可能已被清理', {title: '加载失败', icon: 'fa-solid fa-triangle-exclamation'});
                 return;
             }
-            var data = JSON.parse(raw);
-            // 兼容旧格式: 早期只保存了 data.song, 没有顶层 data.notes
-            var song = data && data.song ? data.song : {};
-            var notes = Array.isArray(data && data.notes) ? data.notes
-                : (Array.isArray(song.notes) ? song.notes : []);
-            if (!data || (!data.song && !Array.isArray(data.notes) && !Array.isArray(song.notes))) {
-                showAppAlert('文件数据不完整', {title: '加载失败', icon: 'fa-solid fa-triangle-exclamation'});
-                console.warn('[loadFileFromLocalStorage] id=' + id + ' 数据缺失:', data);
-                return;
+            try {
+                applyStoredFileData(JSON.parse(raw), id);
+            } catch (e) {
+                showAppAlert('加载失败: ' + formatError(e, '无法加载本地文件'), {title: '加载失败', icon: 'fa-solid fa-triangle-exclamation'});
             }
-            // 设置当前文件 ID, 后续保存将覆盖此文件
-            state.currentFileId = id;
-            state.song = song;
-            if (!state.song.layers) state.song.layers = [];
-            state.tracks = Array.isArray(data.tracks)
-                ? JSON.parse(JSON.stringify(data.tracks))
-                : [];
-            if (Array.isArray(data.solo_layers)) state.song.solo_layers = data.solo_layers.slice();
-            state.lyrics = Array.isArray(data.lyrics)
-                ? data.lyrics.slice()
-                : (Array.isArray(song.lyrics) ? song.lyrics.slice() : []);
-            resetStreamingLyrics();
-            lyricRebuildIndex();
-            syncLyricsToRoll();
-            state.notes = notes;
-            // 从历史记录加载，清除残留的 MIDI 音轨状态
-            state.layerChannelMap = {};
-            _midiTrackStates = {};
-            state._channelTracks = {};
-            state.tempo = data.tempo || song.tempo || 20;
-            // 同步速度 UI
-            $setValue('tempo-slider', state.tempo);
-            $('tempo-value').value = state.tempo;
-            $setValue('settings-tempo-slider', Math.max(5, Math.min(655, state.tempo)));
-            $setValue('settings-tempo-input', state.tempo);
-            $setText('settings-tempo-value', (state.tempo).toFixed(1));
-            buildNoteIndex(state.notes);
-            state.undoStack = [];
-            state.redoStack = [];
-            updateUndoRedoButtons();
-            if (state.pianoRoll) state.pianoRoll.setNotes(state.notes);
-            updateSongInfo();
-            updateTrackPanelUI();
-            handleStop();
-            markDirty();
-        } catch(e) { showAppAlert('加载失败: ' + formatError(e, '无法加载本地文件'), {title: '加载失败', icon: 'fa-solid fa-triangle-exclamation'}); }
+        };
+        projectDbGet(id).then(function(data) {
+            if (!data) { fromLocalStorage(); return; }
+            try {
+                applyStoredFileData(data, id);
+            } catch (e) {
+                showAppAlert('加载失败: ' + formatError(e, '无法加载本地文件'), {title: '加载失败', icon: 'fa-solid fa-triangle-exclamation'});
+            }
+        }).catch(function() { fromLocalStorage(); });
     }
 
     function showHistoryDialog() {
@@ -17460,6 +17698,7 @@ function buildTimbreFittingRows(info) {
     var _dirty = false;
     var _saveTimer = null;
     var _saveDebounceMs = 800;
+    var _autoSaveQuotaWarned = false;
 
     function markDirty() {
         if (!_dirty) {
@@ -17493,11 +17732,20 @@ function buildTimbreFittingRows(info) {
                     lyrics: JSON.parse(JSON.stringify(state.lyrics || []))
                 } : null,
                 lyrics: JSON.parse(JSON.stringify(state.lyrics || [])),
+                currentFileId: state.currentFileId || null,
                 savedAt: Date.now()
             };
             // 使用 safeSetItem, 配额超限时自动清理旧历史文件
             if (safeSetItem(STORAGE_KEY, JSON.stringify(data))) {
                 _dirty = false;
+                _autoSaveQuotaWarned = false;
+            } else if (!_autoSaveQuotaWarned) {
+                // 清理旧历史文件后仍写入失败: 提示一次, 避免用户误以为已保存
+                _autoSaveQuotaWarned = true;
+                showAppAlert('本地存储空间不足，自动保存未成功。请及时「导出 NBS」备份当前作品。', {
+                    title: '自动保存失败',
+                    icon: 'fa-solid fa-triangle-exclamation'
+                });
             }
         } catch(e) {
             console.warn('保存本地数据失败:', e);
@@ -17514,6 +17762,8 @@ function buildTimbreFittingRows(info) {
             state.notes = data.notes || [];
             state.tempo = data.tempo || 20;
             state.currentInstrument = data.currentInstrument || 0;
+            // 恢复上一次的持久文件 ID, 避免刷新后保存产生重复的历史记录
+            state.currentFileId = data.currentFileId || null;
             // 兼容旧版 autoScrollMode 数据: 非 0 视为开启
             if (data.smoothScroll !== undefined) {
                 state.smoothScroll = !!data.smoothScroll;
@@ -17605,6 +17855,456 @@ function buildTimbreFittingRows(info) {
         } catch(e) {}
     }
 
+    // ============ 欢迎引导界面 ============
+    function formatRelativeTime(ts) {
+        if (!ts || typeof ts !== 'number') return '';
+        var diff = Date.now() - ts;
+        if (diff < 0) diff = 0;
+        var min = Math.floor(diff / 60000);
+        if (min < 1) return i18nText('刚刚');
+        if (min < 60) return min + ' ' + i18nText('分钟前');
+        var hour = Math.floor(min / 60);
+        if (hour < 24) return hour + ' ' + i18nText('小时前');
+        var day = Math.floor(hour / 24);
+        if (day < 7) return day + ' ' + i18nText('天前');
+        if (day < 30) return Math.floor(day / 7) + ' ' + i18nText('周前');
+        var month = Math.floor(day / 30);
+        if (month < 12) return month + ' ' + i18nText('个月前');
+        return Math.floor(month / 12) + ' ' + i18nText('年前');
+    }
+
+    // 查找可恢复的编辑内容: 优先实时快照, 再退回历史文件
+    function getRecoverableInfo() {
+        var info = { has: false, source: '', fileId: null, name: '', savedAt: 0, noteCount: 0 };
+        try {
+            var raw = localStorage.getItem(STORAGE_KEY);
+            if (raw) {
+                var d = JSON.parse(raw);
+                var count = (d && Array.isArray(d.notes)) ? d.notes.length : 0;
+                if (count > 0) {
+                    info.has = true;
+                    info.source = 'snapshot';
+                    info.name = (d.song && (d.song.name || d.song.song_name)) || 'Untitled';
+                    info.savedAt = d.savedAt || 0;
+                    info.noteCount = count;
+                    return info;
+                }
+            }
+        } catch (e) {}
+        var history = getHistoryFiles();
+        for (var hi = 0; hi < history.length; hi++) {
+            if (!history[hi].missing) {
+                var h = history[hi];
+                info.has = true;
+                info.source = 'history';
+                info.fileId = h.id;
+                info.name = h.name || 'Untitled';
+                info.savedAt = typeof h.ts === 'number' ? h.ts : 0;
+                info.noteCount = h.size || 0;
+                break;
+            }
+        }
+        return info;
+    }
+
+    function updateWelcomeResumeHint() {
+        var btn = $('welcome-resume');
+        if (!btn) return;
+        var hint = $('welcome-resume-hint');
+        var info = getRecoverableInfo();
+        if (!info.has) {
+            btn.disabled = true;
+            btn.style.opacity = '0.45';
+            btn.style.cursor = 'default';
+            if (hint) hint.textContent = i18nText('暂无记录');
+            return;
+        }
+        btn.disabled = false;
+        btn.style.opacity = '';
+        btn.style.cursor = '';
+        if (hint) {
+            var when = formatRelativeTime(info.savedAt);
+            var countText = info.noteCount + ' ' + i18nText('音符');
+            hint.textContent = when ? (when + ' · ' + countText) : countText;
+        }
+    }
+
+    // 最近歌曲列表最多显示的条数 (超出部分可滚动)
+    var WELCOME_RECENT_LIMIT = 12;
+
+    function renderWelcomeRecent() {
+        var list = $('welcome-recent-list');
+        if (!list) return;
+        list.innerHTML = '';
+        var history = getHistoryFiles().slice(0, WELCOME_RECENT_LIMIT);
+        if (!history.length) {
+            var empty = document.createElement('div');
+            empty.className = 'welcome-recent-empty';
+            empty.textContent = i18nText('暂无最近打开的项目');
+            list.appendChild(empty);
+            return;
+        }
+        history.forEach(function(h) {
+            var row = document.createElement('button');
+            row.type = 'button';
+            row.className = 'welcome-recent-item' + (h.missing ? ' missing' : '');
+            var nameEl = document.createElement('span');
+            nameEl.className = 'welcome-recent-name';
+            nameEl.textContent = h.name || 'Untitled';
+            nameEl.title = h.missing ? (i18nText('本地数据已被清理') ) : (h.name || 'Untitled');
+            var timeEl = document.createElement('span');
+            timeEl.className = 'welcome-recent-time';
+            timeEl.textContent = formatRelativeTime(h.ts) || (h.date || '');
+            row.appendChild(nameEl);
+            row.appendChild(timeEl);
+            if (!h.missing) {
+                row.addEventListener('click', function() {
+                    hideWelcomeScreen();
+                    loadFileFromLocalStorage(h.id);
+                });
+            }
+            list.appendChild(row);
+        });
+    }
+
+    function showWelcomeScreen() {
+        var el = $('welcome-screen');
+        if (!el) return;
+        renderWelcomeRecent();
+        updateWelcomeResumeHint();
+        el.style.display = 'flex';
+    }
+
+    function hideWelcomeScreen() {
+        var el = $('welcome-screen');
+        if (el) el.style.display = 'none';
+    }
+
+    // 打开上一次的项目: 优先恢复实时快照, 否则加载最近的历史文件
+    function welcomeResume() {
+        var info = getRecoverableInfo();
+        if (!info.has) {
+            showAppAlert('暂无可恢复的项目', { title: '打开上一次的项目', icon: 'fa-solid fa-clock-rotate-left' });
+            return;
+        }
+        hideWelcomeScreen();
+        if (info.source === 'snapshot') {
+            if (!autoLoadLocal()) resetToNewFile(false);
+        } else {
+            loadFileFromLocalStorage(info.fileId);
+        }
+    }
+
+    function welcomeCreateNew() {
+        var info = getRecoverableInfo();
+        hideWelcomeScreen();
+        if (!info.has) {
+            clearAutoSaveLocal();
+            resetToNewFile(true);
+            return;
+        }
+        showAppConfirm('检测到上一次的编辑内容，新建歌曲会将其清空且无法恢复。是否继续？', {
+            title: '新建歌曲',
+            icon: 'fa-solid fa-file-circle-plus'
+        }).then(function(ok) {
+            if (ok) {
+                clearAutoSaveLocal();
+                resetToNewFile(true);
+            } else {
+                showWelcomeScreen();
+            }
+        });
+    }
+
+    function initWelcomeScreen() {
+        var el = $('welcome-screen');
+        if (!el) return;
+        var newBtn = $('welcome-new');
+        var openBtn = $('welcome-open');
+        var midiBtn = $('welcome-midi');
+        var resumeBtn = $('welcome-resume');
+
+        if (newBtn) newBtn.addEventListener('click', welcomeCreateNew);
+        if (openBtn) openBtn.addEventListener('click', function() {
+            var input = $('file-input');
+            if (input) {
+                input.accept = '.nbs,.mid,.midi,.zip';
+                input.click();
+            }
+        });
+        if (midiBtn) midiBtn.addEventListener('click', function() {
+            var input = $('file-input');
+            if (input) {
+                input.accept = '.mid,.midi';
+                input.click();
+            }
+        });
+        if (resumeBtn) resumeBtn.addEventListener('click', welcomeResume);
+
+        // 版本号: 与 config.yaml 的 release.version 保持一致
+        fetch('/api/config').then(function(r) { return r.json(); }).then(function(cfg) {
+            if (cfg && cfg.release && cfg.release.version && $('welcome-version')) {
+                $('welcome-version').textContent = cfg.release.version;
+            }
+        }).catch(function() {});
+
+        showWelcomeScreen();
+    }
+
+    // ============ 本地缓存占用检查与清理 ============
+    var STORAGE_WARN_BYTES = 100 * 1024 * 1024;      // 提醒阈值 100 MB
+    var STORAGE_SNOOZE_KEY = 'webnbs_storage_warn_snooze';
+    var STORAGE_SNOOZE_STEP = 50 * 1024 * 1024;      // 忽略后需再增长 50 MB 才重新提醒
+    var STORAGE_KEEP_RECENT = 3;                     // 清理历史时保留的最近记录数
+
+    function formatStorageSize(bytes) {
+        bytes = bytes || 0;
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+    }
+
+    function measureLocalStorageBytes() {
+        var total = 0;
+        try {
+            for (var i = 0; i < localStorage.length; i++) {
+                var k = localStorage.key(i);
+                if (!k) continue;
+                var v = localStorage.getItem(k) || '';
+                total += (k.length + v.length) * 2;
+            }
+        } catch (e) {}
+        return total;
+    }
+
+    // 统计各部分占用: 设置/元数据, 历史项目, 自定义音色, 音色库, 背景图
+    function collectStorageBreakdown() {
+        return Promise.all([
+            estimateStoreBytes(PROJECT_DB, PROJECT_STORE),
+            estimateStoreBytes('webnbs_custom_instruments', 'audio'),
+            estimateStoreBytes('webnbs_soundfont', 'files'),
+            estimateStoreBytes('webnbs_bg', 'kv')
+        ]).then(function(res) {
+            var localBytes = measureLocalStorageBytes();
+            return {
+                settings: localBytes,
+                projects: res[0],
+                customInstruments: res[1],
+                soundfont: res[2],
+                background: res[3],
+                total: localBytes + res[0] + res[1] + res[2] + res[3]
+            };
+        });
+    }
+
+    function getStorageSnoozeBytes() {
+        try {
+            var raw = localStorage.getItem(STORAGE_SNOOZE_KEY);
+            var n = raw ? parseInt(raw, 10) : 0;
+            return isFinite(n) ? n : 0;
+        } catch (e) { return 0; }
+    }
+
+    function checkStorageUsage() {
+        collectStorageBreakdown().then(function(b) {
+            if (b.total < STORAGE_WARN_BYTES) return;
+            // 用户点过「忽略」时, 只有占用继续明显增长才再次提醒
+            var snoozed = getStorageSnoozeBytes();
+            if (snoozed && b.total < snoozed + STORAGE_SNOOZE_STEP) return;
+            showStorageCleanupDialog(b);
+        }).catch(function() {});
+    }
+
+    function clearObjectStore(dbName, storeName) {
+        return new Promise(function(resolve) {
+            if (!window.indexedDB) { resolve(false); return; }
+            var req;
+            try { req = indexedDB.open(dbName); } catch (e) { resolve(false); return; }
+            req.onupgradeneeded = function() { try { req.transaction.abort(); } catch (e) {} };
+            req.onsuccess = function(e) {
+                var db = e.target.result;
+                if (!db.objectStoreNames.contains(storeName)) { db.close(); resolve(false); return; }
+                try {
+                    var tx = db.transaction(storeName, 'readwrite');
+                    tx.objectStore(storeName).clear();
+                    tx.oncomplete = function() { db.close(); resolve(true); };
+                    tx.onerror = function() { db.close(); resolve(false); };
+                    tx.onabort = function() { db.close(); resolve(false); };
+                } catch (e2) { db.close(); resolve(false); }
+            };
+            req.onerror = function() { resolve(false); };
+            req.onblocked = function() { resolve(false); };
+        });
+    }
+
+    function showStorageCleanupDialog(breakdown) {
+        var overlay = _appDialogOverlay();
+        var box = _appDialogBox(i18nText('本地缓存占用提醒'), '', 'fa-solid fa-hard-drive', { maxWidth: 520 });
+        var body = box.querySelector('.settings-body');
+        body.style.whiteSpace = 'normal';
+        body.innerHTML = '';
+
+        var desc = document.createElement('p');
+        desc.className = 'storage-clean-desc';
+        desc.textContent = i18nText('本地缓存占用已超过 100 MB，可勾选下方内容进行清理，或选择忽略。');
+        body.appendChild(desc);
+
+        var list = document.createElement('div');
+        list.className = 'storage-clean-list';
+        body.appendChild(list);
+
+        var items = [
+            { key: 'projects', label: i18nText('历史歌曲数据'), size: breakdown.projects, checked: true },
+            {
+                key: 'customInstruments', label: i18nText('自定义音色音频'), size: breakdown.customInstruments,
+                checked: true, warn: i18nText('清理后自定义音色会被移除，内置音色不受影响。')
+            },
+            {
+                key: 'soundfont', label: i18nText('音色库文件'), size: breakdown.soundfont, checked: false,
+                warn: i18nText('清理后需要重新下载音色库，且可能导致 MIDI 音色不准确或丢失。')
+            },
+            { key: 'background', label: i18nText('背景图片'), size: breakdown.background, checked: true }
+        ];
+
+        var inputs = {};
+        items.forEach(function(it) {
+            var row = document.createElement('label');
+            row.className = 'storage-clean-row';
+            var cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = it.checked && it.size > 0;
+            if (!it.size) cb.disabled = true;
+            inputs[it.key] = cb;
+
+            var name = document.createElement('span');
+            name.className = 'storage-clean-name';
+            name.textContent = it.label;
+            var size = document.createElement('span');
+            size.className = 'storage-clean-size';
+            size.textContent = formatStorageSize(it.size);
+
+            row.appendChild(cb);
+            row.appendChild(name);
+            row.appendChild(size);
+            list.appendChild(row);
+
+            if (it.warn) {
+                var warn = document.createElement('div');
+                warn.className = 'storage-clean-warn';
+                warn.textContent = it.warn;
+                list.appendChild(warn);
+            }
+        });
+
+        var totalEl = document.createElement('div');
+        totalEl.className = 'storage-clean-total';
+        totalEl.textContent = i18nText('当前总占用') + ': ' + formatStorageSize(breakdown.total);
+        body.appendChild(totalEl);
+
+        var close = function() { _closeAppDialog(overlay); };
+        var ignoreBtn = _appDialogBtn(i18nText('忽略'), false);
+        var cleanBtn = _appDialogBtn(i18nText('立即清理'), true);
+
+        ignoreBtn.addEventListener('click', function() {
+            // 记住本次占用, 只有继续明显增长才会再次提醒
+            try { localStorage.setItem(STORAGE_SNOOZE_KEY, String(breakdown.total)); } catch (e) {}
+            close();
+        });
+
+        cleanBtn.addEventListener('click', function() {
+            var picked = Object.keys(inputs).filter(function(k) {
+                return inputs[k].checked && !inputs[k].disabled;
+            });
+            close();
+            if (!picked.length) return;
+            performStorageCleanup(picked);
+        });
+
+        box.querySelector('#app-dialog-x').addEventListener('click', close);
+        var actions = box.querySelector('.popup-actions');
+        actions.appendChild(ignoreBtn);
+        actions.appendChild(cleanBtn);
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+        _appDialogStack.push(overlay);
+    }
+
+    function performStorageCleanup(picked) {
+        var needsReload = false;
+        var jobs = [];
+
+        if (picked.indexOf('projects') >= 0) {
+            // 保留最近若干条与当前正在编辑的作品, 其余连同文件一起删除
+            var history = getHistoryFiles();
+            var keepIds = {};
+            var kept = 0;
+            for (var i = 0; i < history.length; i++) {
+                var isCurrent = state.currentFileId && String(history[i].id) === String(state.currentFileId);
+                if (isCurrent || kept < STORAGE_KEEP_RECENT) {
+                    keepIds[String(history[i].id)] = true;
+                    if (!isCurrent) kept++;
+                }
+            }
+            history.forEach(function(h) {
+                if (!keepIds[String(h.id)]) jobs.push(projectDbDelete(h.id));
+            });
+            var keptList = history.filter(function(h) { return keepIds[String(h.id)]; });
+            safeSetItem('nbs_history', JSON.stringify(keptList));
+        }
+
+        if (picked.indexOf('customInstruments') >= 0) {
+            needsReload = true;
+            jobs.push(clearObjectStore('webnbs_custom_instruments', 'audio'));
+            try { localStorage.removeItem('webnbs_custom_list'); } catch (e) {}
+        }
+
+        if (picked.indexOf('soundfont') >= 0) {
+            needsReload = true;
+            jobs.push(clearObjectStore('webnbs_soundfont', 'files'));
+        }
+
+        if (picked.indexOf('background') >= 0) {
+            needsReload = true;
+            jobs.push(clearObjectStore('webnbs_bg', 'kv'));
+            try {
+                localStorage.removeItem('bg_filename');
+                localStorage.removeItem('bg_migrated_v2');
+            } catch (e) {}
+        }
+
+        Promise.all(jobs).then(function() {
+            try { localStorage.removeItem(STORAGE_SNOOZE_KEY); } catch (e) {}
+            if (picked.indexOf('projects') >= 0 && $('welcome-screen')) {
+                renderWelcomeRecent();
+                updateWelcomeResumeHint();
+            }
+            if (needsReload) {
+                return showAppConfirm('已清理所选内容。部分内容需要刷新页面后才会生效，是否立即刷新？', {
+                    title: '清理完成',
+                    icon: 'fa-solid fa-broom'
+                }).then(function(ok) { if (ok) location.reload(); });
+            }
+            showAppAlert('已清理所选内容。', { title: '清理完成', icon: 'fa-solid fa-circle-check' });
+        }).catch(function() {
+            showAppAlert('清理过程中出现异常，请重试。', { title: '清理失败', icon: 'fa-solid fa-triangle-exclamation' });
+        });
+    }
+
+    // 立即把待写入内容落盘 (用于防抖尚未触发时的紧急保存)
+    var _lastFlushAt = 0;
+    function flushPendingSave() {
+        var now = Date.now();
+        if (now - _lastFlushAt < 3000) return;
+        _lastFlushAt = now;
+        // 先写入最新快照 (含防抖未落盘的内容)
+        if (_dirty) autoSaveLocal();
+        // 再覆盖式写入历史文件, 保证「打开上一次的项目」拿到最新数据
+        if (state.notes && state.notes.length > 0) {
+            saveFileToLocalStorage(true);
+        }
+    }
+
     // 页面关闭前提醒
     window.addEventListener('beforeunload', function(e) {
         if (_dirty) {
@@ -17615,6 +18315,12 @@ function buildTimbreFittingRows(info) {
             return e.returnValue;
         }
     });
+
+    // 移动端/切后台/关闭标签页时 beforeunload 常常不触发, 用这两个事件兜底落盘
+    document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'hidden') flushPendingSave();
+    });
+    window.addEventListener('pagehide', flushPendingSave);
 
     // ============ 通用 Tooltip 系统 ============
     // 所有带 title 属性的元素 (含动态创建): 悬浮显示, 延迟 0.4s

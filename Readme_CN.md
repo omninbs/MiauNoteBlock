@@ -1,7 +1,7 @@
 <div align="center">
 
-<!-- LOGO: 将新 logo 覆盖到 src/static/logo.png，或把这里的 URL 换成你的新图 -->
-<img src="https://webnbs.com/static/logo.png" alt="MiauNoteBlock" width="168" />
+<!-- LOGO为AI生成 -->
+<img src="/docs/logo.png" alt="MiauNoteBlock" width="1280" />
 
 # MiauNoteBlock
 

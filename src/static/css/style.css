@@ -7041,6 +7041,7 @@ textarea:disabled {
     align-items: center;
     justify-content: center;
     padding: 16px;
+    padding: calc(16px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
     background: rgba(0, 0, 0, 0.55);
     animation: fadeIn 0.18s ease;
 }
@@ -7066,10 +7067,11 @@ textarea:disabled {
     text-align: center;
     background: rgba(0, 0, 0, 0.18);
     border-right: 1px solid rgba(255, 255, 255, 0.06);
+    overflow-y: auto;
 }
 .welcome-logo {
-    width: 96px;
-    height: 96px;
+    width: 128px;
+    height: 128px;
     object-fit: contain;
     image-rendering: pixelated;
 }
@@ -7102,11 +7104,12 @@ textarea:disabled {
     margin-top: 6px;
     font-size: 12px;
     color: var(--accent, #4cc2ff);
-    text-decoration: underline;
+    text-decoration: none;
     word-break: break-all;
 }
 .welcome-link:hover {
     color: #7fd3ff;
+    text-decoration: underline;
 }
 .welcome-social {
     margin-top: auto;
@@ -7169,10 +7172,10 @@ textarea:disabled {
     text-decoration: none;
 }
 .welcome-action i {
-    width: 20px;
+    width: 22px;
     flex-shrink: 0;
     text-align: center;
-    font-size: 15px;
+    font-size: 17px;
     color: var(--text-secondary, #bbb);
 }
 .welcome-action-text {
@@ -7338,28 +7341,106 @@ textarea:disabled {
     color: var(--text-tertiary, #888);
     text-align: right;
 }
-@media (max-width: 720px) {
+/* --- 平板 / 中等宽度: 侧栏收窄 --- */
+@media (max-width: 900px) {
+    .welcome-card { max-width: 680px; }
+    .welcome-side { width: 236px; padding: 26px 18px 20px; }
+}
+
+/* --- 手机竖屏 / 小屏: 单栏堆叠 --- */
+@media (max-width: 768px) {
+    .welcome-overlay {
+        padding: 12px;
+        padding: calc(12px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left));
+    }
     .welcome-card {
         flex-direction: column;
         max-height: 94vh;
         overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
     }
     .welcome-side {
         width: 100%;
-        padding: 20px 18px 16px;
+        padding: 18px 16px 14px;
         border-right: none;
         border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        overflow-y: visible;
     }
     .welcome-logo {
-        width: 64px;
-        height: 64px;
+        width: 80px;
+        height: 80px;
     }
+    .welcome-tagline { margin-top: 10px; }
     .welcome-social {
         margin-top: 12px;
         padding-top: 0;
     }
     .welcome-main {
-        padding: 18px;
+        padding: 16px 16px 20px;
         overflow-y: visible;
+    }
+    .welcome-recent { padding-left: 0; }
+    .welcome-recent-list {
+        max-height: 38vh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+    }
+    .welcome-action { padding: 10px; }
+}
+
+/* --- 超窄屏: 进一步压缩 --- */
+@media (max-width: 420px) {
+    .welcome-logo { width: 64px; height: 64px; }
+    .welcome-title { font-size: 16px; }
+    .welcome-side { padding: 14px 12px 12px; }
+    .welcome-main { padding: 12px 12px 16px; }
+    .welcome-social-row { line-height: 1.7; }
+    .welcome-social-text { white-space: normal; }
+    .welcome-resume-hint { display: none; }
+}
+
+/* --- 手机横屏: 恢复紧凑两栏, 利用横向空间 --- */
+@media (max-width: 768px) and (orientation: landscape) {
+    .welcome-card {
+        flex-direction: row;
+        max-height: 96vh;
+        overflow: hidden;
+    }
+    .welcome-side {
+        width: 190px;
+        padding: 16px 14px;
+        border-right: 1px solid rgba(255, 255, 255, 0.06);
+        border-bottom: none;
+        overflow-y: auto;
+    }
+    .welcome-logo { width: 56px; height: 56px; }
+    .welcome-title { margin-top: 8px; font-size: 15px; }
+    .welcome-tagline { display: none; }
+    .welcome-social { margin-top: auto; padding-top: 12px; }
+    .welcome-main { padding: 14px 16px; overflow-y: auto; }
+    .welcome-recent { padding-left: 0; }
+    .welcome-recent-list { max-height: none; overflow-y: visible; }
+    .welcome-resume-hint { display: none; }
+}
+
+/* --- 大屏横屏矮窗口: 压缩侧栏留出纵向空间 --- */
+@media (min-width: 769px) and (orientation: landscape) and (max-height: 560px) {
+    .welcome-card { max-height: 96vh; }
+    .welcome-side { padding: 16px; }
+    .welcome-logo { width: 76px; height: 76px; }
+    .welcome-tagline { display: none; }
+    .welcome-social { padding-top: 10px; }
+    .welcome-recent-list { max-height: 30vh; }
+}
+
+/* --- 触屏: 放大点击目标 --- */
+@media (pointer: coarse) {
+    .welcome-action { min-height: 44px; }
+    .welcome-recent-item {
+        min-height: 36px;
+        padding-top: 6px;
+        padding-bottom: 6px;
     }
 }

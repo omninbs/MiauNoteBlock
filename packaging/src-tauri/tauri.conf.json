@@ -1,0 +1,40 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "MiauNoteBlock",
+  "version": "1.0.0",
+  "identifier": "com.com1919.miaunoteblock",
+  "build": {
+    "frontendDist": "../../blbl-toy"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "MiauNoteBlock - Minecraft Note Block Studio",
+        "width": 1366,
+        "height": 820,
+        "minWidth": 960,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [],
+    "category": "DeveloperTool",
+    "shortDescription": "Minecraft Note Block Studio",
+    "longDescription": "MiauNoteBlock - Minecraft Note Block Studio (离线桌面版)",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

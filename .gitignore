@@ -1,9 +1,13 @@
 node_modules/
 package.json
 package-lock.json
-src-tauri/
+/src-tauri/
 .git/
 __pycache__/
 *.pyc
 # 本地离线构建产物 (node build_local.js 生成, 可删除后重建)
 blbl-toy/
+# 打包构建工作目录 (packaging): 忽略依赖、产物与日志, 保留工程配置
+packaging/src-tauri/target/
+packaging/dist/
+packaging/*.log

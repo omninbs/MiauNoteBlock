@@ -33,7 +33,6 @@
 ## 📖 目录
 
 - [MiauNoteBlock 是什么？](#-miaunoteblock-是什么)
-- [界面预览](#-界面预览)
 - [功能特性](#-功能特性)
 - [在线体验](#-在线体验)
 - [支持的界面语言](#-支持的界面语言)
@@ -56,27 +55,6 @@
 > **隐私优先：** 所有文件都在你的浏览器里处理，不上传、不永久存储。
 
 它最初以 *NoteBlockWeb* 的名字发布，现在正式更名为 **MiauNoteBlock**。
-
----
-
-## 🖼 界面预览
-
-<!-- 截图位：把图片放进 ./assets/ 目录，文件名与下方保持一致即可 -->
-<div align="center">
-
-<img src="./assets/screenshot-editor.png" alt="钢琴卷帘编辑器" width="90%" />
-
-*钢琴卷帘编辑，WinUI / Fluent 风格界面。*
-
-<img src="./assets/screenshot-midi.png" alt="MIDI 导入与音色拟合" width="90%" />
-
-*MIDI 导入，自动音色拟合与延音轨道识别。*
-
-<img src="./assets/screenshot-mobile.png" alt="移动端布局" width="42%" />
-
-*为手机与平板优化的触控布局。*
-
-</div>
 
 ---
 

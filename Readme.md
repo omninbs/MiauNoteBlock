@@ -33,7 +33,6 @@
 ## 📖 Table of Contents
 
 - [What is MiauNoteBlock?](#-what-is-miaunoteblock)
-- [Screenshots](#-screenshots)
 - [Features](#-features)
 - [Try it online](#-try-it-online)
 - [Supported languages](#-supported-languages)
@@ -56,27 +55,6 @@ It reads and writes the standard `.nbs` format used by the Minecraft Note Block 
 > **Privacy by design:** your files are processed in the browser. Nothing is uploaded, nothing is stored permanently.
 
 It was originally published as *NoteBlockWeb*, and is now called **MiauNoteBlock**.
-
----
-
-## 🖼 Screenshots
-
-<!-- SCREENSHOTS: reserved. Drop the files into ./assets/ with these exact names. -->
-<div align="center">
-
-<img src="./assets/screenshot-editor.png" alt="Piano roll editor" width="90%" />
-
-*Piano-roll editing with a WinUI / Fluent-inspired interface.*
-
-<img src="./assets/screenshot-midi.png" alt="MIDI import and timbre fitting" width="90%" />
-
-*MIDI import with automatic timbre fitting and sustain-track detection.*
-
-<img src="./assets/screenshot-mobile.png" alt="Mobile layout" width="42%" />
-
-*Touch-friendly layout for phones and tablets.*
-
-</div>
 
 ---
 

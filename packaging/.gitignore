@@ -5,6 +5,7 @@ src-tauri/target/
 
 # 构建产物
 dist/
+output/
 
 # 构建日志
 *.log

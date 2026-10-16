@@ -1422,5 +1422,30 @@
 <script src="static/js/audio_render.js?v=20260919c"></script>
 <script src="static/js/main.js?v=20261003b"></script>
 
+<script>
+// 桌面应用（含 MSIX 安装版）内：外部链接交给系统默认浏览器打开。
+// WebView 不会自行跳转外部 http/https，否则点击后无任何反应。
+(function () {
+    function openInSystem(url) {
+        var t = window.__TAURI__;
+        if (t && t.core && typeof t.core.invoke === 'function') {
+            t.core.invoke('open_external', { url: url }).catch(function (err) {
+                console.warn('打开外部链接失败:', err);
+            });
+            return true;
+        }
+        return false;
+    }
+    document.addEventListener('click', function (e) {
+        var el = e.target;
+        while (el && el.nodeType === 1 && el.tagName !== 'A') { el = el.parentElement; }
+        if (!el || el.tagName !== 'A') { return; }
+        var href = el.getAttribute('href') || '';
+        if (!/^https?:\/\//i.test(href)) { return; }
+        if (openInSystem(href)) { e.preventDefault(); }
+    }, true);
+})();
+</script>
+
 </body>
 </html>

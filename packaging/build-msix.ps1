@@ -131,7 +131,13 @@ if ($SkipBuild) {
     try { & $Tauri @('build', '--no-bundle') } finally { Pop-Location }
     if ($LASTEXITCODE -ne 0) { throw "tauri build 失败，退出码 $LASTEXITCODE。" }
 }
-if (-not (Test-Path $ExeBuilt)) { throw "未找到主程序：$ExeBuilt" }
+if (-not (Test-Path $ExeBuilt)) {
+    # 回退：按最新产物查找（排除构建脚本），避免因 Cargo 产物名变化而中断
+    $cand = Get-ChildItem (Join-Path $SrcTauri 'target\release') -Filter '*.exe' -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -notmatch 'build-script' } |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if ($cand) { $ExeBuilt = $cand.FullName } else { throw "未找到主程序：$ExeBuilt" }
+}
 Write-Host "  $ExeBuilt  ($([math]::Round((Get-Item $ExeBuilt).Length / 1MB, 2)) MB)"
 
 # ---------- 版本号 ----------

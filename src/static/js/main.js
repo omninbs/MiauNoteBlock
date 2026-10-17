@@ -367,9 +367,11 @@
     var _appDialogStack = [];
 
     function _appDialogOverlay() {
+        // 弹出模态弹窗时先关闭残留的悬浮菜单, 避免其被遮罩盖住却仍占据点击热区
+        closeTransientFloats();
         var ov = document.createElement('div');
         ov.className = 'app-dialog-overlay';
-        ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px;animation:fadeIn 0.15s ease;';
+        ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:100400;display:flex;align-items:center;justify-content:center;padding:16px;animation:fadeIn 0.15s ease;';
         return ov;
     }
 
@@ -1163,6 +1165,16 @@
                 renderWelcomeRecent();
                 updateWelcomeResumeHint();
             }
+            // MIDI 导入弹窗内包含音色名等动态文案, 语言切换后重建相关列表
+            var midiPopupEl = $('midi-popup');
+            if (midiPopupEl && midiPopupEl.style.display !== 'none' && state._midiInfo) {
+                buildTimbreFittingRows(state._midiInfo);
+                fillChannelInstrumentNames();
+            }
+            var substPopupEl = $('midi-substitute-popup');
+            if (substPopupEl && substPopupEl.style.display !== 'none' && typeof _substituteConfig !== 'undefined' && _substituteConfig) {
+                renderSubstituteRows(_substituteConfig);
+            }
         });
         // 创建 DOM 元素
         createContextMenuDOM();
@@ -1396,20 +1408,8 @@
             });
         }
 
-        // 录制时音符动画开关 (默认关闭, 提升录制性能)
-        var recAnimChk = $('settings-recording-animation');
-        if (recAnimChk) {
-            try {
-                var savedRecAnim = localStorage.getItem('recording_animation');
-                // 默认关闭: 如果没有保存过设置, 则 checked = false
-                recAnimChk.checked = (savedRecAnim === '1');
-            } catch(e) { recAnimChk.checked = false; }
-            state.recordingAnimationEnabled = recAnimChk.checked;
-            recAnimChk.addEventListener('change', function() {
-                state.recordingAnimationEnabled = this.checked;
-                try { localStorage.setItem('recording_animation', this.checked ? '1' : '0'); } catch(e) {}
-            });
-        }
+        // 录制时音符动画: 现已常开 (原「录制时显示音符动画」开关已移除)
+        state.recordingAnimationEnabled = true;
 
         // NBS 导出版本选择
         var nbsVersionSel = $('settings-nbs-version');
@@ -1428,18 +1428,74 @@
             });
         }
 
-        // 音量透明度开关
+        // 音量透明度开关 (默认开启)
         var volOpacityChk = $('settings-volume-opacity');
         if (volOpacityChk) {
             try {
                 var savedVolOp = localStorage.getItem('volume_opacity');
-                if (savedVolOp !== null) volOpacityChk.checked = (savedVolOp === '1');
-            } catch(e) {}
+                volOpacityChk.checked = (savedVolOp === null) ? true : (savedVolOp === '1');
+            } catch(e) { volOpacityChk.checked = true; }
             if (state.pianoRoll) state.pianoRoll.setVolumeOpacityEnabled(volOpacityChk.checked);
             volOpacityChk.addEventListener('change', function() {
                 if (state.pianoRoll) state.pianoRoll.setVolumeOpacityEnabled(this.checked);
                 try { localStorage.setItem('volume_opacity', this.checked ? '1' : '0'); } catch(e) {}
             });
+        }
+
+        // 音符触发时轨道高亮 (总开关默认关闭; 子选项默认开启)
+        var trackHlChk = $('settings-track-highlight');
+        var trackHlColorChk = $('settings-track-highlight-color');
+        var trackHlPosRadios = document.querySelectorAll('input[name="settings-track-highlight-pos"]');
+        var trackHlPosVolume = $('settings-track-highlight-pos-volume');
+        var trackHlPosPitch = $('settings-track-highlight-pos-pitch');
+        if (trackHlChk) {
+            try {
+                var savedTHl = localStorage.getItem('track_highlight');
+                trackHlChk.checked = (savedTHl === '1');
+            } catch(e) { trackHlChk.checked = false; }
+            try {
+                var savedTHlColor = localStorage.getItem('track_highlight_color');
+                if (trackHlColorChk) trackHlColorChk.checked = (savedTHlColor === null) ? true : (savedTHlColor === '1');
+            } catch(e) { if (trackHlColorChk) trackHlColorChk.checked = true; }
+            // 高亮位置模式: 'pitch' 根据音调(默认) / 'volume' 根据音量
+            try {
+                var savedPosMode = localStorage.getItem('track_highlight_position');
+                state.trackHighlightPositionMode = (savedPosMode === 'volume') ? 'volume' : 'pitch';
+            } catch(e) { state.trackHighlightPositionMode = 'pitch'; }
+            for (var _hi = 0; _hi < trackHlPosRadios.length; _hi++) {
+                trackHlPosRadios[_hi].checked = (trackHlPosRadios[_hi].value === state.trackHighlightPositionMode);
+            }
+
+            // 总开关关闭时, 子选项禁用并变暗 (表示当前不生效)
+            function syncTrackHighlightRows() {
+                syncTrackHighlightSubRow('settings-track-highlight-color-row', trackHlChk.checked, trackHlColorChk);
+                syncTrackHighlightSubRow('settings-track-highlight-pos-row', trackHlChk.checked, trackHlPosVolume);
+                syncTrackHighlightSubRow('settings-track-highlight-pos-pitch-row', trackHlChk.checked, trackHlPosPitch);
+            }
+            state.trackHighlightEnabled = trackHlChk.checked;
+            state.trackHighlightColorEnabled = trackHlColorChk ? trackHlColorChk.checked : true;
+            applyTrackHighlightSettings();
+            syncTrackHighlightRows();
+
+            trackHlChk.addEventListener('change', function() {
+                state.trackHighlightEnabled = this.checked;
+                try { localStorage.setItem('track_highlight', this.checked ? '1' : '0'); } catch(e) {}
+                syncTrackHighlightRows();
+                applyTrackHighlightSettings();
+            });
+            if (trackHlColorChk) trackHlColorChk.addEventListener('change', function() {
+                state.trackHighlightColorEnabled = this.checked;
+                try { localStorage.setItem('track_highlight_color', this.checked ? '1' : '0'); } catch(e) {}
+                applyTrackHighlightSettings();
+            });
+            for (var _hj = 0; _hj < trackHlPosRadios.length; _hj++) {
+                trackHlPosRadios[_hj].addEventListener('change', function() {
+                    if (!this.checked) return;
+                    state.trackHighlightPositionMode = (this.value === 'pitch') ? 'pitch' : 'volume';
+                    try { localStorage.setItem('track_highlight_position', state.trackHighlightPositionMode); } catch(e) {}
+                    applyTrackHighlightSettings();
+                });
+            }
         }
 
         // 音调文字显示八度数字开关 (默认开启)
@@ -1485,6 +1541,20 @@
             });
         }
         syncNoteExtraState();
+
+        // 总开关关闭时, 子选项行变暗 (表示当前不生效); 总开关打开则恢复
+        function syncTrackHighlightSubRow(rowId, enabled, chk) {
+            var row = $(rowId);
+            if (!row) return;
+            row.classList.toggle('is-disabled', !enabled);
+            if (chk) chk.disabled = !enabled;
+        }
+        function applyTrackHighlightSettings() {
+            if (!state.pianoRoll) return;
+            state.pianoRoll.setTrackHighlightEnabled(state.trackHighlightEnabled);
+            state.pianoRoll.setTrackHighlightColorEnabled(state.trackHighlightColorEnabled);
+            state.pianoRoll.setTrackHighlightPositionMode(state.trackHighlightPositionMode);
+        }
 
         // ============ 个性化: 网页背景图片层 (重构版) ============
         var bgLayer = $('page-bg');
@@ -2157,8 +2227,16 @@
                     var valLabel = menuItem.querySelector('#tempo-value');
                     if (valLabel) valLabel.id = 'tempo-value-menu';
                 } else {
-                    var iconHtml = el.querySelector('.icon') ? el.querySelector('.icon').outerHTML : '';
-                    menuItem.innerHTML = iconHtml + '<span>' + (el.title || el.textContent || '') + '</span>';
+                    var iconEl = el.querySelector('.icon');
+                    var iconHtml = iconEl ? iconEl.outerHTML : '';
+                    // 纯图标工具栏按钮的 title 已被自定义 tooltip 迁移为 data-tip,
+                    // 因此标签需按 title -> data-tip -> aria-label -> textContent 依次取;
+                    // 若都不存在则跳过该项, 避免出现只有图标没有文字的空白菜单项
+                    var label = (el.title || el.getAttribute('data-tip') || el.getAttribute('aria-label') || el.textContent || '').trim();
+                    if (!label && !iconHtml) continue;
+                    menuItem.innerHTML = iconHtml + '<span></span>';
+                    var labelSpan = menuItem.querySelector('span');
+                    if (labelSpan) labelSpan.textContent = label;
                     menuItem.addEventListener('click', function(srcEl) {
                         return function() {
                             srcEl.click();
@@ -2192,19 +2270,23 @@
             });
         })();
 
-        // 初始刷新 & 窗口变化时再次刷新 (仅移动端)
-        if (window.innerWidth < 768) {
-            var _toolbarRefreshTimer = null;
-            function scheduleToolbarRefresh() {
-                if (_toolbarRefreshTimer) return;
-                _toolbarRefreshTimer = setTimeout(function() {
-                    _toolbarRefreshTimer = null;
-                    refreshToolbarLayout();
-                }, 80);
-            }
-            scheduleToolbarRefresh();
-            window.addEventListener('resize', scheduleToolbarRefresh);
-            window.addEventListener('orientationchange', scheduleToolbarRefresh);
+        // 初始刷新 & 窗口变化时再次刷新
+        // 注: 不再以初始宽度是否为移动端为条件 —— 桌面/移动之间来回切换时也必须重算,
+        //     否则先前被收进"更多"的按钮会残留在隐藏状态。
+        var _toolbarRefreshTimer = null;
+        function scheduleToolbarRefresh() {
+            if (_toolbarRefreshTimer) return;
+            _toolbarRefreshTimer = setTimeout(function() {
+                _toolbarRefreshTimer = null;
+                refreshToolbarLayout();
+            }, 80);
+        }
+        scheduleToolbarRefresh();
+        window.addEventListener('resize', scheduleToolbarRefresh);
+        window.addEventListener('orientationchange', scheduleToolbarRefresh);
+        // 图标字体加载完成后按钮实际宽度会变化, 需重新测量一次, 避免折叠结果与实际宽度不符
+        if (document.fonts && document.fonts.ready && document.fonts.ready.then) {
+            document.fonts.ready.then(function() { refreshToolbarLayout(); });
         }
 
         updateProgressUI();
@@ -2212,6 +2294,8 @@
         // 键盘快捷键
         initKeyboardShortcuts();
         startFpsDisplayTimer();
+        // 模态弹窗打开时自动关闭残留的悬浮菜单
+        initModalFloatGuard();
 
         // 创作辅助悬浮窗 + 音符查找/替换浮层
         initCreativeAssist();
@@ -4685,6 +4769,61 @@
         state._fpsDisplayTimer = setInterval(updateFpsIndicator, 500);
     }
 
+    // 元素是否真实可见 (综合内联 display / aria-hidden / 计算样式)
+    function _isElementVisible(el) {
+        if (!el) return false;
+        if (el.style && el.style.display === 'none') return false;
+        if (el.getAttribute && el.getAttribute('aria-hidden') === 'true') return false;
+        var cs = window.getComputedStyle ? window.getComputedStyle(el) : null;
+        if (cs && (cs.display === 'none' || cs.visibility === 'hidden')) return false;
+        return true;
+    }
+
+    // 判断当前是否有模态弹窗打开 (自定义弹窗 / .popup / 隐私弹窗)
+    // 用途: 弹窗打开时阻塞主窗口快捷键 (空格播放、Delete 删除、Escape 停止等)
+    function isAnyModalOpen() {
+        if (_appDialogStack.length > 0) return true;
+        var nodes = document.querySelectorAll('.popup, .privacy-popup-mask, .app-dialog-overlay');
+        for (var i = 0; i < nodes.length; i++) {
+            if (_isElementVisible(nodes[i])) return true;
+        }
+        return false;
+    }
+
+    // 关闭所有临时悬浮层 (工具栏菜单 / 右键菜单 / 乐器浮层 / FAB 菜单 / 横屏抽屉)。
+    // 模态弹窗打开时调用: 避免这些悬浮层被弹窗遮罩盖住却仍占据点击热区
+    // (用户以为点在悬浮层上, 实际点在遮罩上)。常驻工具面板(创作辅助/查找替换)不在此列。
+    function closeTransientFloats() {
+        hideContextMenu();
+        var ids = ['functions-menu', 'toolbar-more-menu', 'instrument-popup', 'fab-context-menu',
+                   'timbre-slot-menu', 'substitute-slot-menu', 'find-pick-pop'];
+        for (var i = 0; i < ids.length; i++) {
+            var el = document.getElementById(ids[i]);
+            if (el) el.style.display = 'none';
+        }
+        var menus = document.querySelectorAll('.context-menu');
+        for (var m = 0; m < menus.length; m++) menus[m].style.display = 'none';
+        var drawer = document.getElementById('landscape-drawer');
+        if (drawer) drawer.classList.remove('visible');
+        var drawerMask = document.getElementById('landscape-drawer-mask');
+        if (drawerMask) drawerMask.classList.remove('visible');
+    }
+
+    // 观察所有模态弹窗容器: 一旦变为可见就关闭残留的悬浮层
+    function initModalFloatGuard() {
+        if (!window.MutationObserver) return;
+        var popups = document.querySelectorAll('.popup, .privacy-popup-mask');
+        if (!popups.length) return;
+        var observer = new MutationObserver(function(mutations) {
+            for (var i = 0; i < mutations.length; i++) {
+                if (_isElementVisible(mutations[i].target)) { closeTransientFloats(); return; }
+            }
+        });
+        for (var i = 0; i < popups.length; i++) {
+            observer.observe(popups[i], { attributes: true, attributeFilter: ['style', 'class'] });
+        }
+    }
+
     // ============ 键盘快捷键 ============
     function initKeyboardShortcuts() {
         document.addEventListener('keydown', function(e) {
@@ -4697,6 +4836,17 @@
                 if (fpsEl) {
                     fpsEl.style.display = state.showFps ? 'block' : 'none';
                     fpsEl.textContent = getFpsText('--');
+                }
+                return;
+            }
+
+            // 有模态弹窗打开时, 阻塞主窗口快捷键 (空格播放 / Delete 删除 / Escape 停止等),
+            // 让弹窗自身与弹窗内输入框处理按键 (等效 Windows 子窗口阻塞父窗口)
+            if (isAnyModalOpen()) {
+                var modalTarget = e.target;
+                var modalEditing = modalTarget && (modalTarget.tagName === 'INPUT' || modalTarget.tagName === 'TEXTAREA' || modalTarget.tagName === 'SELECT' || modalTarget.isContentEditable);
+                if (!modalEditing && (e.code === 'Space' || e.key === 'PageDown' || e.key === 'PageUp')) {
+                    e.preventDefault();
                 }
                 return;
             }
@@ -5002,7 +5152,7 @@
     function showSmallTip(message) {
         var tip = document.createElement('div');
         tip.textContent = message;
-        tip.style.cssText = 'position:fixed;left:50%;bottom:72px;z-index:100000;transform:translateX(-50%);'
+        tip.style.cssText = 'position:fixed;left:50%;bottom:72px;z-index:100600;transform:translateX(-50%);'
             + 'max-width:min(92vw,420px);padding:8px 12px;border-radius:10px;background:rgba(20,20,32,0.94);'
             + 'border:1px solid rgba(255,255,255,0.12);box-shadow:0 10px 28px rgba(0,0,0,0.35);'
             + 'color:#fff;font-size:12px;line-height:1.35;text-align:center;pointer-events:none;opacity:0;'
@@ -5524,6 +5674,9 @@
 
                 if (state.pianoRoll && state.highlightAnimationEnabled) {
                     state.pianoRoll.highlightPlayingNotes(notesAtTick);
+                }
+                if (state.pianoRoll && state.trackHighlightEnabled) {
+                    state.pianoRoll.highlightTriggeredTracks(notesAtTick);
                 }
 
                 if (state.pianoRoll) {
@@ -7519,17 +7672,18 @@
             }
             // 公开模式且首次访问才显示隐私弹窗
             if (!alreadyAgreed && cfg && cfg.privacy && cfg.privacy.enabled && cfg.is_public) {
-                if (msgEl) {
-                    msgEl.textContent = (window.WebNBSI18n && WebNBSI18n.t)
-                        ? WebNBSI18n.t('privacy_message')
-                        : (cfg.privacy.message || '');
+                // 政策正文: 优先使用服务端 config.yaml 提供的文本, 未提供则沿用页面内置的完整政策
+                if (msgEl && cfg.privacy.message) {
+                    msgEl.textContent = String(cfg.privacy.message);
                 }
                 mask.style.display = 'flex';
             }
             // 初始化 SoundFont 音色库 (后台异步下载)
             if (cfg && cfg.soundfont) initSoundfontLoader(cfg.soundfont);
         }).catch(function() {
-            // 拉取失败, 不显示弹窗
+            // 离线打开 (file:// 协议) 或配置接口不可用时, 同样展示隐私声明:
+            // 正文使用页面内置的完整政策 (同时覆盖"在线访问"与"离线软件"两种使用方式)
+            if (!alreadyAgreed) mask.style.display = 'flex';
         });
 
         btn.addEventListener('click', function() {
@@ -11156,13 +11310,25 @@
     }
 
     // ============ MIDI 导入 ============
-    // NBS 乐器名称 (与后端 INSTRUMENT_NAMES 对应)
+    // NBS 乐器名称 (与后端 INSTRUMENT_NAMES 对应; 仅作为 i18n 缺失时的回退)
     var INSTRUMENT_NAMES = [
         "Harp/Piano", "Double Bass", "Bass Drum", "Snare Drum", "Click/Sticks",
         "Guitar", "Flute", "Bell/Glock", "Chime/Box", "Xylophone",
         "Iron Xylophone", "Cow Bell", "Didgeridoo", "Bit/Pluck", "Banjo", "Pling/Elec",
         "Copper Horn", "Exposed Copper Horn", "Weathered Copper Horn", "Oxidized Copper Horn"
     ];
+
+    // 界面显示用的音色名: 内置 0-19 走 i18n (中文界面显示中文名), 其余回退英文原名
+    function getInstName(instId) {
+        var idx = parseInt(instId);
+        if (!(idx >= 0)) return '无';
+        var intl = window.WebNBSI18n;
+        if (intl && typeof intl.instrumentName === 'function') {
+            var localized = intl.instrumentName(idx);
+            if (localized) return localized;
+        }
+        return INSTRUMENT_NAMES[idx] || ('乐器 ' + idx);
+    }
 
     // NBS 音高名称 (0-87)
     var NOTE_NAMES = [];
@@ -11456,7 +11622,7 @@
                 nameTd.style.cssText = 'padding:5px 8px;white-space:nowrap;';
                 nameTd.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;">'
                     + getInstrumentIconHtml(instId)
-                    + '<span>' + (INSTRUMENT_NAMES[instId] || ('Inst ' + instId)) + '</span></span>';
+                    + '<span>' + escapeHTML(getInstName(instId)) + '</span></span>';
                 tr.appendChild(nameTd);
 
                 // 音域
@@ -11470,7 +11636,7 @@
                 highTd.style.padding = '5px 8px';
                 highTd.innerHTML = '<input type="hidden" class="substitute-slot" data-inst="' + instId + '" data-type="high" value="' + cfg.high + '">'
                     + '<div class="timbre-slot-btn substitute-slot-btn" data-inst="' + instId + '" data-type="high" title="点击选择高音替代音色">'
-                    + getInstrumentIconHtml(cfg.high) + '<span class="timbre-slot-text">' + (cfg.high >= 0 ? INSTRUMENT_NAMES[cfg.high] : '无') + '</span> <i class="fa-solid fa-caret-up" style="opacity:0.5;font-size:10px;"></i></div>';
+                    + getInstrumentIconHtml(cfg.high) + '<span class="timbre-slot-text">' + escapeHTML(getInstName(cfg.high)) + '</span> <i class="fa-solid fa-caret-up" style="opacity:0.5;font-size:10px;"></i></div>';
                 tr.appendChild(highTd);
 
                 // 低音替代槽 (timbre-slot-btn 风格)
@@ -11478,7 +11644,7 @@
                 lowTd.style.padding = '5px 8px';
                 lowTd.innerHTML = '<input type="hidden" class="substitute-slot" data-inst="' + instId + '" data-type="low" value="' + cfg.low + '">'
                     + '<div class="timbre-slot-btn substitute-slot-btn" data-inst="' + instId + '" data-type="low" title="点击选择低音替代音色">'
-                    + getInstrumentIconHtml(cfg.low) + '<span class="timbre-slot-text">' + (cfg.low >= 0 ? INSTRUMENT_NAMES[cfg.low] : '无') + '</span> <i class="fa-solid fa-caret-up" style="opacity:0.5;font-size:10px;"></i></div>';
+                    + getInstrumentIconHtml(cfg.low) + '<span class="timbre-slot-text">' + escapeHTML(getInstName(cfg.low)) + '</span> <i class="fa-solid fa-caret-up" style="opacity:0.5;font-size:10px;"></i></div>';
                 tr.appendChild(lowTd);
 
                 tbody.appendChild(tr);
@@ -11543,9 +11709,9 @@
                 item.innerHTML = '<span class="timbre-menu-icon" style="background:' + colors[optId2] + ';">'
                     + '<img src="static/sprites/spr_instrumenticons/inst_' + optId2 + '.png" alt="" />'
                     + (isSelected ? '<span class="timbre-menu-check"><i class="fa-solid fa-check"></i></span>' : '')
-                    + '</span><span>' + INSTRUMENT_NAMES[optId2] + '</span>';
+                    + '</span><span>' + escapeHTML(getInstName(optId2)) + '</span>';
                 item.addEventListener('click', function(e) {
-                    selectSubstituteSlot(instId, type, optId2, INSTRUMENT_NAMES[optId2]);
+                    selectSubstituteSlot(instId, type, optId2, getInstName(optId2));
                     menu.remove();
                     e.stopPropagation();
                 });
@@ -12270,7 +12436,7 @@
         html += '<option value="-1"' + (currentValue === -1 ? ' selected' : '') + '>忽略</option>';
         for (var i = 0; i < INSTRUMENT_NAMES.length; i++) {
             var sel = (currentValue === i) ? ' selected' : '';
-            html += '<option value="' + i + '"' + sel + '>' + INSTRUMENT_NAMES[i] + '</option>';
+            html += '<option value="' + i + '"' + sel + '>' + escapeHTML(getInstName(i)) + '</option>';
         }
         html += '</select>';
         return html;
@@ -12512,7 +12678,7 @@
                 }
                 instId = defInst;
             }
-            cell.textContent = INSTRUMENT_NAMES[instId] || ('乐器 ' + instId);
+            cell.textContent = getInstName(instId);
             // 标记超出 MC 标准音域的乐器
             var instOffset = INSTRUMENT_OFFSET[instId] || 0;
             if (instOffset !== 0) {
@@ -15433,20 +15599,33 @@
     }
 
     // 从 localStorage 读取/保存音色拟合设置
+    // 结构: { programs, drums, programVolumes, drumVolumes }
+    //   programs/drums:        { key: [inst1, inst2, inst3] }  (-1 = 无)
+    //   programVolumes/drums:  { key: [vol1, vol2, vol3] }     (0-100, 缺省 100)
     var TIMBRE_FITTING_KEY = 'webnbs_timbre_fitting_v1';
     function loadSavedTimbreFitting() {
         try {
             var raw = localStorage.getItem(TIMBRE_FITTING_KEY);
             if (raw) {
                 var parsed = JSON.parse(raw);
-                return { programs: parsed.programs || {}, drums: parsed.drums || {} };
+                return {
+                    programs: parsed.programs || {},
+                    drums: parsed.drums || {},
+                    programVolumes: parsed.programVolumes || {},
+                    drumVolumes: parsed.drumVolumes || {}
+                };
             }
         } catch (e) {}
-        return { programs: {}, drums: {} };
+        return { programs: {}, drums: {}, programVolumes: {}, drumVolumes: {} };
     }
-    function saveTimbreFitting(programs, drums) {
+    function saveTimbreFitting(programs, drums, programVolumes, drumVolumes) {
         try {
-            localStorage.setItem(TIMBRE_FITTING_KEY, JSON.stringify({ programs: programs, drums: drums }));
+            localStorage.setItem(TIMBRE_FITTING_KEY, JSON.stringify({
+                programs: programs || {},
+                drums: drums || {},
+                programVolumes: programVolumes || {},
+                drumVolumes: drumVolumes || {}
+            }));
         } catch (e) {}
     }
     function getSavedFittingSlots(saved, program, drumNote) {
@@ -15455,6 +15634,17 @@
         }
         if (program !== null && program !== undefined && saved.programs[program] !== undefined) {
             return saved.programs[program];
+        }
+        return null;
+    }
+    // 读取已保存的槽位音量; 缺省返回 null (调用方回退 100)
+    function getSavedFittingVolumes(saved, program, drumNote) {
+        if (!saved) return null;
+        if (drumNote !== null && drumNote !== undefined && saved.drumVolumes && saved.drumVolumes[drumNote] !== undefined) {
+            return saved.drumVolumes[drumNote];
+        }
+        if (program !== null && program !== undefined && saved.programVolumes && saved.programVolumes[program] !== undefined) {
+            return saved.programVolumes[program];
         }
         return null;
     }
@@ -15522,8 +15712,9 @@
             // 按档位重置全部 (旋律) 音色槽: 清除已保存的旋律拟合, 重建拟合表
             var saved = state._midiTimbreFittingSaved || loadSavedTimbreFitting();
             var drums = saved.drums || {};
-            saveTimbreFitting({}, drums);
-            state._midiTimbreFittingSaved = { programs: {}, drums: drums };
+            var drumVols = saved.drumVolumes || {};
+            saveTimbreFitting({}, drums, {}, drumVols);
+            state._midiTimbreFittingSaved = { programs: {}, drums: drums, programVolumes: {}, drumVolumes: drumVols };
             if (state._midiInfo) {
                 buildTimbreFittingRows(state._midiInfo);
                 fillChannelInstrumentNames();
@@ -15606,6 +15797,7 @@ function buildTimbreFittingRows(info) {
             var isPercussion = rowData.type === 'percussion';
             var idKey = isPercussion ? (rowData.drumNote || 0) : (rowData.program || 0);
             var savedSlots = getSavedFittingSlots(savedFitting, isPercussion ? null : idKey, isPercussion ? idKey : null);
+            var savedVols = getSavedFittingVolumes(savedFitting, isPercussion ? null : idKey, isPercussion ? idKey : null);
             var defaultSlots;
             if (savedSlots) {
                 defaultSlots = savedSlots;
@@ -15638,6 +15830,7 @@ function buildTimbreFittingRows(info) {
 
             // MIDI 原音试听列
             var previewMidiCell = document.createElement('td');
+            previewMidiCell.className = 'timbre-col-preview';
             var midiBtnAttr = isPercussion ? ('data-percussion="' + idKey + '"') : ('data-channel="' + rowData.channel + '" data-program="' + idKey + '"');
             previewMidiCell.innerHTML = '<div class="timbre-preview-wrap">'
                 + '<button class="timbre-preview-btn timbre-preview-midi" title="试听 MIDI 原音" ' + midiBtnAttr + '><i class="fa-solid fa-music"></i></button>'
@@ -15647,18 +15840,27 @@ function buildTimbreFittingRows(info) {
 
             // NBS 组合试听按钮列
             var previewNbsCell = document.createElement('td');
+            previewNbsCell.className = 'timbre-col-preview';
             previewNbsCell.innerHTML = '<button class="timbre-preview-btn timbre-preview-nbs" title="试听 NBS 组合音" ' + midiBtnAttr + '><i class="fa-solid fa-layer-group"></i></button>';
             row.appendChild(previewNbsCell);
 
-            // 音色槽
+            // 音色槽 (音色选择框 + 右侧紧凑音量输入框)
             var slotAttr = isPercussion ? ('data-percussion="' + idKey + '"') : ('data-channel="' + rowData.channel + '"');
             for (var s = 0; s < 3; s++) {
                 var slotVal = defaultSlots[s];
                 if (slotVal === undefined || slotVal === null || isNaN(slotVal)) slotVal = -1;
+                var slotVol = 100;
+                if (savedVols && savedVols[s] !== undefined) {
+                    var _sv = Number(savedVols[s]);
+                    if (isFinite(_sv)) slotVol = Math.max(0, Math.min(100, Math.round(_sv)));
+                }
                 var slotCell = document.createElement('td');
-                var displayName = slotVal >= 0 ? INSTRUMENT_NAMES[slotVal] : '无';
+                var displayName = getInstName(slotVal);
                 slotCell.innerHTML = '<input type="hidden" class="timbre-slot" ' + slotAttr + ' data-slot="' + (s + 1) + '" value="' + slotVal + '">'
-                    + '<div class="timbre-slot-btn" ' + slotAttr + ' data-slot="' + (s + 1) + '">' + getInstrumentIconHtml(slotVal) + '<span class="timbre-slot-text">' + displayName + '</span> <i class="fa-solid fa-caret-up" style="opacity:0.5;font-size:10px;"></i></div>';
+                    + '<div class="timbre-slot-inner">'
+                    + '<div class="timbre-slot-btn" ' + slotAttr + ' data-slot="' + (s + 1) + '" title="' + escapeHTML(displayName) + '">' + getInstrumentIconHtml(slotVal) + '<span class="timbre-slot-text">' + displayName + '</span> <i class="fa-solid fa-caret-up" style="opacity:0.5;font-size:10px;"></i></div>'
+                    + '<input type="number" class="timbre-slot-vol" ' + slotAttr + ' data-slot="' + (s + 1) + '" min="0" max="100" step="1" value="' + slotVol + '" inputmode="numeric" title="音量 0-100（可按住上下拖动调节）"' + (slotVal < 0 ? ' disabled' : '') + '>'
+                    + '</div>';
                 row.appendChild(slotCell);
             }
 
@@ -15700,7 +15902,13 @@ function buildTimbreFittingRows(info) {
                     for (var si = 0; si < slots.length; si++) {
                         instruments.push(parseInt(slots[si].value));
                     }
-                    previewNbsCombination(instruments, midiNote, btn);
+                    var volInputs = row.querySelectorAll('.timbre-slot-vol');
+                    var volumes = [];
+                    for (var vi = 0; vi < volInputs.length; vi++) {
+                        var vv = parseInt(volInputs[vi].value);
+                        volumes.push(isFinite(vv) ? Math.max(0, Math.min(100, vv)) : 100);
+                    }
+                    previewNbsCombination(instruments, midiNote, btn, volumes);
                 });
             })(nbsPreviewBtns[m]);
         }
@@ -15730,6 +15938,169 @@ function buildTimbreFittingRows(info) {
                 });
             })(slotBtns[s]);
         }
+
+        // 绑定槽位音量输入框 (输入/微调箭头/上下拖动调节)
+        bindTimbreSlotVolumeInputs(tbody);
+    }
+
+    // ============ 拟合槽位音量 ============
+    // 槽位音量 0-100, 生成时: 音符音量 = MIDI 原音量 x 槽位音量 / 100
+    var _slotVolDrag = null;
+    var _slotVolDocBound = false;
+
+    function clampSlotVolume(v) {
+        var n = Number(v);
+        if (!isFinite(n)) return null;
+        return Math.max(0, Math.min(100, Math.round(n)));
+    }
+
+    function bindTimbreSlotVolumeInputs(tbody) {
+        if (!tbody) return;
+        ensureSlotVolumeDocListeners();
+        var inputs = tbody.querySelectorAll('.timbre-slot-vol');
+        for (var i = 0; i < inputs.length; i++) bindTimbreSlotVolumeInput(inputs[i]);
+    }
+
+    function ensureSlotVolumeDocListeners() {
+        if (_slotVolDocBound) return;
+        _slotVolDocBound = true;
+        document.addEventListener('mousemove', function(e) {
+            if (!_slotVolDrag) return;
+            updateSlotVolumeDrag(e.clientY, e);
+        });
+        document.addEventListener('mouseup', function() {
+            if (_slotVolDrag) endSlotVolumeDrag();
+        });
+    }
+
+    function bindTimbreSlotVolumeInput(input) {
+        if (!input || input.dataset.volBound === '1') return;
+        input.dataset.volBound = '1';
+
+        // 聚焦时全选, 便于直接覆盖输入
+        input.addEventListener('focus', function() {
+            try { this.select(); } catch (e) {}
+        });
+
+        function commit(fromBlur) {
+            if (input.disabled) return;
+            var v = clampSlotVolume(input.value);
+            if (v === null) {
+                if (!fromBlur) return;   // 输入过程中的空值不打断
+                v = 100;
+            }
+            if (String(v) !== String(input.value)) input.value = v;
+            saveSlotVolume(input, v);
+        }
+        input.addEventListener('input', function() { commit(false); });
+        input.addEventListener('change', function() { commit(true); });
+        input.addEventListener('blur', function() { commit(true); });
+
+        // 鼠标拖动: 超过阈值才进入拖动, 不影响点击编辑/点击上下微调箭头
+        input.addEventListener('mousedown', function(e) {
+            if (e.button !== 0 || input.disabled) return;
+            beginSlotVolumeDrag(input, e.clientY);
+        });
+        // 触屏拖动: 进入拖动后阻止页面滚动
+        input.addEventListener('touchstart', function(e) {
+            if (input.disabled || !e.touches || !e.touches.length) return;
+            beginSlotVolumeDrag(input, e.touches[0].clientY);
+        }, { passive: true });
+        input.addEventListener('touchmove', function(e) {
+            if (!_slotVolDrag || _slotVolDrag.input !== input || !e.touches || !e.touches.length) return;
+            updateSlotVolumeDrag(e.touches[0].clientY, e);
+        }, { passive: false });
+        input.addEventListener('touchend', function() {
+            if (_slotVolDrag && _slotVolDrag.input === input) endSlotVolumeDrag();
+        });
+        input.addEventListener('touchcancel', function() {
+            if (_slotVolDrag && _slotVolDrag.input === input) endSlotVolumeDrag();
+        });
+        // 拖动释放后浏览器仍会补发 click, 阻止其抢焦点/弹键盘
+        input.addEventListener('click', function(e) {
+            if (input.dataset.justDragged === '1') {
+                input.dataset.justDragged = '';
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        });
+    }
+
+    function beginSlotVolumeDrag(input, clientY) {
+        _slotVolDrag = {
+            input: input,
+            startY: clientY,
+            startVal: clampSlotVolume(input.value) === null ? 0 : clampSlotVolume(input.value),
+            active: false,
+            lastVal: null
+        };
+    }
+
+    function updateSlotVolumeDrag(clientY, e) {
+        var d = _slotVolDrag;
+        if (!d) return;
+        var dy = clientY - d.startY;
+        // 3px 阈值: 保留正常点击编辑与原生上下微调
+        if (!d.active) {
+            if (Math.abs(dy) < 3) return;
+            d.active = true;
+            d.input.dataset.justDragged = '1';
+            try { d.input.blur(); } catch (err) {}
+            document.body.style.cursor = 'ns-resize';
+        }
+        if (e && e.cancelable) e.preventDefault();
+        // 每 2.5px 调整 1%, 上下各 250px 即可覆盖整个 0-100 区间
+        var v = clampSlotVolume(d.startVal + dy / 2.5);
+        if (v !== d.lastVal) {
+            d.lastVal = v;
+            d.input.value = v;
+            saveSlotVolume(d.input, v);
+        }
+    }
+
+    function endSlotVolumeDrag() {
+        var d = _slotVolDrag;
+        _slotVolDrag = null;
+        document.body.style.cursor = '';
+        if (!d) return;
+        var v = clampSlotVolume(d.input.value);
+        if (v === null) v = d.startVal;
+        d.input.value = v;
+        saveSlotVolume(d.input, v);
+    }
+
+    // 保存单个槽位音量到内存与 localStorage
+    function saveSlotVolume(input, value) {
+        var row = input.closest ? input.closest('tr') : null;
+        if (!row) return;
+        var isPercussion = row.getAttribute('data-type') === 'percussion';
+        var slotNum = parseInt(input.getAttribute('data-slot'));
+        if (!(slotNum >= 1 && slotNum <= 3)) return;
+        var idKey = isPercussion ? parseInt(row.getAttribute('data-percussion')) : parseInt(row.getAttribute('data-program'));
+        if (!isFinite(idKey)) return;
+
+        var saved = state._midiTimbreFittingSaved || loadSavedTimbreFitting();
+        var slotsKey = isPercussion ? 'drums' : 'programs';
+        var volKey = isPercussion ? 'drumVolumes' : 'programVolumes';
+        if (!saved[volKey]) saved[volKey] = {};
+        var arr = saved[volKey][idKey];
+        if (!arr) {
+            arr = [100, 100, 100];
+            saved[volKey][idKey] = arr;
+        }
+        while (arr.length < 3) arr.push(100);
+        arr[slotNum - 1] = value;
+
+        // 确保该行的槽位数组也落盘, 重建时才能一起匹配
+        if (!saved[slotsKey][idKey]) {
+            var hidden = row.querySelectorAll('.timbre-slot');
+            var insts = [];
+            for (var k = 0; k < hidden.length; k++) insts.push(parseInt(hidden[k].value));
+            saved[slotsKey][idKey] = insts;
+        }
+
+        state._midiTimbreFittingSaved = saved;
+        saveTimbreFitting(saved.programs, saved.drums, saved.programVolumes, saved.drumVolumes);
     }
 
     // 显示音色槽右键菜单
@@ -15751,7 +16122,7 @@ function buildTimbreFittingRows(info) {
         menu.id = 'timbre-slot-menu';
         menu.className = 'timbre-slot-menu';
 
-        var names = INSTRUMENT_NAMES;
+        var names = INSTRUMENT_NAMES.map(function(_, idx) { return getInstName(idx); });
         var colors = (window.NOTE_COLORS && window.NOTE_COLORS.length >= 20) ? window.NOTE_COLORS : ['#d4a96a','#8b5a2b','#c84b3c','#f0e68c','#dcdcdc','#6b8e23','#87ceeb','#fffacd','#fff0f5','#ffb6c1','#b0c4de','#daa520','#cd853f','#ffd700','#cd5c5c','#e6e6fa','#c46b3d','#8b6f47','#5c8b5c','#3d7a6b'];
 
         // 如果是 slot 2 或 3，添加"无"选项
@@ -15774,7 +16145,7 @@ function buildTimbreFittingRows(info) {
             item.innerHTML = '<span class="timbre-menu-icon" style="background:' + colors[i] + ';">'
                 + '<img src="static/sprites/spr_instrumenticons/inst_' + i + '.png" alt="" />'
                 + (isSelected ? '<span class="timbre-menu-check"><i class="fa-solid fa-check"></i></span>' : '')
-                + '</span><span>' + names[i] + '</span>';
+                + '</span><span>' + escapeHTML(names[i]) + '</span>';
             item.addEventListener('click', (function(instIndex, instName) {
                 return function(e) {
                     selectTimbreSlot(channel, slotNum, instIndex, instName, percussionNote);
@@ -15868,8 +16239,13 @@ function buildTimbreFittingRows(info) {
         var slotBtn = document.querySelector('.timbre-slot-btn' + selector + '[data-slot="' + slotNum + '"]');
         if (slotInput) slotInput.value = value;
         if (slotBtn) {
+            slotBtn.setAttribute('title', displayName);
             slotBtn.innerHTML = getInstrumentIconHtml(value) + '<span class="timbre-slot-text">' + displayName + '</span> <i class="fa-solid fa-caret-up" style="opacity:0.5;font-size:10px;"></i>';
         }
+        // 槽位为"无"时, 该槽音量无意义 -> 禁用输入框
+        var slotVolInput = slotInput && slotInput.parentElement
+            ? slotInput.parentElement.querySelector('.timbre-slot-vol') : null;
+        if (slotVolInput) slotVolInput.disabled = (value < 0);
 
         // 保存设置到 localStorage
         var row = slotInput ? slotInput.closest('tr') : null;
@@ -15879,18 +16255,28 @@ function buildTimbreFittingRows(info) {
         var slotsKey = isPercussion ? 'drums' : 'programs';
         if (!saved[slotsKey][idKey]) saved[slotsKey][idKey] = [-1, -1, -1];
         saved[slotsKey][idKey][slotNum - 1] = value;
+        // 同步补齐该行槽位音量数组 (缺省 100, 与 UI 一致)
+        var volKey = isPercussion ? 'drumVolumes' : 'programVolumes';
+        if (!saved[volKey]) saved[volKey] = {};
+        if (!saved[volKey][idKey]) saved[volKey][idKey] = [100, 100, 100];
+        while (saved[volKey][idKey].length < 3) saved[volKey][idKey].push(100);
         state._midiTimbreFittingSaved = saved;
-        saveTimbreFitting(saved.programs, saved.drums);
+        saveTimbreFitting(saved.programs, saved.drums, saved.programVolumes, saved.drumVolumes);
 
-        // 立即播放单个 NBS 音色音符 (使用该行选择的 MIDI 音调)
+        // 立即播放单个 NBS 音色音符 (使用该行选择的 MIDI 音调与该槽位音量)
         var pitchSelect = row ? row.querySelector('.timbre-pitch-select') : null;
         var midiNote = pitchSelect ? parseInt(pitchSelect.value) : 60;
         if (value >= 0) {
-            var nbsKey = Math.max(0, Math.min(87, midiNote - 21));
-            if (window.AudioEngine && AudioEngine.playNote) {
-                AudioEngine.playNote(value, nbsKey, 80);
-            } else {
-                previewTimbreNote(value, midiNote, slotBtn);
+            var slotVol = slotVolInput ? parseInt(slotVolInput.value) : 100;
+            if (!isFinite(slotVol)) slotVol = 100;
+            slotVol = Math.max(0, Math.min(100, slotVol));
+            if (slotVol > 0) {
+                var nbsKey = Math.max(0, Math.min(87, midiNote - 21));
+                if (window.AudioEngine && AudioEngine.playNote) {
+                    AudioEngine.playNote(value, nbsKey, slotVol);
+                } else {
+                    previewTimbreNote(value, midiNote, slotBtn);
+                }
             }
         }
 
@@ -15908,8 +16294,9 @@ function buildTimbreFittingRows(info) {
 
     // 试听 NBS 组合: 同时播放选中的 NBS 乐器 (使用真实 NBS 样本)
     // instruments: [inst1, inst2, inst3] 中 -1 表示"无"槽
+    // volumes: 可选, 各槽位音量 0-100 (缺省 100); 音量为 0 的槽静音
     // midiNote: 音调 (沿用 midi 弹窗左侧选择, 默认 C5)
-    function previewNbsCombination(instruments, midiNote, btn) {
+    function previewNbsCombination(instruments, midiNote, btn, volumes) {
         stopTimbrePreview();
         _activePreviewBtn = btn;
         if (btn) btn.classList.add('playing');
@@ -15921,7 +16308,13 @@ function buildTimbreFittingRows(info) {
         for (var i = 0; i < instruments.length; i++) {
             var inst = instruments[i];
             if (inst === undefined || inst < 0) continue;
-            AudioEngine.playNote(inst, nbsKey, 80);
+            var vol = 80;
+            if (volumes && volumes[i] !== undefined && volumes[i] !== null) {
+                var vn = Number(volumes[i]);
+                if (isFinite(vn)) vol = Math.max(0, Math.min(100, vn));
+            }
+            if (vol <= 0) continue;
+            AudioEngine.playNote(inst, nbsKey, vol);
             played++;
         }
 
@@ -16002,9 +16395,14 @@ function buildTimbreFittingRows(info) {
     }
 
     // 收集音色拟合设置
-    // 返回 { channels: {channel: [slot1,slot2,slot3]}, drums: {drumNote: [slot1,slot2,slot3]} }
+    // 返回 {
+    //   channels: {channel: [slot1,slot2,slot3]},
+    //   drums: {drumNote: [slot1,slot2,slot3]},
+    //   channel_volumes: {channel: [vol1,vol2,vol3]},   // 0-100
+    //   drum_volumes: {drumNote: [vol1,vol2,vol3]}
+    // }
     function collectTimbreFitting() {
-        var result = { channels: {}, drums: {} };
+        var result = { channels: {}, drums: {}, channel_volumes: {}, drum_volumes: {} };
         var rows = document.querySelectorAll('#midi-timbre-melody-rows tr, #midi-timbre-percussion-rows tr');
         for (var i = 0; i < rows.length; i++) {
             var row = rows[i];
@@ -16016,12 +16414,23 @@ function buildTimbreFittingRows(info) {
             }
             // 只收集至少有 slot1 设置了的 (不是 -1 的都算)
             if (instruments[0] < 0) continue;
+
+            var volInputs = row.querySelectorAll('.timbre-slot-vol');
+            var volumes = [];
+            for (var v = 0; v < 3; v++) {
+                var volVal = volInputs[v] ? parseInt(volInputs[v].value) : 100;
+                if (!isFinite(volVal)) volVal = 100;
+                volumes.push(Math.max(0, Math.min(100, volVal)));
+            }
+
             if (isPercussion) {
                 var drumNote = parseInt(row.getAttribute('data-percussion'));
                 result.drums[drumNote] = instruments;
+                result.drum_volumes[drumNote] = volumes;
             } else {
                 var ch = parseInt(row.getAttribute('data-channel'));
                 result.channels[ch] = instruments;
+                result.channel_volumes[ch] = volumes;
             }
         }
         return result;
@@ -17584,7 +17993,7 @@ function buildTimbreFittingRows(info) {
         var lib = CustomInstruments.list();
         lib.sort(function(a, b) { return (a.name < b.name ? -1 : (a.name > b.name ? 1 : 0)); });
         // 默认 NBS 音色列表 (值 = nbs:编号)
-        var nbsNames = INSTRUMENT_NAMES.slice(0, 20);
+        var nbsNames = INSTRUMENT_NAMES.map(function(_, idx) { return getInstName(idx); });
 
         return new Promise(function(resolve) {
             var overlay = _appDialogOverlay();

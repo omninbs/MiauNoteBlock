@@ -22,7 +22,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="static/css/style.css?v=20261004a">
+    <link rel="stylesheet" href="static/css/style.css?v=20261017h">
 </head>
 <body>
 
@@ -504,84 +504,115 @@
             </div>
             <div class="settings-body">
                 <div class="settings-tab-panel active" id="settings-tab-general">
-                    <div class="settings-row">
-                        <label class="settings-label">
-                            <input type="checkbox" id="settings-smooth-scroll"> 平滑翻页 (播放头居中)
-                        </label>
+                    <!-- ===== 播放 ===== -->
+                    <div class="settings-group">
+                        <div class="settings-group-title">播放</div>
+                        <div class="settings-row">
+                            <label class="settings-label">
+                                <input type="checkbox" id="settings-smooth-scroll"> 平滑滚动 (播放头居中)
+                            </label>
+                        </div>
+                        <div class="settings-row">
+                            <label class="settings-label">
+                                <input type="checkbox" id="settings-highlight-animation"> 音符播放高亮
+                            </label>
+                        </div>
+                        <div class="settings-row">
+                            <label class="settings-label">
+                                <input type="checkbox" id="settings-track-highlight"> 音符触发时轨道高亮
+                            </label>
+                        </div>
+                        <div class="settings-row settings-sub-row" id="settings-track-highlight-color-row">
+                            <label class="settings-label">
+                                <input type="checkbox" id="settings-track-highlight-color"> 高亮跟随音色颜色
+                            </label>
+                        </div>
+                        <div class="settings-row settings-sub-row" id="settings-track-highlight-pos-row">
+                            <label class="settings-label">
+                                <input type="radio" name="settings-track-highlight-pos" id="settings-track-highlight-pos-volume" value="volume"> 根据音量调整位置
+                            </label>
+                        </div>
+                        <div class="settings-row settings-sub-row" id="settings-track-highlight-pos-pitch-row">
+                            <label class="settings-label">
+                                <input type="radio" name="settings-track-highlight-pos" id="settings-track-highlight-pos-pitch" value="pitch" checked> 根据音调调整位置
+                            </label>
+                        </div>
                     </div>
-                    <div class="settings-row">
-                        <label class="settings-label">
-                            <input type="checkbox" id="settings-streaming-lyrics"> 流式歌词
-                        </label>
+                    <!-- ===== 显示 ===== -->
+                    <div class="settings-group">
+                        <div class="settings-group-title">显示</div>
+                        <div class="settings-row">
+                            <label class="settings-label">
+                                <input type="checkbox" id="settings-volume-opacity"> 音量映射透明度
+                            </label>
+                        </div>
+                        <div class="settings-row">
+                            <label class="settings-label">
+                                <input type="checkbox" id="settings-show-octave"> 音调标注八度
+                            </label>
+                        </div>
+                        <div class="settings-row">
+                            <label class="settings-label">
+                                <input type="checkbox" id="settings-show-note-clicks"> 音符显示点击次数
+                            </label>
+                        </div>
+                        <div class="settings-row">
+                            <label class="settings-label">
+                                <input type="checkbox" id="settings-show-note-block"> 音符显示音色方块
+                            </label>
+                        </div>
+                        <div class="settings-row">
+                            <label class="settings-label">
+                                <input type="checkbox" id="settings-streaming-lyrics"> 流式歌词
+                            </label>
+                        </div>
                     </div>
-                    <div class="settings-row settings-inline-row">
-                        <label class="settings-label" for="settings-render-fps">画面 FPS:</label>
-                        <select id="settings-render-fps" class="settings-control">
-                            <option value="30">30 FPS</option>
-                            <option value="60" selected>60 FPS</option>
-                            <option value="0">垂直同步</option>
-                        </select>
+                    <!-- ===== 性能 ===== -->
+                    <div class="settings-group">
+                        <div class="settings-group-title">性能</div>
+                        <div class="settings-row settings-inline-row">
+                            <label class="settings-label" for="settings-render-fps">画面帧率</label>
+                            <select id="settings-render-fps" class="settings-control">
+                                <option value="30">30 FPS</option>
+                                <option value="60" selected>60 FPS</option>
+                                <option value="0">垂直同步</option>
+                            </select>
+                        </div>
+                        <div class="settings-row">
+                            <label class="settings-label">
+                                <input type="checkbox" id="settings-audio-enhance"> 空间音效
+                            </label>
+                        </div>
                     </div>
-                    <div class="settings-row">
-                        <label class="settings-label">
-                            <input type="checkbox" id="settings-highlight-animation"> 音符播放高亮动画
-                        </label>
+                    <!-- ===== 文件 ===== -->
+                    <div class="settings-group">
+                        <div class="settings-group-title">文件</div>
+                        <div class="settings-row" style="display:flex;align-items:center;gap:8px;">
+                            <label class="settings-label" style="margin:0;">NBS 导出版本:</label>
+                            <select id="settings-nbs-version" style="padding:3px 6px;font-size:12px;border:1px solid var(--ctrl-stroke-default);border-radius:4px;background:var(--ctrl-fill-default);color:var(--text-primary);">
+                                <option value="4">V4</option>
+                                <option value="5" selected>V5</option>
+                                <option value="6">V6</option>
+                            </select>
+                            <span style="font-size:11px;color:var(--text-tertiary);">含铜号角乐器时自动 V6</span>
+                        </div>
+                        <div class="settings-row" style="display:flex;align-items:center;gap:8px;">
+                            <label class="settings-label" style="margin:0;" for="settings-language">语言:</label>
+                            <select id="settings-language" class="settings-control" aria-label="语言">
+                                <option value="zh-CN">🇨🇳 简体中文</option>
+                                <option value="en-US">🇺🇸 English (United States)</option>
+                                <option value="es-ES">🇪🇸 Español</option>
+                                <option value="pt-BR">🇧🇷 Português (Brasil)</option>
+                                <option value="ru-RU">🇷🇺 Русский</option>
+                                <option value="de-DE">🇩🇪 Deutsch</option>
+                                <option value="fr-FR">🇫🇷 Français</option>
+                                <option value="ja-JP">🇯🇵 日本語</option>
+                                <option value="ko-KR">🇰🇷 한국어</option>
+                                <option value="id-ID">🇮🇩 Bahasa Indonesia</option>
+                            </select>
+                        </div>
+                        <button class="popup-btn" id="settings-about-btn" style="margin-top:8px;width:100%;">关于 MiauNoteBlock</button>
                     </div>
-                    <div class="settings-row">
-                        <label class="settings-label">
-                            <input type="checkbox" id="settings-recording-animation"> 录制时显示音符动画 (关闭可提升录制性能)
-                        </label>
-                    </div>
-                    <div class="settings-row">
-                        <label class="settings-label">
-                            <input type="checkbox" id="settings-audio-enhance"> 音效优化 (混响/立体声)
-                        </label>
-                    </div>
-                    <div class="settings-row">
-                        <label class="settings-label">
-                            <input type="checkbox" id="settings-volume-opacity"> 音符音量透明度 (音量越低越透明)
-                        </label>
-                    </div>
-                    <div class="settings-row">
-                        <label class="settings-label">
-                            <input type="checkbox" id="settings-show-octave"> 音调文字显示八度数字
-                        </label>
-                    </div>
-                    <div class="settings-row">
-                        <label class="settings-label">
-                            <input type="checkbox" id="settings-show-note-clicks"> 音符上显示音符盒点击次数
-                        </label>
-                    </div>
-                    <div class="settings-row">
-                        <label class="settings-label">
-                            <input type="checkbox" id="settings-show-note-block"> 音符上显示方块名
-                        </label>
-                    </div>
-                    <div class="settings-row" style="display:flex;align-items:center;gap:8px;">
-                        <label class="settings-label" style="margin:0;">NBS 导出版本:</label>
-                        <select id="settings-nbs-version" style="padding:3px 6px;font-size:12px;border:1px solid var(--ctrl-stroke-default);border-radius:4px;background:var(--ctrl-fill-default);color:var(--text-primary);">
-                            <option value="4">V4</option>
-                            <option value="5" selected>V5</option>
-                            <option value="6">V6</option>
-                        </select>
-                        <span style="font-size:11px;color:var(--text-tertiary);">含铜号角乐器时自动 V6</span>
-                    </div>
-                    <div class="settings-row" style="display:flex;align-items:center;gap:8px;">
-                        <label class="settings-label" style="margin:0;" for="settings-language">语言:</label>
-                        <select id="settings-language" class="settings-control" aria-label="语言">
-                            <option value="zh-CN">🇨🇳 简体中文</option>
-                            <option value="en-US">🇺🇸 English (United States)</option>
-                            <option value="es-ES">🇪🇸 Español</option>
-                            <option value="pt-BR">🇧🇷 Português (Brasil)</option>
-                            <option value="ru-RU">🇷🇺 Русский</option>
-                            <option value="de-DE">🇩🇪 Deutsch</option>
-                            <option value="fr-FR">🇫🇷 Français</option>
-                            <option value="ja-JP">🇯🇵 日本語</option>
-                            <option value="ko-KR">🇰🇷 한국어</option>
-                            <option value="id-ID">🇮🇩 Bahasa Indonesia</option>
-                        </select>
-                    </div>
-                    <button class="popup-btn" id="settings-about-btn" style="margin-top:8px;width:100%;">关于 MiauNoteBlock</button>
                 </div>
                 <div class="settings-tab-panel" id="settings-tab-personal">
                     <div class="settings-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -1277,10 +1308,44 @@
     </div>
 
     <!-- ========== 隐私政策弹窗 ========== -->
-    <div class="privacy-popup-mask" id="privacy-popup-mask" style="display:none;position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,0.6);align-items:center;justify-content:center;padding:16px;">
+    <div class="privacy-popup-mask" id="privacy-popup-mask" style="display:none;position:fixed;inset:0;z-index:100300;background:rgba(0,0,0,0.6);align-items:center;justify-content:center;padding:16px;">
         <div class="privacy-popup">
             <h3 class="privacy-popup-title">隐私声明</h3>
-            <p id="privacy-popup-message" style="margin:0 0 16px;font-size:13px;color:var(--text-secondary);line-height:1.6;"></p>
+            <p id="privacy-popup-message" class="privacy-popup-body">MiauNoteBlock 隐私政策
+
+本政策同时适用于同一份程序的两种使用方式：在浏览器中在线访问网页版，以及将程序打包为离线软件后在本地打开。程序在技术上无法区分这两种方式，因此采用统一政策；两者的数据处理差异已在文中分别说明。
+
+一、我们不收集的信息
+本程序没有账号、登录或注册功能，不会收集您的姓名、邮箱、手机号、身份证号、通讯录、位置、相册等个人信息，也不会要求您提供任何身份凭证。程序不会读取您设备上与编曲无关的文件。
+
+二、您在程序中打开与导出的文件
+您选择的 MIDI、NBS 等文件仅在您的设备上（浏览器内存）被读取与编辑，不会上传到我们的服务器；导出的 NBS、音频、作品包等文件在本地生成，由您自行保存。您的作品内容不会被我们获取或留存。
+
+三、本地存储
+为记住您的偏好，程序会在您的设备上使用浏览器本地存储：
+- localStorage：界面语言、外观与功能开关、上次会话的自动保存数据（含乐谱与歌词标注）；
+- IndexedDB：您导入的自定义音色音频，以及（如使用）MIDI 音色库缓存。
+上述数据只保存在本机，可通过清理浏览器数据或程序内相应功能随时删除。
+
+四、在线访问时的访问统计
+在线访问网页版时，页面集成了第三方匿名访问统计服务（analytics.xozet.com），用于了解整体使用情况。它记录的是不针对个人身份的数据，例如页面访问量与访客数、访问来源、浏览器与操作系统类型、屏幕尺寸、访问时间与停留时长。该统计不用于广告投放，也不用于识别、追踪或定位您的个人身份。该第三方脚本可能使用 Cookie 或设备本地标识来区分独立访客，其数据处理遵循服务提供方的隐私规则。
+
+五、外部资源与网络请求
+- 在线访问时，页面会从公共 CDN 加载图标字体与网页字体（cdnjs.cloudflare.com、fonts.googleapis.com）。
+- 若管理员配置了 MIDI 音色库下载地址，程序会在您选择下载时由浏览器直连下载该文件，并缓存到本机以便离线复用。
+- 打包为离线软件后，音色样本与主要脚本已内嵌在程序中，无网络时上述外部请求不会成功，程序仍可完整离线使用；若离线软件在联网环境中打开，其行为与在线访问一致（包括上述匿名访问统计）。
+
+六、数据安全与第三方共享
+我们不会出售您的数据，也不会将数据分享给第三方用于营销。除上述匿名访问统计与公共 CDN 外，本程序不会向其他外部服务发送您的数据。
+
+七、未成年人
+本程序不针对特定年龄群体设计，不会有意收集未成年人的个人信息。
+
+八、政策更新
+若本政策发生变化，我们会在程序内更新本说明内容，必要时会重新征得您的同意。
+
+九、联系方式
+如对本政策有任何疑问，可通过下方邮箱与我们联系：3451392772@qq.com</p>
             <div class="privacy-popup-links">
                 <a href="https://github.com/kevincennis/TinySynth" target="_blank" rel="noopener noreferrer">TinySynth</a>
                 <a href="https://github.com/Tonejs/Midi" target="_blank" rel="noopener noreferrer">@tonejs/midi</a>
@@ -1402,25 +1467,25 @@
     }
 </script>
 <!-- nbs_client.js 必须在 api_client.js 之前加载 (api_client.js 引用 NBSClient 全局对象) -->
-<script src="static/js/nbs_client.js?v=20261002a"></script>
+<script src="static/js/nbs_client.js?v=20261017d"></script>
 <script src="static/js/compress_est.js?v=20260926b"></script>
 <script src="static/js/api_client.js?v=20260905a"></script>
-<script src="static/js/custom_dropdown.js?v=20260913f"></script>
-<script src="static/js/i18n.js?v=20261003b"></script>
+<script src="static/js/custom_dropdown.js?v=20261017d"></script>
+<script src="static/js/i18n.js?v=20261017h"></script>
 <script src="static/js/audio_engine.js?v=20260919c"></script>
 <script src="static/js/custom_instruments.js?v=20260905a"></script>
 <script src="static/js/audio_fix_utils.js?v=20260905a"></script>
 <script src="static/js/sf3_player.js?v=20260808a"></script>
 <script src="static/js/spessa_player.js?v=20260918a"></script>
 <script src="static/js/soundfont_loader.js?v=20260808b"></script>
-<script src="static/js/piano_roll.js?v=20261002b"></script>
+<script src="static/js/piano_roll.js?v=20261017e"></script>
 <!-- 本地化第三方库: ZIP 打包 (jszip) / MP3 编码 (lamejs) -->
 <script src="static/vendor/jszip.min.js?v=20260905a"></script>
 <script src="static/vendor/lame.min.js?v=20260905a"></script>
 <!-- 离线渲染引擎: audio_render.js 必须在 main.js 之前加载 -->
 <script src="static/js/render_jsmix.js?v=20260906e"></script>
 <script src="static/js/audio_render.js?v=20260919c"></script>
-<script src="static/js/main.js?v=20261003b"></script>
+<script src="static/js/main.js?v=20261017h"></script>
 
 <script>
 // 桌面应用（含 MSIX 安装版）内：外部链接交给系统默认浏览器打开。

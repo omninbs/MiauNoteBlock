@@ -10,6 +10,11 @@ rust-version = "1.77.2"
 name = "miaunoteblock_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+# 可执行文件名固定为 productName，避免产物名与打包脚本/AppxManifest 不一致
+[[bin]]
+name = "MiauNoteBlock"
+path = "src/main.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

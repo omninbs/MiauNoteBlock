@@ -384,7 +384,8 @@ body.bg-active #piano-roll-container {
    ================================================================== */
 .cdd-tip {
     position: fixed;
-    z-index: 100100;
+    /* 自定义 tooltip: 需始终位于弹窗(100200)与自定义弹窗(100400)之上 */
+    z-index: 100500;
     background: var(--mica-acrylic);
     color: var(--text-primary);
     border: 1px solid var(--ctrl-stroke-default);
@@ -407,21 +408,27 @@ body.bg-active #piano-roll-container {
 }
 
 /* ==================================================================
-   0d. 数字输入框 — 统一样式 (保留原生箭头但美化)
+   0d. 数字输入框 — 统一样式 (暗色主题下的原生微调箭头)
    ================================================================== */
 input[type="number"] {
     -moz-appearance: textfield;
+    /* 声明暗色配色方案: 让原生上下微调箭头按暗色渲染,
+       避免浅色主题的亮白按钮块在深色面板上过于突兀 */
+    color-scheme: dark;
 }
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
     -webkit-appearance: inner-spin-button;
     margin: 0;
-    opacity: 0.6;
+    /* 默认压低亮度, 仅在悬停/聚焦时轻微提亮 */
+    opacity: 0.42;
     cursor: pointer;
 }
 input[type="number"]:hover::-webkit-inner-spin-button,
-input[type="number"]:hover::-webkit-outer-spin-button {
-    opacity: 1;
+input[type="number"]:hover::-webkit-outer-spin-button,
+input[type="number"]:focus::-webkit-inner-spin-button,
+input[type="number"]:focus::-webkit-outer-spin-button {
+    opacity: 0.75;
 }
 
 /* ==================================================================
@@ -1743,7 +1750,8 @@ input[type="number"]:hover::-webkit-outer-spin-button {
     bottom: 0;
     /* 遮罩层: 仅半透明黑色, 不使用模糊 (兼容性更好) */
     background: rgba(0, 0, 0, 0.55);
-    z-index: 10001;
+    /* 模态弹窗需覆盖一切常驻 UI 与悬浮菜单 (工具栏菜单/右键菜单/抽屉/浮层面板 均在 10006 以下) */
+    z-index: 100200;
     align-items: center;
     justify-content: center;
 }
@@ -1753,13 +1761,13 @@ input[type="number"]:hover::-webkit-outer-spin-button {
     animation: popupFadeIn var(--anim-control);
 }
 
-/* 音色替代设置弹窗: 需显示在 MIDI 导入弹窗与功能区弹窗(100000)之上 */
+/* 音色替代设置弹窗: 需显示在 MIDI 导入弹窗(100200)之上 */
 #midi-substitute-popup {
-    z-index: 100100;
+    z-index: 100240;
 }
-/* 音色替代槽位选择菜单: 需显示在替代弹窗(100100)之上 */
+/* 音色替代槽位选择菜单: 需显示在替代弹窗(100240)之上 */
 #substitute-slot-menu {
-    z-index: 100200;
+    z-index: 100260;
 }
 
 @keyframes popupFadeIn {
@@ -1902,6 +1910,13 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 .popup-content input[type="checkbox"] {
     width: 16px;
     height: 16px;
+    accent-color: var(--accent);
+}
+
+.popup-content input[type="radio"] {
+    width: 15px;
+    height: 15px;
+    margin: 0 2px 0 0;
     accent-color: var(--accent);
 }
 
@@ -2591,36 +2606,63 @@ input[type="number"]:hover::-webkit-outer-spin-button {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.3px;
-    padding: 4px 6px;
+    padding: 3px 4px;
     font-weight: 600;
     white-space: nowrap;
 }
 
 .midi-table-timbre td {
-    padding: 3px 6px;
+    padding: 3px 3px;
     vertical-align: middle;
 }
 
+/* 水平紧凑: 除「乐器」列外, 其余列收缩到内容宽度,
+   剩余宽度全部给乐器名列, 避免按钮之间出现大片空白。
+   垂直方向保持舒适的 3px 行距 (不压缩上下留白)。 */
+.midi-table-timbre thead th {
+    width: 1%;
+}
+.midi-table-timbre thead th.timbre-col-name {
+    width: auto;
+}
+
 .timbre-col-preview {
-    min-width: 96px;
+    min-width: 66px;
     width: auto;
     text-align: center;
     white-space: nowrap;
 }
 
+/* 试听内容靠右贴紧下一列, 消除按钮与音色槽之间的空白 */
+.midi-table-timbre td.timbre-col-preview {
+    text-align: right;
+    padding-right: 4px;
+}
+.midi-table-timbre td.timbre-col-preview .timbre-preview-wrap {
+    justify-content: flex-end;
+}
+
+/* 拟合表内自定义下拉与槽位同高 */
+.midi-table-timbre .cdd-trigger {
+    padding: 2px 3px;
+    gap: 2px;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
 .timbre-col-name {
-    min-width: 120px;
+    min-width: 104px;
 }
 
 .timbre-preview-wrap {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 3px;
 }
 
 .timbre-preview-btn {
-    width: 26px;
-    height: 26px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
     background: var(--ctrl-fill-default);
     border: 1px solid var(--ctrl-stroke-default);
@@ -2629,10 +2671,10 @@ input[type="number"]:hover::-webkit-outer-spin-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 11px;
+    font-size: 10px;
     transition: all var(--anim-fast);
     flex-shrink: 0;
-    margin-right: 4px;
+    margin-right: 0;
 }
 
 .timbre-preview-btn:hover {
@@ -2648,8 +2690,11 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 .timbre-pitch-select {
-    width: 56px;
-    padding: 4px 4px;
+    width: 46px;
+    height: 22px;
+    min-height: 0;
+    line-height: 18px;
+    padding: 1px 2px;
     background: var(--ctrl-fill-default);
     border: 1px solid var(--ctrl-stroke-default);
     border-radius: var(--radius-sm);
@@ -2684,7 +2729,7 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 
 /* 音色槽可点击按钮样式 */
 .timbre-slot-btn {
-    padding: 3px 6px;
+    padding: 2px 4px;
     background: var(--ctrl-fill-default);
     border: 1px solid var(--ctrl-stroke-default);
     border-radius: var(--radius-sm);
@@ -2692,12 +2737,12 @@ input[type="number"]:hover::-webkit-outer-spin-button {
     cursor: pointer;
     font-size: 11px;
     transition: border-color 0.15s, background 0.15s;
-    min-width: 70px;
+    min-width: 64px;
     text-align: center;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 4px;
+    gap: 3px;
     white-space: nowrap;
 }
 .timbre-slot-btn:hover {
@@ -2706,6 +2751,63 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 .timbre-slot-btn:active {
     background: rgba(76, 194, 255, 0.15);
+}
+
+/* 音色槽: 选择框 + 右侧紧凑音量输入框 (0-100, 可拖动调节) */
+.timbre-slot-inner {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    min-width: 0;
+}
+.timbre-slot-inner .timbre-slot-btn {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+}
+.timbre-slot-inner .timbre-slot-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* 提高优先级以覆盖通用 input[type="number"] 的 32px 最小高度 */
+.midi-table-timbre .timbre-slot-vol {
+    flex: 0 0 40px;
+    width: 40px;
+    height: 22px;
+    min-height: 0;
+    line-height: 18px;
+    box-sizing: border-box;
+    padding: 1px 2px;
+    font-size: 11px;
+    font-family: var(--font-family);
+    text-align: center;
+    color: var(--text-primary);
+    background: var(--ctrl-fill-default);
+    border: 1px solid var(--ctrl-stroke-default);
+    border-radius: var(--radius-sm);
+    cursor: ns-resize;
+    /* 防止拖动调节时选中文本 */
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+}
+.midi-table-timbre .timbre-slot-vol:hover {
+    border-color: var(--accent);
+}
+.midi-table-timbre .timbre-slot-vol:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: rgba(76, 194, 255, 0.08);
+}
+.midi-table-timbre .timbre-slot-vol:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+.midi-table-timbre tbody tr.channel-excluded .timbre-slot-vol {
+    pointer-events: none;
+    opacity: 0.4;
 }
 
 /* 拟合表: channel 被排除的行 — 黑色遮罩 + 只读 */
@@ -3727,7 +3829,8 @@ textarea:disabled {
         background: rgba(0, 0, 0, 0.7);
         backdrop-filter: blur(8px);
         -webkit-backdrop-filter: blur(8px);
-        z-index: 100000;
+        /* 隐私弹窗为强制同意流程, 需位于普通弹窗(100200)之上 */
+        z-index: 100300;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -3738,10 +3841,26 @@ textarea:disabled {
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 8px;
         padding: 14px 16px;
-        max-width: 380px;
+        max-width: 460px;
         width: 100%;
+        /* 隐私政策正文较长: 弹窗限高, 正文内部滚动, 同意按钮始终可见 */
+        max-height: calc(100svh - 32px);
+        display: flex;
+        flex-direction: column;
         box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
         text-align: center;
+    }
+    .privacy-popup-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        margin: 0 0 12px;
+        font-size: 13px;
+        line-height: 1.65;
+        color: var(--text-secondary, #d0d0e0);
+        text-align: left;
+        /* pre-line: 保留政策文本中的段落换行, 同时正常折行 */
+        white-space: pre-line;
     }
     .privacy-popup-title {
         font-size: 17px;
@@ -7443,4 +7562,61 @@ textarea:disabled {
         padding-top: 6px;
         padding-bottom: 6px;
     }
+}
+
+/* ==================================================================
+   模态弹窗: 固定内容区高度 + 分组标题 + 移动端紧凑布局
+   (追加在文件末尾, 以覆盖上方历史规则)
+   ================================================================== */
+
+/* 带标签页 / 列表的功能弹窗: 内容区高度固定, 切换标签页不再抖动, 超出部分内部滚动
+   (仅作用于「设置」与「MIDI 导入」这两个含 TAB 的弹窗, 避免影响其他自适应弹窗) */
+#settings-popup { --dialog-body-h: 440px; }
+#settings-popup .settings-body {
+    flex: 0 1 var(--dialog-body-h);
+    height: var(--dialog-body-h);
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+#midi-popup { --dialog-body-h: 440px; }
+#midi-popup .midi-tab-content {
+    flex: 0 1 var(--dialog-body-h);
+    height: var(--dialog-body-h);
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* 设置项分组标题 */
+.settings-group { display: flex; flex-direction: column; }
+.settings-group + .settings-group { margin-top: 4px; }
+.settings-group-title {
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    color: var(--text-tertiary);
+    padding: 2px 0 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    margin-bottom: 4px;
+}
+/* 从属于上一个开关的子选项: 缩进 + 次要文字色; 总开关关闭时整体变暗 */
+.settings-row.settings-sub-row { padding-left: 20px; }
+.settings-row.settings-sub-row .settings-label { color: var(--text-secondary); font-weight: 400; }
+.settings-row.settings-sub-row.is-disabled { opacity: 0.45; }
+
+/* 移动端: 收紧内边距与间距, 把纵向空间还给可操作项 */
+@media (max-width: 768px) {
+    #settings-popup { --dialog-body-h: min(440px, calc(100svh - 176px)); }
+    #midi-popup { --dialog-body-h: min(440px, calc(100svh - 206px)); }
+    .settings-header { padding: 6px 10px; }
+    .settings-body { padding: 6px 8px; gap: 8px; }
+    .settings-tabs { padding: 0 6px; }
+    .settings-row { padding: 1px 0; }
+    .settings-group + .settings-group { margin-top: 2px; }
+    .popup-actions { margin-top: 6px; }
+    .about-body { padding: 10px 12px; gap: 10px; }
+    #midi-substitute-popup .settings-body { padding: 8px 10px; }
+    .midi-settings { padding: 6px 8px; }
+    .settings-row.settings-sub-row { padding-left: 14px; }
 }

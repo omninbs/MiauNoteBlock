@@ -972,7 +972,7 @@
         setText('#about-popup .settings-header h4', t('about') + ' MiauNoteBlock');
         setText('.privacy-popup-title', t('privacy_title'));
         setText('#privacy-popup-agree', t('agree'));
-        setText('#privacy-popup-message', t('privacy_message'));
+        // 注: 隐私政策正文 (#privacy-popup-message) 固定为简体中文完整文本, 不做多语言替换
         setTitle('#btn-settings', t('settings'));
         setTitle('#btn-about', t('about'));
         setTitle('#btn-functions', t('functions'));
@@ -1964,6 +1964,151 @@
         if (Object.prototype.hasOwnProperty.call(_settingsExtraI18n, _nl)) Object.assign(UI_TEXT[_nl], _settingsExtraI18n[_nl]);
     }
 
+    // ============ 设置弹窗「分组标题 + 改写文案」补充词条 (9 种非中文语言) ============
+    // 对应 index.html 设置弹窗 ($settings-popup) 中新增的分组标题与改写后的设置项文案。
+    // 旧词条(如「平滑翻页 (播放头居中)」)已不再出现在 DOM 中, 保留无害; 此处只补充新 key。
+    // 「文件」分组标题与工具栏「文件」按钮文案相同, 沿用既有译文, 故未重复列出。
+    var _settingsGroupI18n = {
+        'en-US': {
+            '播放': 'Playback', '显示': 'Display', '性能': 'Performance',
+            '平滑滚动 (播放头居中)': 'Smooth scrolling (center playhead)',
+            '音符播放高亮': 'Note playback highlight',
+            '音符触发时轨道高亮': 'Track highlight on note trigger',
+            '高亮跟随音色颜色': 'Highlight follows timbre color',
+            '根据音量调整位置': 'Adjust position by volume',
+            '根据音调调整位置': 'Adjust position by pitch',
+            '音量映射透明度': 'Volume-mapped transparency',
+            '音调标注八度': 'Octave labels on keys',
+            '音符显示点击次数': 'Show click count on notes',
+            '音符显示音色方块': 'Show timbre block on notes',
+            '画面帧率': 'Frame rate',
+            '空间音效': 'Spatial audio'
+        },
+        'ja-JP': {
+            '播放': '再生', '显示': '表示', '性能': 'パフォーマンス',
+            '平滑滚动 (播放头居中)': 'スムーズスクロール (再生ヘッドを中央に)',
+            '音符播放高亮': 'ノート再生ハイライト',
+            '音符触发时轨道高亮': 'ノート発音時にトラックをハイライト',
+            '高亮跟随音色颜色': 'ハイライトを音色の色に合わせる',
+            '根据音量调整位置': '音量に応じて位置を調整',
+            '根据音调调整位置': '音程に応じて位置を調整',
+            '音量映射透明度': '音量に応じた透明度',
+            '音调标注八度': '鍵盤ラベルにオクターブ表示',
+            '音符显示点击次数': '音符にクリック回数を表示',
+            '音符显示音色方块': '音符に音色ブロックを表示',
+            '画面帧率': 'フレームレート',
+            '空间音效': '空間オーディオ'
+        },
+        'ko-KR': {
+            '播放': '재생', '显示': '표시', '性能': '성능',
+            '平滑滚动 (播放头居中)': '부드러운 스크롤 (재생 헤드 중앙)',
+            '音符播放高亮': '노트 재생 하이라이트',
+            '音符触发时轨道高亮': '노트 발음 시 트랙 하이라이트',
+            '高亮跟随音色颜色': '하이라이트를 음색 색상으로',
+            '根据音量调整位置': '음량에 따라 위치 조정',
+            '根据音调调整位置': '음높이에 따라 위치 조정',
+            '音量映射透明度': '음량에 따른 투명도',
+            '音调标注八度': '건반 라벨에 옥타브 표시',
+            '音符显示点击次数': '노트에 클릭 횟수 표시',
+            '音符显示音色方块': '노트에 음색 블록 표시',
+            '画面帧率': '프레임 레이트',
+            '空间音效': '공간 음향'
+        },
+        'pt-BR': {
+            '播放': 'Reprodução', '显示': 'Exibição', '性能': 'Desempenho',
+            '平滑滚动 (播放头居中)': 'Rolagem suave (cabeçote centralizado)',
+            '音符播放高亮': 'Destaque de nota ao reproduzir',
+            '音符触发时轨道高亮': 'Destacar a faixa ao disparar a nota',
+            '高亮跟随音色颜色': 'Destaque na cor do timbre',
+            '根据音量调整位置': 'Ajustar posição pelo volume',
+            '根据音调调整位置': 'Ajustar posição pela altura',
+            '音量映射透明度': 'Transparência mapeada pelo volume',
+            '音调标注八度': 'Rótulos de oitava nas teclas',
+            '音符显示点击次数': 'Mostrar contagem de cliques nas notas',
+            '音符显示音色方块': 'Mostrar bloco de timbre nas notas',
+            '画面帧率': 'Taxa de quadros',
+            '空间音效': 'Áudio espacial'
+        },
+        'id-ID': {
+            '播放': 'Pemutaran', '显示': 'Tampilan', '性能': 'Performa',
+            '平滑滚动 (播放头居中)': 'Gulir halus (kepala putar di tengah)',
+            '音符播放高亮': 'Sorotan not saat diputar',
+            '音符触发时轨道高亮': 'Sorot trek saat not dipicu',
+            '高亮跟随音色颜色': 'Sorotan mengikuti warna timbre',
+            '根据音量调整位置': 'Sesuaikan posisi menurut volume',
+            '根据音调调整位置': 'Sesuaikan posisi menurut nada',
+            '音量映射透明度': 'Transparansi mengikuti volume',
+            '音调标注八度': 'Label oktaf pada tuts',
+            '音符显示点击次数': 'Tampilkan jumlah klik pada not',
+            '音符显示音色方块': 'Tampilkan blok timbre pada not',
+            '画面帧率': 'Laju bingkai',
+            '空间音效': 'Audio spasial'
+        },
+        'es-ES': {
+            '播放': 'Reproducción', '显示': 'Visualización', '性能': 'Rendimiento',
+            '平滑滚动 (播放头居中)': 'Desplazamiento suave (cursor centrado)',
+            '音符播放高亮': 'Resaltado de notas al reproducir',
+            '音符触发时轨道高亮': 'Resaltar la pista al sonar la nota',
+            '高亮跟随音色颜色': 'El resaltado sigue el color del timbre',
+            '根据音量调整位置': 'Ajustar la posición según el volumen',
+            '根据音调调整位置': 'Ajustar la posición según el tono',
+            '音量映射透明度': 'Transparencia según el volumen',
+            '音调标注八度': 'Etiquetas de octava en las teclas',
+            '音符显示点击次数': 'Mostrar el número de clics en las notas',
+            '音符显示音色方块': 'Mostrar el bloque de timbre en las notas',
+            '画面帧率': 'Tasa de fotogramas',
+            '空间音效': 'Audio espacial'
+        },
+        'ru-RU': {
+            '播放': 'Воспроизведение', '显示': 'Отображение', '性能': 'Производительность',
+            '平滑滚动 (播放头居中)': 'Плавная прокрутка (плейхед по центру)',
+            '音符播放高亮': 'Подсветка нот при воспроизведении',
+            '音符触发时轨道高亮': 'Подсветка дорожки при срабатывании ноты',
+            '高亮跟随音色颜色': 'Подсветка по цвету тембра',
+            '根据音量调整位置': 'Позиция по громкости',
+            '根据音调调整位置': 'Позиция по высоте тона',
+            '音量映射透明度': 'Прозрачность по громкости',
+            '音调标注八度': 'Октава на подписях клавиш',
+            '音符显示点击次数': 'Показывать число кликов на нотах',
+            '音符显示音色方块': 'Показывать блок тембра на нотах',
+            '画面帧率': 'Частота кадров',
+            '空间音效': 'Пространственный звук'
+        },
+        'de-DE': {
+            '播放': 'Wiedergabe', '显示': 'Anzeige', '性能': 'Leistung',
+            '平滑滚动 (播放头居中)': 'Sanftes Scrollen (Kopf zentriert)',
+            '音符播放高亮': 'Noten-Highlight bei Wiedergabe',
+            '音符触发时轨道高亮': 'Spur-Highlight beim Auslösen einer Note',
+            '高亮跟随音色颜色': 'Highlight folgt der Klangfarbe',
+            '根据音量调整位置': 'Position nach Lautstärke',
+            '根据音调调整位置': 'Position nach Tonhöhe',
+            '音量映射透明度': 'Transparenz nach Lautstärke',
+            '音调标注八度': 'Oktavbeschriftung auf Tasten',
+            '音符显示点击次数': 'Klickanzahl auf Noten anzeigen',
+            '音符显示音色方块': 'Klangblock auf Noten anzeigen',
+            '画面帧率': 'Bildrate',
+            '空间音效': 'Räumlicher Klang'
+        },
+        'fr-FR': {
+            '播放': 'Lecture', '显示': 'Affichage', '性能': 'Performances',
+            '平滑滚动 (播放头居中)': 'Défilement fluide (curseur centré)',
+            '音符播放高亮': 'Surbrillance des notes à la lecture',
+            '音符触发时轨道高亮': 'Surligner la piste au déclenchement de la note',
+            '高亮跟随音色颜色': 'La surbrillance suit la couleur du timbre',
+            '根据音量调整位置': 'Position selon le volume',
+            '根据音调调整位置': 'Position selon la hauteur',
+            '音量映射透明度': 'Transparence selon le volume',
+            '音调标注八度': 'Octave sur les étiquettes des touches',
+            '音符显示点击次数': 'Afficher le nombre de clics sur les notes',
+            '音符显示音色方块': 'Afficher le bloc de timbre sur les notes',
+            '画面帧率': 'Fréquence d’images',
+            '空间音效': 'Audio spatial'
+        }
+    };
+    for (_nl in _settingsGroupI18n) {
+        if (Object.prototype.hasOwnProperty.call(_settingsGroupI18n, _nl)) Object.assign(UI_TEXT[_nl], _settingsGroupI18n[_nl]);
+    }
+
     // ============ 查找/替换面板「悬浮选择器」词条 (9 种非中文语言) ============
     var _findPickerI18n = {
         'en-US': {
@@ -2815,5 +2960,17 @@
         return Object.prototype.hasOwnProperty.call(dictionary, key);
     }
 
-    window.WebNBSI18n = { init: init, apply: apply, getLocale: function() { return current; }, t: t, translate: translate, has: has, supported: SUPPORTED.slice() };
+    // 内置 NBS 音色名 (0-19) 的本地化名称。
+    // 中文界面直接返回中文源名 (INSTRUMENT_KEYS 本身即中文);
+    // 其它语言查 UI_TEXT 词典, 缺失时回退中文源名。未知编号返回 null。
+    function instrumentName(id) {
+        var idx = parseInt(id, 10);
+        if (!(idx >= 0) || idx >= INSTRUMENT_KEYS.length) return null;
+        var key = INSTRUMENT_KEYS[idx];
+        if (current === 'zh-CN') return key;
+        var dictionary = UI_TEXT[current] || {};
+        return dictionary[key] || UI_TEXT['en-US'][key] || key;
+    }
+
+    window.WebNBSI18n = { init: init, apply: apply, getLocale: function() { return current; }, t: t, translate: translate, has: has, instrumentName: instrumentName, supported: SUPPORTED.slice() };
 })();

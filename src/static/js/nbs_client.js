@@ -318,6 +318,21 @@ function _has(obj, key) {
     return Object.prototype.hasOwnProperty.call(obj, key);
 }
 
+// 读取拟合槽位音量 (0-100, 缺省 100)
+function _fitSlotVolume(volTable, key, idx) {
+    if (!volTable || !_has(volTable, key)) return 100;
+    var arr = volTable[key];
+    if (!arr || arr[idx] === undefined || arr[idx] === null) return 100;
+    var v = Number(arr[idx]);
+    if (!isFinite(v)) return 100;
+    return _clamp(v, 0, 100);
+}
+
+// 音符音量 = MIDI 原音量 x 槽位音量 / 100 (结果取整并限制在 0-100)
+function _applyFitVolume(baseVel, volPct) {
+    return _clamp(Math.round(baseVel * volPct / 100), 0, 100);
+}
+
 function _decodeLatin1(bytes) {
     var s = '';
     for (var i = 0; i < bytes.length; i++) {
@@ -1519,6 +1534,9 @@ function _convertMidiToNBS(arrayBuffer, settings) {
     var fitting = settings.timbre_fitting || {};
     var timbreFitting = fitting.channels || fitting || {};
     var percussionFitting = fitting.drums || {};
+    // 槽位音量表: { channel: [vol1,vol2,vol3] } / { drumNote: [...] }, 0-100
+    var channelVolumes = fitting.channel_volumes || {};
+    var drumVolumes = fitting.drum_volumes || {};
 
     var sustainTracks = settings.sustain_tracks || [];
     var excludedTracks = settings.excluded_tracks || [];
@@ -2095,13 +2113,17 @@ function _convertMidiToNBS(arrayBuffer, settings) {
         var layer = baseLayer + used;
         layerCounters[lKey] = used + 1;
 
-        // velocity
-        var velocity;
+        // velocity: MIDI 原音量 (0-100) -> 再乘槽位 1 (主音色) 的拟合音量
+        var baseVelocity;
         if (readVelocity) {
-            velocity = Math.min(100, Math.floor(e.velocity / 127.0 * 100));
+            baseVelocity = Math.min(100, Math.floor(e.velocity / 127.0 * 100));
         } else {
-            velocity = 100;
+            baseVelocity = 100;
         }
+        var mainSlotVol = (ch === 9)
+            ? _fitSlotVolume(drumVolumes, midiNote, 0)
+            : _fitSlotVolume(channelVolumes, ch, 0);
+        var velocity = _applyFitVolume(baseVelocity, mainSlotVol);
 
         // note length
         var durationTicks = e.duration_ticks || 1;
@@ -2133,6 +2155,8 @@ function _convertMidiToNBS(arrayBuffer, settings) {
             for (var slotIdx = 1; slotIdx < fittingSlots.length; slotIdx++) {
                 var slotInst = fittingSlots[slotIdx];
                 if (slotInst >= 0) {
+                    // 该槽独立的拟合音量 (与其它槽互不影响)
+                    var slotVelocity = _applyFitVolume(baseVelocity, _fitSlotVolume(channelVolumes, ch, slotIdx));
                     // slot 独立计算 MIDI 表示值 (遵循新流水线)
                     var slotMidi;
 
@@ -2210,7 +2234,7 @@ function _convertMidiToNBS(arrayBuffer, settings) {
                         layer: fitLayer,
                         instrument: slotInst,
                         key: slotNbsKey,
-                        velocity: velocity,
+                        velocity: slotVelocity,
                         pan: 50,
                         pitch: 0
                     });
@@ -2230,7 +2254,7 @@ function _convertMidiToNBS(arrayBuffer, settings) {
                                 layer: sLayer2,
                                 instrument: slotInst,
                                 key: slotNbsKey,
-                                velocity: velocity,
+                                velocity: slotVelocity,
                                 pan: 50,
                                 pitch: 0
                             });
@@ -2246,6 +2270,7 @@ function _convertMidiToNBS(arrayBuffer, settings) {
             for (var pSlotIdx = 1; pSlotIdx < pFittingSlots.length; pSlotIdx++) {
                 var pSlotInst = pFittingSlots[pSlotIdx];
                 if (pSlotInst >= 0) {
+                    var pSlotVelocity = _applyFitVolume(baseVelocity, _fitSlotVolume(drumVolumes, midiNote, pSlotIdx));
                     var pUsed2 = layerCounters[lKey] || 0;
                     var pFitLayer = baseLayer + pUsed2;
                     layerCounters[lKey] = pUsed2 + 1;
@@ -2255,7 +2280,7 @@ function _convertMidiToNBS(arrayBuffer, settings) {
                         layer: pFitLayer,
                         instrument: pSlotInst,
                         key: nbsKey,
-                        velocity: velocity,
+                        velocity: pSlotVelocity,
                         pan: 50,
                         pitch: 0
                     });

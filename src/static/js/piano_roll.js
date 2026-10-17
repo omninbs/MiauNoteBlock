@@ -341,6 +341,11 @@
         this._draggedTrackLayer = -1;
         this._dragTargetLayer = -1;
         this._trackDragStartY = 0;
+        this._trackDragGrabY = 0;    // 拖拽开始时鼠标/手指的 y (被拖轨道跟手的基准)
+
+        // 轨道排序平滑动画 (拖动让位 / 松手归位): off=当前偏移, target=目标偏移
+        this._trackAnim = { off: {}, target: {}, raf: null, active: false };
+        this._trackAnimPendingReorder = null;  // { from, to } 动画收敛后只提交一次
 
         // 音轨信息栏按钮悬浮/按下状态 (用于 hover/点击动画)
         this._trackPanelHover = null;
@@ -354,6 +359,12 @@
 
         // 音量透明度映射 (0-100 → 不透明-80%)
         this.volumeOpacityEnabled = false;
+
+        // 音符触发时轨道高亮: 总开关(默认关) + 子选项(默认开)
+        this.trackHighlightEnabled = false;
+        this.trackHighlightColorEnabled = true;   // 高亮使用触发音符的音色颜色
+        this.trackHighlightPositionMode = 'pitch'; // 高亮中心位置: 'pitch' 按音调(默认) / 'volume' 按音量
+        this._trackHighlights = {};               // layer -> [ { startTime, duration, color, volume, key } ] (可并发多个)
         // 面板透明度 (0-1, 1=不透明; 设置网页背景图后用于透出背景)
         this.panelAlpha = 1.0;
         // 左侧音轨信息栏透明度 (独立于面板透明度, 可单独调整)
@@ -651,8 +662,19 @@
         return tick * this._cfg.cellW * this.zoom - this.scrollX + this._editOriginX();
     };
 
-    PianoRoll.prototype._layerToScreen = function(layer) {
+    // 轨道行的原始基准坐标 (不含轨道排序动画偏移, 用于命中判定/DOM 定位/落点指示)
+    PianoRoll.prototype._layerBaseY = function(layer) {
         return layer * this._cfg.cellH * this.zoom - this.scrollY + this._editOriginY();
+    };
+
+    // 轨道排序动画: 该 layer 当前的纵向动画偏移 (无动画时为 0)
+    PianoRoll.prototype._trackOffsetOf = function(layer) {
+        if (!this._trackAnim || !this._trackAnim.off) return 0;
+        return this._trackAnim.off[layer] || 0;
+    };
+
+    PianoRoll.prototype._layerToScreen = function(layer) {
+        return this._layerBaseY(layer) + this._trackOffsetOf(layer);
     };
 
     // ============ 歌词临时轨道 (3 条平行轨道) ============
@@ -972,7 +994,7 @@
         for (var i = this.notes.length - 1; i >= 0; i--) {
             var note = this.notes[i];
             var nx = this._tickToScreen(note.tick);
-            var ny = this._layerToScreen(note.layer);
+            var ny = this._layerBaseY(note.layer);
             var nw = this._cfg.cellW * this.zoom;
             var nh = this._cfg.cellH * this.zoom;
             if (x >= nx && x < nx + nw && y >= ny && y < ny + nh) {
@@ -989,7 +1011,7 @@
         for (var i = 0; i < this.notes.length; i++) {
             var note = this.notes[i];
             var nx = this._tickToScreen(note.tick);
-            var ny = this._layerToScreen(note.layer);
+            var ny = this._layerBaseY(note.layer);
             var nw = this._cfg.cellW * this.zoom;
             var nh = this._cfg.cellH * this.zoom;
             if (nx + nw >= minX && nx <= maxX && ny + nh >= minY && ny <= maxY) {
@@ -1568,6 +1590,130 @@
         this._noteAnims = alive;
     };
 
+    // ============ 轨道排序平滑动画 (rAF 缓动) ============
+    // 拖动让位 / 松手归位共用一个 rAF 循环: 对 target 中的 layer 做指数缓动, 收敛后自动停表。
+    PianoRoll.prototype._startTrackAnim = function() {
+        if (!this._trackAnim || this._trackAnim.raf) return;
+        var self = this;
+        var step = function() {
+            var anim = self._trackAnim;
+            var off = anim.off, target = anim.target;
+            var dragging = self._isDraggingTrack && self._draggedTrackLayer >= 0;
+            var dragged = self._draggedTrackLayer;
+            var done = true;
+            for (var k in target) {
+                if (off[k] === undefined) off[k] = 0;
+                // 被拖轨道由跟手逻辑直接控制, 不参与缓动
+                if (dragging && +k === dragged) continue;
+                off[k] += (target[k] - off[k]) * 0.28;
+                if (Math.abs(target[k] - off[k]) < 0.5) {
+                    off[k] = target[k];
+                } else {
+                    done = false;
+                }
+            }
+            self.requestRender();
+            if (!done) {
+                anim.raf = requestAnimationFrame(step);
+                return;
+            }
+            anim.raf = null;
+            // 拖动中收敛只说明让位到位, 不提交重排; 松手后的收敛才提交
+            if (!dragging) self._commitTrackReorderIfPending();
+        };
+        this._trackAnim.active = true;
+        this._trackAnim.raf = requestAnimationFrame(step);
+    };
+
+    // 停止循环并清空位移 (取消拖拽/打断长按时调用)
+    PianoRoll.prototype._stopTrackAnim = function() {
+        if (!this._trackAnim) return;
+        if (this._trackAnim.raf) {
+            cancelAnimationFrame(this._trackAnim.raf);
+            this._trackAnim.raf = null;
+        }
+        this._trackAnim.off = {};
+        this._trackAnim.target = {};
+        this._trackAnim.active = false;
+        this._trackAnimPendingReorder = null;
+    };
+
+    // 拖动中统一处理 (桌面鼠标 + 触屏共用): 更新落点行 + 跟手/让位偏移动画
+    PianoRoll.prototype._updateTrackDrag = function(screenYAbsolute) {
+        if (!this._isDraggingTrack || this._draggedTrackLayer < 0) return;
+        var cellH = this._cfg.cellH * this.zoom;
+        var dragged = this._draggedTrackLayer;
+        var target = Math.floor((screenYAbsolute - this._cfg.timelineHeight + this.scrollY) / cellH);
+        if (!isFinite(target) || target < 0) target = 0;
+        if (target >= this.trackCount) target = this.trackCount - 1;
+        this._dragTargetLayer = target;
+
+        var off = this._trackAnim.off, tgt = this._trackAnim.target;
+        // 被拖轨道: 精确跟随鼠标 (不缓动); 记下松手时将吸附到的位置差
+        off[dragged] = screenYAbsolute - this._trackDragGrabY;
+        tgt[dragged] = (target - dragged) * cellH;
+        // 其余轨道平滑让位
+        for (var l = 0; l < this.trackCount; l++) {
+            if (l === dragged) continue;
+            if (off[l] === undefined) off[l] = 0;
+            if (target > dragged && l > dragged && l <= target) {
+                tgt[l] = -cellH;
+            } else if (target < dragged && l >= target && l < dragged) {
+                tgt[l] = cellH;
+            } else {
+                tgt[l] = 0;
+            }
+        }
+        this._startTrackAnim();
+        this._fullRedrawNeeded = true;
+        this.requestRender();
+    };
+
+    // 松手: 保持让位轨道不动, 只让被拖轨道缓动吸附到落点, 收敛后再提交重排
+    PianoRoll.prototype._settleTrackDrag = function() {
+        var from = this._draggedTrackLayer;
+        var to = this._dragTargetLayer;
+        var cellH = this._cfg.cellH * this.zoom;
+        this._isDraggingTrack = false;
+        if (from >= 0 && to >= 0 && from !== to) {
+            this._trackAnimPendingReorder = { from: from, to: to };
+            this._trackAnim.target[from] = (to - from) * cellH;
+        } else {
+            this._trackAnimPendingReorder = null;
+            if (from >= 0) this._trackAnim.target[from] = 0;
+        }
+        this._draggedTrackLayer = -1;
+        this._dragTargetLayer = -1;
+        this._fullRedrawNeeded = true;
+        this._startTrackAnim();
+    };
+
+    // 动画收敛: 清空位移并按需提交一次轨道重排
+    PianoRoll.prototype._commitTrackReorderIfPending = function() {
+        if (this._trackAnim.raf) {
+            cancelAnimationFrame(this._trackAnim.raf);
+            this._trackAnim.raf = null;
+        }
+        var pending = this._trackAnimPendingReorder;
+        this._trackAnimPendingReorder = null;
+        this._trackAnim.off = {};
+        this._trackAnim.target = {};
+        this._trackAnim.active = false;
+        if (pending) {
+            if (this.onReorderTrack) {
+                this.onReorderTrack(pending.from, pending.to);
+            } else if (this.onMoveTrack) {
+                var dir = (pending.to > pending.from) ? 1 : -1;
+                var steps = Math.abs(pending.to - pending.from);
+                for (var s = 0; s < steps; s++) {
+                    this.onMoveTrack(pending.from + s * dir, dir);
+                }
+            }
+        }
+        this._fullRedrawNeeded = true;
+        this.requestRender();
+    };
+
     // 获取动画进度 0..1
     PianoRoll.prototype._getAnimProgress = function(noteId, type) {
         for (var i = 0; i < this._noteAnims.length; i++) {
@@ -1597,6 +1743,7 @@
 
     PianoRoll.prototype.clearPlayHighlights = function() {
         this._playHighlights = {};
+        this.clearTrackHighlights();
     };
 
     PianoRoll.prototype._processPlayHighlights = function() {
@@ -1608,10 +1755,124 @@
                 delete this._playHighlights[keys[i]];
             }
         }
+        this._processTrackHighlights();
     };
 
     PianoRoll.prototype._hasActiveHighlights = function() {
-        return Object.keys(this._playHighlights).length > 0;
+        return Object.keys(this._playHighlights).length > 0
+            || Object.keys(this._trackHighlights).length > 0;
+    };
+
+    // ============ 音符触发时轨道高亮 ============
+    PianoRoll.prototype.setTrackHighlightEnabled = function(enabled) {
+        this.trackHighlightEnabled = !!enabled;
+        if (!this.trackHighlightEnabled) this._trackHighlights = {};
+        this._fullRedrawNeeded = true;
+        this.render();
+    };
+
+    PianoRoll.prototype.setTrackHighlightColorEnabled = function(enabled) {
+        this.trackHighlightColorEnabled = !!enabled;
+        this._fullRedrawNeeded = true;
+        this.render();
+    };
+
+    // 高亮位置模式: 'pitch' 根据音调(默认) / 'volume' 根据音量
+    PianoRoll.prototype.setTrackHighlightPositionMode = function(mode) {
+        this.trackHighlightPositionMode = (mode === 'volume') ? 'volume' : 'pitch';
+        this._fullRedrawNeeded = true;
+        this.render();
+    };
+
+    // Minecraft 音符盒音域 F#3(33) ~ F#5(57), 共 24 个半音。
+    // 把音符音调映射为音轨信息栏内的横向位置; 超出音域时取最值 (贴左/贴右)。
+    PianoRoll.prototype._pitchToPanelX = function(key, pw) {
+        var k = Number(key);
+        if (!isFinite(k)) return pw * 0.5;
+        var span = MINECRAFT_PITCH_MAX - MINECRAFT_PITCH_MIN;
+        var frac = (k - MINECRAFT_PITCH_MIN) / span;
+        if (frac < 0) frac = 0;
+        if (frac > 1) frac = 1;
+        return pw * frac;
+    };
+
+    PianoRoll.prototype.clearTrackHighlights = function() {
+        this._trackHighlights = {};
+    };
+
+    // 播放到某个 tick 时调用: 记录该 tick 触发音符所在轨道的高亮。
+    // 同一轨道允许多个高亮实例并发叠加 (短时间重复触发时不会互相阻塞, 呈现彩色闪烁效果)。
+    // 同一批音符中同一轨道有多个音符时, 保留音量最大者 (决定高亮中心位置与颜色)。
+    PianoRoll.prototype.highlightTriggeredTracks = function(noteArray) {
+        if (!this.trackHighlightEnabled || !noteArray || noteArray.length === 0) return;
+        var now = performance.now();
+        var duration = this._animDuration || 600;
+
+        var best = {};
+        for (var i = 0; i < noteArray.length; i++) {
+            var n = noteArray[i];
+            if (!n || n.layer === undefined || n.layer === null || n.layer < 0) continue;
+            var vol = (n.velocity === undefined || n.velocity === null) ? 100 : Number(n.velocity);
+            if (!isFinite(vol)) vol = 100;
+            vol = Math.max(0, Math.min(100, vol));
+            var prevBest = best[n.layer];
+            if (!prevBest || vol > prevBest.volume) {
+                best[n.layer] = { volume: vol, instrument: n.instrument, key: n.key };
+            }
+        }
+
+        for (var layerKey in best) {
+            if (!Object.prototype.hasOwnProperty.call(best, layerKey)) continue;
+            var b = best[layerKey];
+            var list = this._trackHighlights[layerKey];
+            if (!list) {
+                list = [];
+                this._trackHighlights[layerKey] = list;
+            }
+            list.push({
+                startTime: now,
+                duration: duration,
+                color: this._getInstrumentColor(b.instrument),
+                volume: b.volume,
+                key: b.key
+            });
+            // 并发上限: 密集音符下丢弃最旧实例, 避免叠加过曝与无限增长
+            var maxConcurrent = 6;
+            if (list.length > maxConcurrent) list.splice(0, list.length - maxConcurrent);
+        }
+        if (!this.isPlaying && !this._animLoopRunning) this._startAnimLoop();
+    };
+
+    PianoRoll.prototype._processTrackHighlights = function() {
+        var now = performance.now();
+        var keys = Object.keys(this._trackHighlights);
+        for (var i = 0; i < keys.length; i++) {
+            var list = this._trackHighlights[keys[i]];
+            if (!list || !list.length) {
+                delete this._trackHighlights[keys[i]];
+                continue;
+            }
+            for (var j = list.length - 1; j >= 0; j--) {
+                if (now - list[j].startTime >= list[j].duration) list.splice(j, 1);
+            }
+            if (!list.length) delete this._trackHighlights[keys[i]];
+        }
+    };
+
+    // hex 颜色 + 透明度 → rgba 字符串 (用于渐变淡出)
+    PianoRoll.prototype._colorWithAlpha = function(color, alpha) {
+        var c = String(color || '#4cc2ff').trim();
+        if (c.charAt(0) === '#') {
+            var hex = c.slice(1);
+            if (hex.length === 3) hex = hex.charAt(0) + hex.charAt(0) + hex.charAt(1) + hex.charAt(1) + hex.charAt(2) + hex.charAt(2);
+            var r = parseInt(hex.slice(0, 2), 16);
+            var g = parseInt(hex.slice(2, 4), 16);
+            var b = parseInt(hex.slice(4, 6), 16);
+            if (isFinite(r) && isFinite(g) && isFinite(b)) {
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha.toFixed(3) + ')';
+            }
+        }
+        return c;
     };
 
     // _ensureGridCache 已移除，改用全量渲染
@@ -1624,7 +1885,7 @@
         }
         if (hit.type === 'name') {
             var layout = this._getTrackButtonLayout(this._cfg.cellH * this.zoom);
-            var nameY = this._layerToScreen(hit.layer);
+            var nameY = this._layerBaseY(hit.layer);
             this._showTrackNameEditor(hit.layer, layout.nameStart, nameY, layout.nameEnd - layout.nameStart);
             return;
         }
@@ -1960,6 +2221,10 @@
                     this._isDraggingTrack = true;
                     this._draggedTrackLayer = hit.layer;
                     this._dragTargetLayer = hit.layer;
+                    this._trackDragGrabY = y;
+                    // 清空上一次残留的位移; 若上一次排序动画尚未提交, 先立即提交, 避免丢失
+                    if (this._trackAnimPendingReorder) this._commitTrackReorderIfPending();
+                    else this._stopTrackAnim();
                     this._mouseDown = true;
                     this._dragStartX = x;
                     this._dragStartY = y;
@@ -2264,13 +2529,7 @@
         }
 
         if (this._isDraggingTrack) {
-            var cellH = this._cfg.cellH * this.zoom;
-            var targetLayer = Math.floor((y - this._cfg.timelineHeight + this.scrollY) / cellH);
-            if (targetLayer < 0) targetLayer = 0;
-            if (targetLayer >= this.trackCount) targetLayer = this.trackCount - 1;
-            this._dragTargetLayer = targetLayer;
-            this._fullRedrawNeeded = true;
-            this.requestRender();
+            this._updateTrackDrag(y);
             return;
         }
 
@@ -2409,27 +2668,9 @@
             return;
         }
 
-        // 轨道拖拽排序结束
+        // 轨道拖拽排序结束: 先播放归位动画, 收敛后再提交重排 (避免直接跳变)
         if (this._isDraggingTrack) {
-            this._isDraggingTrack = false;
-            if (this._draggedTrackLayer >= 0 && this._dragTargetLayer >= 0 &&
-                this._draggedTrackLayer !== this._dragTargetLayer) {
-                if (this.onReorderTrack) {
-                    this.onReorderTrack(this._draggedTrackLayer, this._dragTargetLayer);
-                } else if (this.onMoveTrack) {
-                    var from = this._draggedTrackLayer;
-                    var to = this._dragTargetLayer;
-                    var dir = (to > from) ? 1 : -1;
-                    var steps = Math.abs(to - from);
-                    for (var s = 0; s < steps; s++) {
-                        this.onMoveTrack(from + s * dir, dir);
-                    }
-                }
-            }
-            this._draggedTrackLayer = -1;
-            this._dragTargetLayer = -1;
-            this._fullRedrawNeeded = true;
-            this.render();
+            this._settleTrackDrag();
             return;
         }
 
@@ -2656,6 +2897,10 @@
                         this._trackDragTimer = setTimeout(function() {
                             dragSelf._touchMode = 'track-drag';
                             dragSelf._isDraggingTrack = true;
+                            dragSelf._trackDragGrabY = dragSelf._lastTouchY;
+                            // 清空上一次残留的位移; 若上一次排序动画尚未提交, 先立即提交, 避免丢失
+                            if (dragSelf._trackAnimPendingReorder) dragSelf._commitTrackReorderIfPending();
+                            else dragSelf._stopTrackAnim();
                             dragSelf.render();
                         }, 250);
                         return;
@@ -2860,20 +3105,15 @@
                     }
                     this._touchMode = 'pan';
                     this._draggedTrackLayer = -1;
+                    this._stopTrackAnim();
                 }
                 return;
             }
 
             if (this._touchMode === 'track-drag' && this._isDraggingTrack) {
-                var cellH = this._cfg.cellH * this.zoom;
-                var targetLayer = Math.floor((y - this._cfg.timelineHeight + this.scrollY) / cellH);
-                if (targetLayer < 0) targetLayer = 0;
-                if (targetLayer >= this.trackCount) targetLayer = this.trackCount - 1;
-                this._dragTargetLayer = targetLayer;
+                this._updateTrackDrag(y);
                 this._lastTouchX = x;
                 this._lastTouchY = y;
-                this._fullRedrawNeeded = true;
-                this.requestRender();
                 return;
             }
 
@@ -3043,30 +3283,13 @@
             this._touchMode = 'none';
             this._draggedTrackLayer = -1;
             this._dragTargetLayer = -1;
+            this._stopTrackAnim();
             return;
         }
 
         if (this._touchMode === 'track-drag' && this._isDraggingTrack) {
-            this._isDraggingTrack = false;
             this._touchMode = 'none';
-            if (this._draggedTrackLayer >= 0 && this._dragTargetLayer >= 0 &&
-                this._draggedTrackLayer !== this._dragTargetLayer) {
-                if (this.onReorderTrack) {
-                    this.onReorderTrack(this._draggedTrackLayer, this._dragTargetLayer);
-                } else if (this.onMoveTrack) {
-                    var from = this._draggedTrackLayer;
-                    var to = this._dragTargetLayer;
-                    var dir = (to > from) ? 1 : -1;
-                    var steps = Math.abs(to - from);
-                    for (var s = 0; s < steps; s++) {
-                        this.onMoveTrack(from + s * dir, dir);
-                    }
-                }
-            }
-            this._draggedTrackLayer = -1;
-            this._dragTargetLayer = -1;
-            this._fullRedrawNeeded = true;
-            this.render();
+            this._settleTrackDrag();  // 归位动画收敛后再提交重排
             return;
         }
 
@@ -3283,7 +3506,7 @@
         renameItem.addEventListener('click', function() {
             menu.remove();
             var layout = self._getTrackButtonLayout(self._cfg.cellH * self.zoom);
-            var nameY = self._layerToScreen(layer);
+            var nameY = self._layerBaseY(layer);
             self._showTrackNameEditor(layer, layout.nameStart, nameY, layout.nameEnd - layout.nameStart);
         });
         menu.appendChild(renameItem);
@@ -5139,6 +5362,34 @@
             }
             ctx.fillRect(0, y, pw, cellH);
 
+            // 音符触发时轨道高亮: 播放中被触发的轨道显示横向光带
+            // - 同一轨道可同时存在多个高亮实例 (密集音符叠加显示, 形成彩色闪烁)
+            // - 跟随音色颜色: 取触发音符的音色色; 否则统一用强调色
+            // - 跟随音量: 光带中心位于从左(0%)到右(100%)的音量位置, 左右仅透明度淡出
+            var thList = this._trackHighlights[layer];
+            if (thList && thList.length) {
+                var thNow = performance.now();
+                for (var thi = 0; thi < thList.length; thi++) {
+                    var th = thList[thi];
+                    var thProg = (thNow - th.startTime) / th.duration;
+                    if (thProg >= 1) continue;
+                    // 单实例透明度按并发数分摊, 避免多层叠加过曝成白色
+                    var thAlpha = (1 - thProg) * 0.55 / Math.min(3, Math.sqrt(thList.length));
+                    var thColor = this.trackHighlightColorEnabled ? (th.color || '#4cc2ff') : '#4cc2ff';
+                    // 中心位置: 按音量 或 按音调 (Minecraft 音域 F#3-F#5 线性映射)
+                    var thCx = (this.trackHighlightPositionMode === 'pitch')
+                        ? this._pitchToPanelX(th.key, pw)
+                        : pw * (th.volume / 100);
+                    var thR = Math.max(20, pw * 0.45);
+                    var thGrad = ctx.createLinearGradient(thCx - thR, 0, thCx + thR, 0);
+                    thGrad.addColorStop(0, this._colorWithAlpha(thColor, 0));
+                    thGrad.addColorStop(0.5, this._colorWithAlpha(thColor, thAlpha));
+                    thGrad.addColorStop(1, this._colorWithAlpha(thColor, 0));
+                    ctx.fillStyle = thGrad;
+                    ctx.fillRect(0, y, pw, cellH);
+                }
+            }
+
             // 选轨模式: 高亮选中的音轨 (演奏模式 / 通用选轨)
             var _selListForPanel = this._trackSelectMode ? this.compressionSelectedLayers
                 : (this.currentTool === 'performance' ? this.performanceSelectedLayers : null);
@@ -5340,7 +5591,7 @@
 
         // 拖拽排序视觉指示
         if (this._isDraggingTrack && this._draggedTrackLayer >= 0) {
-            // 高亮被拖拽的轨道
+            // 高亮被拖拽的轨道 (跟随其动画偏移, 与移动中的行内容贴合)
             var dragY = this._layerToScreen(this._draggedTrackLayer);
             ctx.fillStyle = 'rgba(78,205,196,0.2)';
             ctx.fillRect(0, dragY, pw, cellH);
@@ -5348,17 +5599,19 @@
             ctx.lineWidth = 2;
             ctx.strokeRect(0.5, dragY + 0.5, pw - 1, cellH - 1);
 
-            // 目标位置插入指示线
+            // 落点提示: 目标行用不含动画偏移的基准坐标画虚线框 (标记轨道将落下的位置)
             if (this._dragTargetLayer >= 0 && this._dragTargetLayer !== this._draggedTrackLayer) {
-                var targetY = this._layerToScreen(this._dragTargetLayer);
-                // 如果向下拖, 指示线在目标行底部; 向上拖, 在目标行顶部
-                var indicatorY = (this._dragTargetLayer > this._draggedTrackLayer) ? targetY + cellH : targetY;
-                ctx.strokeStyle = '#e8a423';
+                var w = this.displayWidth;
+                var targetY = this._layerBaseY(this._dragTargetLayer);
+                ctx.save();
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+                ctx.fillRect(pw, targetY, w - pw, cellH);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
                 ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.moveTo(0, indicatorY - 1);
-                ctx.lineTo(pw, indicatorY - 1);
-                ctx.stroke();
+                ctx.setLineDash([5, 4]);
+                ctx.strokeRect(pw + 0.5, targetY + 0.5, w - pw - 1, cellH - 1);
+                ctx.setLineDash([]);
+                ctx.restore();
             }
         }
     };
@@ -5868,7 +6121,8 @@
             ctx.fillText(clickText, bx + bw - 2, by + 2);
         }
 
-        // 播放高亮：白色叠加，快速淡入淡出
+        // 播放高亮：白色叠加, 快速淡入淡出
+        // 注意: 「高亮跟随音色颜色」只作用于左侧音轨信息栏的光带, 音符本身保持原有白色
         if (highlightAlpha > 0) {
             ctx.save();
             ctx.globalAlpha = highlightAlpha;
@@ -5917,7 +6171,7 @@
         var cellW = cfg.cellW * this.zoom, cellH = cfg.cellH * this.zoom;
         for (var i = 0; i < this.notes.length; i++) {
             var note = this.notes[i];
-            var nx = this._tickToScreen(note.tick), ny = this._layerToScreen(note.layer);
+            var nx = this._tickToScreen(note.tick), ny = this._layerBaseY(note.layer);
             if (nx + cellW >= sx && nx <= ex && ny + cellH >= sy && ny <= ey) {
                 this.selectedNotes[note.id] = true;
             }

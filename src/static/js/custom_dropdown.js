@@ -285,7 +285,8 @@
 
             list.style.left = left + 'px';
             list.style.top = top + 'px';
-            list.style.zIndex = '100100';
+            // 自定义下拉列表需高于弹窗遮罩(100200), 但低于自定义 tooltip(100500) 与自定义弹窗(100400)
+            list.style.zIndex = '100280';
         }
 
         function closeList() {

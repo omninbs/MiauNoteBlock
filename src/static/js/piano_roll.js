@@ -6,14 +6,21 @@
     'use strict';
 
     // ============ 配置 ============
+    // ============ 顶部导航条 (时间栏预览视图 / minimap) 高度档位 ============
+    // 「时间栏视图高度」设置: 小(当前尺寸, 默认) / 中 / 大
+    var TIMELINE_BAR_HEIGHTS = { small: 28, medium: 48, large: 72 };
+    var RULER_BAR_HEIGHT = 28;              // 时间轴标尺 (显示 tick 数字) 高度, 固定
+    var gTimelineBarLevel = 'small';
+    var gTimelineBarHeight = TIMELINE_BAR_HEIGHTS.small;
+
     function getConfig() {
         var isMobile = window.innerWidth < 768 || ('ontouchstart' in window);
         return {
             cellW: isMobile ? 24 : 32,       // 每个网格单元宽度 (tick方向): 桌面32px, 移动端24px
             cellH: isMobile ? 24 : 32,       // 每个网格单元高度 (layer方向): 桌面32px, 移动端24px
             sidePanelWidth: 134,             // 左侧音轨信息区宽度（显示 Layer / M / S / ☒）
-            timelineHeight: 56,              // 顶部总高度 (进度条 28px + 时间轴 28px)
-            progressBarHeight: 28,           // 顶部进度条高度 (把柄加高, 便于拖拽)
+            timelineHeight: gTimelineBarHeight + RULER_BAR_HEIGHT,  // 顶部总高度 (导航条 + 时间轴标尺)
+            progressBarHeight: gTimelineBarHeight,                  // 顶部导航条高度 (含音符缩略 map, 可由设置调整)
             longPressDelay: 600,             // 长按触发延迟 0.6s
             doubleTapDelay: 300,
             defaultZoom: isMobile ? 1.2 : 1.0,
@@ -128,6 +135,8 @@
         this.scrollX = 0;
         this.scrollY = 0;
         this.zoom = this._cfg.defaultZoom;
+        this.zoomX = 1;   // 横向额外缩放 (片段编辑模式可独立调整)
+        this.zoomY = 1;   // 纵向额外缩放
         this.displayWidth = 0;
         this.displayHeight = 0;
         // 音符间隔 (左右内边距, 单位 px; 0-16; 不持久, 仅当前工程)
@@ -272,6 +281,15 @@
         //   duration: 固定时长(tick), 恒 >= 1; 新建默认为 DEFAULT_LYRIC_DURATION
         this.lyricTicks = [];
         this.lyricsEditMode = false;
+        // ---- 片段编辑模式 (真剪辑型: 移动/剪裁会真正改变音符与工程长度) ----
+        // segments: [{ id, start, end }] 由 main.js 注入的同一数组引用
+        this.segmentsEditMode = false;
+        this.segmentSelectedId = null;
+        this.segments = [];
+        this.SEGMENT_LANE_COUNT = 1;      // 片段轨道仅 1 条
+        this._segDrag = null;
+        this._segHover = null;
+        this._segmentPreview = null;
         // ---- 歌词临时轨道 (剪映/AE 风格, 3 条平行轨道) ----
         // 编辑模式下在时间轴下方、第一条音轨上方腾出临时轨道
         //   实现方式: 把 _cfg.timelineHeight 临时抬高 (单轨高 x 轨道数), 编辑区原点随之整体下移,
@@ -484,7 +502,10 @@
         if (this.zoom < 0.5) this.zoom = this._cfg.defaultZoom;
         // _cfg 被重建, 需重新套用歌词轨道占位 (否则编辑模式下轨道高度会丢失)
         this._lyricLanePerH = (this._cfg.cellH <= 24) ? 20 : 24;
+        // 高度档位可能在本次重建前发生变化, 重新锁定基准高度
+        this._lyricLaneBase = null;
         this._applyLyricsLaneHeight();
+        this._miniMapDirty = true;
 
         var newIsDesktop = !(window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches) && window.innerWidth >= 769;
         if (newIsDesktop !== this._isDesktop) {
@@ -499,22 +520,136 @@
     };
 
     PianoRoll.prototype._getMaxScrollX = function() {
-        var cellW = this._cfg ? this._cfg.cellW * this.zoom : 16;
+        var cellW = this._cfg ? this._cfg.cellW * this._zoomX() : 16;
         var contentWidth = Math.max(0, this.totalTicks * cellW);
         var editWidth = Math.max(0, this.displayWidth - this._currentPanelWidth);
         return Math.max(0, contentWidth - editWidth);
     };
 
-    // 顶部滑动条: 根据 x 比例滚动视图 (左右翻页)
-    PianoRoll.prototype._scrollFromSliderX = function(x) {
+    // 顶部导航条: 根据 x 比例滚动视图 (左右翻页)
+    // animate=true 时用快速缓动动画平滑过渡 (点击跳转), false 时直接跟手 (拖动)
+    PianoRoll.prototype._scrollFromSliderX = function(x, animate) {
         var ratio = Math.max(0, Math.min(1, x / Math.max(1, this.displayWidth)));
         var maxScroll = this._getMaxScrollX();
-        this.scrollX = ratio * maxScroll;
+        var target = ratio * maxScroll;
+        if (animate) { this._animateScrollTo(target); return; }
+        this._cancelScrollAnim();
+        this.scrollX = target;
         this._fullRedrawNeeded = true;
         this.requestRender();
     };
 
-    // 获取当前用于渲染的 tick, 播放时根据 tick 间隔做线性插值, 使播放头/进度条更平滑
+    // 平滑滚动到目标 scrollX (快速 ease-out, 保证「跟手」手感)
+    PianoRoll.prototype._animateScrollTo = function(target) {
+        var maxScroll = this._getMaxScrollX();
+        if (!isFinite(target)) return;
+        if (target < 0) target = 0;
+        if (target > maxScroll) target = maxScroll;
+        this._cancelScrollAnim();
+        var from = this.scrollX;
+        var dist = target - from;
+        if (Math.abs(dist) < 0.5) {
+            this.scrollX = target;
+            this._fullRedrawNeeded = true;
+            this.requestRender();
+            return;
+        }
+        var self = this;
+        var startTime = performance.now();
+        // 距离越远时长略长, 但整体保持快速 (120~260ms)
+        var dur = Math.min(260, Math.max(120, Math.abs(dist) * 0.45));
+        var step = function(now) {
+            var t = Math.min(1, (now - startTime) / dur);
+            var e = 1 - Math.pow(1 - t, 3);   // easeOutCubic
+            self.scrollX = from + dist * e;
+            self._fullRedrawNeeded = true;
+            self.render();
+            if (t < 1) {
+                self._scrollAnimRAF = requestAnimationFrame(step);
+            } else {
+                self._scrollAnimRAF = null;
+                self.scrollX = target;
+                self._fullRedrawNeeded = true;
+                self.render();
+            }
+        };
+        this._scrollAnimRAF = requestAnimationFrame(step);
+    };
+
+    PianoRoll.prototype._cancelScrollAnim = function() {
+        if (this._scrollAnimRAF) {
+            cancelAnimationFrame(this._scrollAnimRAF);
+            this._scrollAnimRAF = null;
+        }
+    };
+
+    // 设置「时间栏视图高度」: 'small'(默认) / 'medium' / 'large'
+    PianoRoll.prototype.setTimelineBarHeight = function(level) {
+        if (!TIMELINE_BAR_HEIGHTS[level]) level = 'small';
+        gTimelineBarLevel = level;
+        gTimelineBarHeight = TIMELINE_BAR_HEIGHTS[level];
+        if (this._cfg) {
+            this._cfg.progressBarHeight = gTimelineBarHeight;
+            this._cfg.timelineHeight = gTimelineBarHeight + RULER_BAR_HEIGHT;
+            this._lyricLaneBase = null;
+            this._applyLyricsLaneHeight();
+        }
+        this._miniMapDirty = true;
+        this._fullRedrawNeeded = true;
+        this.render();
+    };
+
+    PianoRoll.prototype.getTimelineBarLevel = function() { return gTimelineBarLevel; };
+
+    // 重建时间栏音符缩略 map (离屏缓存, 仅在音符/尺寸变化时重建)
+    // 颜色 = 音色, 透明度 = 音量; 纵向按音高分布 (低音在下, 高音在上)
+    PianoRoll.prototype._rebuildMiniMap = function() {
+        var w = Math.floor(this.displayWidth);
+        var h = this._cfg ? Math.floor(this._cfg.progressBarHeight) : 28;
+        if (w <= 0 || h <= 0) { this._miniMapCanvas = null; this._miniMapDirty = false; return; }
+        if (!this._miniMapCanvas) this._miniMapCanvas = document.createElement('canvas');
+        var c = this._miniMapCanvas;
+        if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+        var mc = c.getContext('2d');
+        mc.clearRect(0, 0, w, h);
+        if (!this.notes || !this.notes.length || !(this.totalTicks > 0)) { this._miniMapDirty = false; return; }
+
+        var minKey = 127, maxKey = -1;
+        for (var i = 0; i < this.notes.length; i++) {
+            var k = this.notes[i].key;
+            if (!isFinite(k)) continue;
+            if (k < minKey) minKey = k;
+            if (k > maxKey) maxKey = k;
+        }
+        if (maxKey < 0) { this._miniMapDirty = false; return; }
+
+        var span = Math.max(1, maxKey - minKey);
+        var padTop = 2, padBot = 2;
+        var availH = Math.max(1, h - padTop - padBot);
+        var blockH = Math.max(1, Math.min(4, availH * 0.08));
+        var pxPerTick = w / this.totalTicks;
+
+        for (var j = 0; j < this.notes.length; j++) {
+            var n = this.notes[j];
+            var nt = n.tick;
+            if (!isFinite(nt)) continue;
+            var x = (nt / this.totalTicks) * w;
+            var key = isFinite(n.key) ? n.key : minKey;
+            var frac = (key - minKey) / span;
+            var y = padTop + (1 - frac) * (availH - blockH);
+            var vel = isFinite(n.velocity) ? n.velocity : 100;
+            var alpha = 0.2 + 0.8 * Math.max(0, Math.min(1, vel / 100));
+            mc.globalAlpha = alpha;
+            mc.fillStyle = this._getInstrumentColor(n.instrument);
+            mc.fillRect(x, y, Math.max(1, pxPerTick * 0.9), blockH);
+        }
+        mc.globalAlpha = 1;
+        this._miniMapDirty = false;
+    };
+
+    // 获取当前用于渲染的 tick
+    // - 播放中: 按 tick 间隔做线性插值, 使播放头平滑
+    // - 非播放: 优先使用 _smoothedPlayheadTick (跳转补间动画的当前值)
     PianoRoll.prototype._getDisplayTick = function() {
         var tick = (this.playheadTick != null) ? this.playheadTick : this.currentTick;
         if (tick === undefined || tick === null) tick = 0;
@@ -522,8 +657,47 @@
             var elapsed = performance.now() - this._lastTickTime;
             var frac = Math.max(0, Math.min(1, elapsed / this._tickDuration));
             tick += frac;
+        } else if (this._smoothedPlayheadTick != null) {
+            tick = this._smoothedPlayheadTick;
         }
         return tick;
+    };
+
+    // 播放头跳转补间: 以 ease-out 平滑移动到目标 tick (非播放状态下生效)
+    PianoRoll.prototype.animatePlayheadTo = function(tick) {
+        if (tick === undefined || tick === null || !isFinite(tick)) return;
+        if (this.isPlaying) {
+            this._smoothedPlayheadTick = tick;
+            return;
+        }
+        var from = (this._smoothedPlayheadTick != null)
+            ? this._smoothedPlayheadTick
+            : ((this.playheadTick != null) ? this.playheadTick : tick);
+        if (Math.abs(tick - from) < 0.01) {
+            this._smoothedPlayheadTick = tick;
+            this.redrawPlaybackOverlay();
+            return;
+        }
+        if (this._playheadAnimRAF) cancelAnimationFrame(this._playheadAnimRAF);
+        var self = this;
+        var dist = Math.abs(tick - from);
+        // 近距离快速到位 (90ms), 远距离最多 200ms
+        var dur = Math.min(200, Math.max(90, dist * 4));
+        var startTime = performance.now();
+        var step = function(now) {
+            var t = Math.min(1, (now - startTime) / dur);
+            var e = 1 - Math.pow(1 - t, 3);
+            self._smoothedPlayheadTick = from + (tick - from) * e;
+            self.redrawPlaybackOverlay();
+            if (t < 1) {
+                self._playheadAnimRAF = requestAnimationFrame(step);
+            } else {
+                self._playheadAnimRAF = null;
+                self._smoothedPlayheadTick = tick;
+                self.redrawPlaybackOverlay();
+            }
+        };
+        this._playheadAnimRAF = requestAnimationFrame(step);
     };
 
     PianoRoll.prototype.redrawPlaybackOverlay = function() {
@@ -534,7 +708,8 @@
         var cfg = this._cfg;
         var pw = this._currentPanelWidth;
         ctx.clearRect(0, 0, w, h);
-        if (!this.isPlaying || this.playheadTick === null || this.playheadTick === undefined) return;
+        // 暂停/编辑状态下也保持播放头可见 (playheadTick === null 表示已停止, 需要隐藏)
+        if (this.playheadTick === null || this.playheadTick === undefined) return;
 
         var displayTick = this._getDisplayTick();
         var x = this.smoothScrollEnabled ? pw + (w - pw) / 3 : this._tickToScreen(displayTick);
@@ -639,15 +814,15 @@
     PianoRoll.prototype._editOriginY = function() { return this._cfg.timelineHeight; };
 
     PianoRoll.prototype._screenToTick = function(screenX) {
-        return Math.floor((screenX - this._editOriginX() + this.scrollX) / (this._cfg.cellW * this.zoom));
+        return Math.floor((screenX - this._editOriginX() + this.scrollX) / (this._cfg.cellW * this._zoomX()));
     };
 
     PianoRoll.prototype._screenToTickNearest = function(screenX) {
-        return Math.round((screenX - this._editOriginX() + this.scrollX) / (this._cfg.cellW * this.zoom));
+        return Math.round((screenX - this._editOriginX() + this.scrollX) / (this._cfg.cellW * this._zoomX()));
     };
 
     PianoRoll.prototype._screenToTickFloat = function(screenX) {
-        return (screenX - this._editOriginX() + this.scrollX) / (this._cfg.cellW * this.zoom);
+        return (screenX - this._editOriginX() + this.scrollX) / (this._cfg.cellW * this._zoomX());
     };
 
     PianoRoll.prototype._screenToLyricLaneFloat = function(screenY) {
@@ -655,16 +830,16 @@
     };
 
     PianoRoll.prototype._screenToLayer = function(screenY) {
-        return Math.floor((screenY - this._editOriginY() + this.scrollY) / (this._cfg.cellH * this.zoom));
+        return Math.floor((screenY - this._editOriginY() + this.scrollY) / (this._cfg.cellH * this._zoomY()));
     };
 
     PianoRoll.prototype._tickToScreen = function(tick) {
-        return tick * this._cfg.cellW * this.zoom - this.scrollX + this._editOriginX();
+        return tick * this._cfg.cellW * this._zoomX() - this.scrollX + this._editOriginX();
     };
 
     // 轨道行的原始基准坐标 (不含轨道排序动画偏移, 用于命中判定/DOM 定位/落点指示)
     PianoRoll.prototype._layerBaseY = function(layer) {
-        return layer * this._cfg.cellH * this.zoom - this.scrollY + this._editOriginY();
+        return layer * this._cfg.cellH * this._zoomY() - this.scrollY + this._editOriginY();
     };
 
     // 轨道排序动画: 该 layer 当前的纵向动画偏移 (无动画时为 0)
@@ -678,14 +853,27 @@
     };
 
     // ============ 歌词临时轨道 (3 条平行轨道) ============
-    PianoRoll.prototype._laneCount = function() { return this.LYRIC_LANE_COUNT || 3; };
-    // 歌词轨道总高度 (仅编辑模式占用, 非编辑模式为 0)
-    PianoRoll.prototype._laneH = function() { return this.lyricsEditMode ? this._lyricLanePerH * this._laneCount() : 0; };
+    PianoRoll.prototype._laneCount = function() {
+        if (this.segmentsEditMode) return this.SEGMENT_LANE_COUNT || 1;
+        return this.LYRIC_LANE_COUNT || 3;
+    };
+    // 附加轨道总高度 (歌词编辑 / 片段编辑模式占用, 其余为 0)
+    PianoRoll.prototype._laneH = function() {
+        if (this.lyricsEditMode) return this._lyricLanePerH * (this.LYRIC_LANE_COUNT || 3);
+        if (this.segmentsEditMode) return this._segLaneH();
+        return 0;
+    };
     // 歌词轨道纵向范围 (夹在时间轴标尺底边与编辑区原点之间)
     PianoRoll.prototype._laneTop = function() { return this._baseTimelineHeight; };
     PianoRoll.prototype._laneBottom = function() { return this._baseTimelineHeight + this._laneH(); };
+    // 片段轨道固定高度 (剪辑软件风格, 需要容纳音符缩略图)
+    PianoRoll.prototype._segLaneH = function() { return 48; };
+    // 当前附加轨道的单轨高度
+    PianoRoll.prototype._perLaneH = function() {
+        return this.segmentsEditMode ? this._segLaneH() : this._lyricLanePerH;
+    };
     // 某条轨道的顶边 y
-    PianoRoll.prototype._laneY = function(lane) { return this._laneTop() + lane * this._lyricLanePerH; };
+    PianoRoll.prototype._laneY = function(lane) { return this._laneTop() + lane * this._perLaneH(); };
     // 命中 y 落在第几条轨道 (钳制到 0..count-1)
     PianoRoll.prototype._laneIndexAt = function(y) {
         var i = Math.floor((y - this._laneTop()) / this._lyricLanePerH);
@@ -696,9 +884,10 @@
     };
     // 单条轨道的纵向显示范围
     PianoRoll.prototype._laneRect = function(lane) {
-        var pad = Math.min(3, this._lyricLanePerH * 0.12);
+        var perH = this._perLaneH();
+        var pad = Math.min(3, perH * 0.12);
         var top = this._laneY(lane);
-        return { top: top + pad, h: Math.max(4, this._lyricLanePerH - pad * 2) };
+        return { top: top + pad, h: Math.max(4, perH - pad * 2) };
     };
 
     // 进入/退出歌词编辑模式: 抬高/还原时间轴总高度, 使编辑区整体下移/上移
@@ -710,6 +899,331 @@
         this._applyLyricsLaneHeight();
         this._fullRedrawNeeded = true;
         this.render();
+    };
+
+    // ============ 片段编辑模式 (剪映/AE 风格的整曲片段剪辑) ============
+    PianoRoll.prototype.setSegmentsEditMode = function(on) {
+        on = !!on;
+        if (this.segmentsEditMode === on) return;
+        this.segmentsEditMode = on;
+        if (!on) {
+            this._segDrag = null;
+            this._segHover = null;
+            this.segmentSelectedId = null;
+            this._segmentPreview = null;
+        }
+        this._applyLyricsLaneHeight();
+        this._fullRedrawNeeded = true;
+        this.render();
+    };
+
+    // 同步片段列表 (main.js 传入同一数组引用, 保证拖动/编辑后立即反映)
+    PianoRoll.prototype.setSegments = function(list) {
+        this.segments = Array.isArray(list) ? list : [];
+        this._fullRedrawNeeded = true;
+        this.requestRender();
+    };
+
+    // 命中测试: 片段轨道内的片段块 -> { seg, zone: 'left'|'right'|'body', x0, x1 }
+    PianoRoll.prototype._hitSegment = function(x, y) {
+        if (!this.segmentsEditMode) return null;
+        if (y < this._baseTimelineHeight || y >= this._cfg.timelineHeight) return null;
+        if (x < this._currentPanelWidth) return null;
+        var list = this.segments || [];
+        var edge = Math.max(4, Math.min(8, this._perLaneH() * 0.35));
+        for (var i = 0; i < list.length; i++) {
+            var s = list[i];
+            var x0 = this._tickToScreen(s.start);
+            var x1 = this._tickToScreen(s.end);
+            if (x < x0 - edge || x > x1 + edge) continue;
+            var zone = 'body';
+            if (x <= x0 + edge) zone = 'left';
+            else if (x >= x1 - edge) zone = 'right';
+            return { seg: s, zone: zone, x0: x0, x1: x1 };
+        }
+        return null;
+    };
+
+    PianoRoll.prototype._clearSegmentSelection = function() {
+        if (this.segmentSelectedId == null && !this._segHover) return;
+        this.segmentSelectedId = null;
+        this._segHover = null;
+        this._fullRedrawNeeded = true;
+        this.requestRender();
+    };
+
+    // 开始拖动片段 (body=整体移动 / left|right=拉伸端点)
+    PianoRoll.prototype._beginSegmentDrag = function(hit, x, y) {
+        var seg = hit.seg;
+        this.segmentSelectedId = seg.id;
+        this._segDrag = {
+            id: seg.id, mode: hit.zone, startX: x, startY: y,
+            origStart: seg.start, origEnd: seg.end, moved: false
+        };
+        this._segmentPreview = null;
+        if (typeof this.onSegmentSelect === 'function') this.onSegmentSelect(seg.id);
+        return true;
+    };
+
+    // 拖动过程: 浮点跟随 + 整数吸附预览 (松手前不修改真实数据)
+    PianoRoll.prototype._applySegmentDrag = function(x, y) {
+        var d = this._segDrag;
+        if (!d) return;
+        var cellWpx = Math.max(1, this._cfg.cellW * this._zoomX());
+        var dt = (x - d.startX) / cellWpx;
+        if (!isFinite(dt)) dt = 0;
+        if (Math.abs(x - d.startX) > 3 || Math.abs(y - d.startY) > 3) d.moved = true;
+
+        var maxTick = Math.max(1, this.totalTicks);
+        var ns = d.origStart, ne = d.origEnd;
+        var fStart = d.origStart, fEnd = d.origEnd;
+
+        if (d.mode === 'body') {
+            var span = d.origEnd - d.origStart;
+            ns = Math.round(d.origStart + dt);
+            if (ns < 0) ns = 0;
+            ne = ns + span;
+            fStart = Math.max(0, d.origStart + dt);
+            fEnd = fStart + span;
+        } else if (d.mode === 'left') {
+            ns = Math.round(d.origStart + dt);
+            if (ns < 0) ns = 0;
+            if (ns > d.origEnd - 1) ns = d.origEnd - 1;
+            ne = d.origEnd;
+            fStart = Math.max(0, d.origStart + dt);
+            if (fStart > d.origEnd - 1) fStart = d.origEnd - 1;
+            fEnd = d.origEnd;
+        } else {
+            ne = Math.round(d.origEnd + dt);
+            if (ne < d.origStart + 1) ne = d.origStart + 1;
+            ns = d.origStart;
+            fEnd = Math.max(d.origStart + 1, d.origEnd + dt);
+            fStart = d.origStart;
+        }
+        if (ne > maxTick + 256) ne = maxTick + 256;
+
+        this._segmentPreview = { id: d.id, mode: d.mode, start: ns, end: ne, fStart: fStart, fEnd: fEnd };
+        this._fullRedrawNeeded = true;
+        this.requestRender();
+    };
+
+    // 结束拖动: 提交 (由 main.js 真正改动音符与片段区间, 支持撤销)
+    PianoRoll.prototype._endSegmentDrag = function() {
+        var d = this._segDrag;
+        var prev = this._segmentPreview;
+        this._segDrag = null;
+        this._segmentPreview = null;
+        if (!d) return;
+        this._fullRedrawNeeded = true;
+        this.requestRender();
+        if (!d.moved || !prev) return;
+        if (prev.start === d.origStart && prev.end === d.origEnd) return;
+        if (typeof this.onSegmentCommit === 'function') {
+            this.onSegmentCommit(d.id, prev.start, prev.end, d.mode);
+        }
+    };
+
+    // 绘制片段轨道 (编辑模式): 片段块 / 端点手柄 / 空隙纹理 / 拖动预览
+    PianoRoll.prototype._drawSegmentLane = function(ctx, w, pw) {
+        var top = this._laneTop();
+        var h = this._laneH();
+        if (h <= 0) return;
+        var self = this;
+        var rect = this._laneRect(0);
+
+        ctx.fillStyle = 'rgba(16, 24, 36, ' + this.panelAlpha + ')';
+        ctx.fillRect(0, top, w, h);
+        ctx.fillStyle = 'rgba(14, 14, 34, ' + this.panelAlpha + ')';
+        ctx.fillRect(0, top, pw, h);
+
+        var list = this.segments || [];
+        var prev = this._segmentPreview;
+        var edge = Math.max(4, Math.min(8, this._perLaneH() * 0.35));
+        var toX = function(tick) { return self._tickToScreen(tick); };
+
+        // 空隙: 相邻片段之间绘制斜纹暗区, 直观表示「空白段」
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(pw, top, Math.max(0, w - pw), h);
+        ctx.clip();
+        var sorted = list.slice().sort(function(a, b) { return a.start - b.start; });
+        var cursor = 0;
+        for (var gi = 0; gi < sorted.length; gi++) {
+            if (sorted[gi].start > cursor) {
+                var gx0 = toX(cursor), gx1 = toX(sorted[gi].start);
+                if (gx1 >= pw && gx0 <= w) {
+                    ctx.fillStyle = 'rgba(255, 120, 90, 0.08)';
+                    ctx.fillRect(gx0, rect.top, Math.max(1, gx1 - gx0), rect.h);
+                    ctx.strokeStyle = 'rgba(255, 120, 90, 0.28)';
+                    ctx.lineWidth = 1;
+                    for (var sx = gx0 - rect.h; sx < gx1; sx += 7) {
+                        if (sx + rect.h < pw) continue;
+                        ctx.beginPath();
+                        ctx.moveTo(sx, rect.top + rect.h);
+                        ctx.lineTo(sx + rect.h, rect.top);
+                        ctx.stroke();
+                    }
+                }
+            }
+            cursor = Math.max(cursor, sorted[gi].end);
+        }
+        ctx.restore();
+
+        // 片段内音符缩略图: 按片段分桶 (一次遍历, 避免逐块扫描全部音符)
+        var notesBySeg = {};
+        var noteList = this.notes || [];
+        for (var nbi = 0; nbi < noteList.length; nbi++) {
+            var nb = noteList[nbi];
+            for (var sbi = 0; sbi < list.length; sbi++) {
+                var sb = list[sbi];
+                if (nb.tick >= sb.start && nb.tick < sb.end) {
+                    if (!notesBySeg[sb.id]) notesBySeg[sb.id] = [];
+                    notesBySeg[sb.id].push(nb);
+                    break;
+                }
+            }
+        }
+
+        // 在片段块内绘制音符缩略图 (颜色=音色, 透明度=音量)
+        var drawThumb = function(seg, x0px, x1px, clipTop, clipH) {
+            if (!seg) return;
+            var arr = notesBySeg[seg.id];
+            if (!arr || !arr.length) return;
+            var wpx = x1px - x0px;
+            if (wpx < 5) return;
+            var span = Math.max(1, seg.end - seg.start);
+            var minK = 999, maxK = -1;
+            for (var i = 0; i < arr.length; i++) {
+                var k = arr[i].key;
+                if (!isFinite(k)) continue;
+                if (k < minK) minK = k;
+                if (k > maxK) maxK = k;
+            }
+            if (maxK < 0) return;
+            var spanK = Math.max(1, maxK - minK);
+            var padY = 3;
+            var avail = Math.max(2, clipH - padY * 2);
+            var bh = Math.max(1, Math.min(3, avail * 0.11));
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(x0px + 1, clipTop, Math.max(2, wpx - 2), clipH);
+            ctx.clip();
+            for (var j = 0; j < arr.length; j++) {
+                var n = arr[j];
+                var rx = x0px + ((n.tick - seg.start) / span) * wpx;
+                var key = isFinite(n.key) ? n.key : minK;
+                var ry = clipTop + padY + (1 - (key - minK) / spanK) * (avail - bh);
+                var vel = isFinite(n.velocity) ? n.velocity : 100;
+                ctx.globalAlpha = 0.35 + 0.65 * Math.max(0, Math.min(1, vel / 100));
+                ctx.fillStyle = self._getInstrumentColor(n.instrument);
+                ctx.fillRect(rx, ry, 1.6, bh);
+            }
+            ctx.restore();
+        };
+
+        var drawBlock = function(seg, x0px, x1px, selected, hovered, hoverZone, scale) {
+            var cx = x0px + (x1px - x0px) / 2, cy = rect.top + rect.h / 2;
+            ctx.save();
+            if (scale && scale !== 1) {
+                ctx.translate(cx, cy);
+                ctx.scale(scale, scale);
+                ctx.translate(-cx, -cy);
+                ctx.shadowColor = 'rgba(0,0,0,0.55)';
+                ctx.shadowBlur = 10;
+                ctx.shadowOffsetY = 3;
+            }
+            ctx.fillStyle = selected ? '#3f7fa6' : (hovered ? '#356e91' : '#2b5a7a');
+            ctx.fillRect(x0px + 1, rect.top, Math.max(2, x1px - x0px - 2), rect.h);
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetY = 0;
+            // 音符缩略图 (片段内部的迷你地图)
+            drawThumb(seg, x0px, x1px, rect.top, rect.h);
+            ctx.strokeStyle = selected ? '#5ac8ff' : 'rgba(255,255,255,0.18)';
+            ctx.lineWidth = selected ? 1.5 : 1;
+            ctx.strokeRect(x0px + 0.5, rect.top + 0.5, Math.max(2, x1px - x0px - 2), rect.h - 1);
+            if ((x1px - x0px) > edge * 2.4) {
+                ctx.fillStyle = (hoverZone === 'left') ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.4)';
+                ctx.fillRect(x0px + 2, rect.top + 2, 2, rect.h - 4);
+                ctx.fillStyle = (hoverZone === 'right') ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.4)';
+                ctx.fillRect(x1px - 4, rect.top + 2, 2, rect.h - 4);
+            }
+            ctx.restore();
+        };
+
+        for (var i = 0; i < list.length; i++) {
+            var s = list[i];
+            if (this._segDrag && this._segDrag.id === s.id) continue;   // 拖动中的单独绘制
+            var x0 = toX(s.start), x1 = toX(s.end);
+            if (x1 < pw || x0 > w) continue;
+            var hovered = !!(this._segHover && this._segHover.seg && this._segHover.seg.id === s.id);
+            drawBlock(s, x0, x1, s.id === this.segmentSelectedId, hovered, hovered ? this._segHover.zone : null, 1);
+        }
+
+        // 拖动预览: 放大 + 投影 + 白色虚线框 (预计落点的吸附位置)
+        if (prev) {
+            var prevSeg = null;
+            for (var pi = 0; pi < list.length; pi++) {
+                if (list[pi].id === prev.id) { prevSeg = list[pi]; break; }
+            }
+            var fx0 = toX(prev.fStart), fx1 = toX(prev.fEnd);
+            var dLeft = Math.min(fx0, fx1), dRight = Math.max(fx0, fx1);
+            drawBlock(prevSeg, dLeft, dRight, true, false, null, 1.06);
+            var sx0 = toX(prev.start), sx1 = toX(prev.end);
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 3]);
+            ctx.strokeRect(Math.min(sx0, sx1) + 0.5, rect.top + 0.5, Math.max(2, Math.abs(sx1 - sx0) - 1), rect.h - 1);
+            ctx.setLineDash([]);
+            ctx.restore();
+        }
+
+        // 左侧标签
+        ctx.save();
+        ctx.fillStyle = 'rgba(200, 220, 240, 0.75)';
+        ctx.font = (this._isDesktop ? '11px' : '10px') + ' "Segoe UI", sans-serif';
+        ctx.textBaseline = 'middle';
+        var segLabel = '片段';
+        if (window.WebNBSI18n && typeof window.WebNBSI18n.t === 'function') {
+            segLabel = window.WebNBSI18n.t('片段');
+        }
+        ctx.fillText(segLabel, 10, top + h / 2);
+        ctx.restore();
+    };
+
+    // 分割线: 所有模式下常驻显示 (青色虚线, 与播放头红色实线区分)
+    // 拖动片段端点/整体时, 使用拖拽预览位置, 使分割线同步跟随
+    PianoRoll.prototype._drawSegmentMarkers = function(ctx, w, pw) {
+        var list = this.segments || [];
+        if (!list.length) return;
+        var prev = this._segmentPreview;
+        var top = this._baseTimelineHeight;
+        var bottom = this.displayHeight;
+        var drawn = {};
+        ctx.save();
+        ctx.strokeStyle = 'rgba(90, 200, 255, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 3]);
+        for (var i = 0; i < list.length; i++) {
+            var s = list[i];
+            var st = s.start, en = s.end;
+            if (prev && prev.id === s.id) { st = prev.start; en = prev.end; }
+            var ticks = [st, en];
+            for (var k = 0; k < 2; k++) {
+                var tick = ticks[k];
+                if (drawn[tick]) continue;
+                drawn[tick] = true;
+                var x = this._tickToScreen(tick);
+                if (x < pw || x > w) continue;
+                ctx.beginPath();
+                ctx.moveTo(x + 0.5, top);
+                ctx.lineTo(x + 0.5, bottom);
+                ctx.stroke();
+            }
+        }
+        ctx.setLineDash([]);
+        ctx.restore();
     };
 
     // 依据当前模式同步 _cfg.timelineHeight (_cfg 被 getConfig 重建后必须重新调用)
@@ -783,7 +1297,7 @@
         if (!d) return false;
         var clip = this._findLyricById(d.id);
         if (!clip) return false;
-        var cellW = this._cfg.cellW * this.zoom;
+        var cellW = this._cfg.cellW * this._zoomX();
         if (cellW <= 0) return false;
         // 浮点位移 (tick): 像素级平滑跟随, 不跳格
         var dispTick = (x - d.startX) / cellW;
@@ -995,8 +1509,8 @@
             var note = this.notes[i];
             var nx = this._tickToScreen(note.tick);
             var ny = this._layerBaseY(note.layer);
-            var nw = this._cfg.cellW * this.zoom;
-            var nh = this._cfg.cellH * this.zoom;
+            var nw = this._cfg.cellW * this._zoomX();
+            var nh = this._cfg.cellH * this._zoomY();
             if (x >= nx && x < nx + nw && y >= ny && y < ny + nh) {
                 return note;
             }
@@ -1012,8 +1526,8 @@
             var note = this.notes[i];
             var nx = this._tickToScreen(note.tick);
             var ny = this._layerBaseY(note.layer);
-            var nw = this._cfg.cellW * this.zoom;
-            var nh = this._cfg.cellH * this.zoom;
+            var nw = this._cfg.cellW * this._zoomX();
+            var nh = this._cfg.cellH * this._zoomY();
             if (nx + nw >= minX && nx <= maxX && ny + nh >= minY && ny <= maxY) {
                 result.push(note);
             }
@@ -1270,7 +1784,7 @@
         if (Object.keys(this.selectedNotes).length === 0) { this._dragPreview = null; return; }
         var cfg = this._cfg;
         var pw = this._currentPanelWidth;
-        var cellW = cfg.cellW * this.zoom, cellH = cfg.cellH * this.zoom;
+        var cellW = cfg.cellW * this._zoomX(), cellH = cfg.cellH * this._zoomY();
         if (cellW <= 0 || cellH <= 0) { this._dragPreview = null; return; }
         var ids = Object.keys(this.selectedNotes);
         var aid = (anchorId && this.selectedNotes[anchorId]) ? anchorId : ids[0];
@@ -1300,7 +1814,7 @@
         if (!pv) return;
         var cfg = this._cfg;
         var pw = this._currentPanelWidth;
-        var cellW = cfg.cellW * this.zoom, cellH = cfg.cellH * this.zoom;
+        var cellW = cfg.cellW * this._zoomX(), cellH = cfg.cellH * this._zoomY();
         if (cellW <= 0 || cellH <= 0) return;
         var floatTick = (currentX - pw + this.scrollX) / cellW;
         var floatLayer = (currentY - cfg.timelineHeight + this.scrollY) / cellH;
@@ -1641,7 +2155,7 @@
     // 拖动中统一处理 (桌面鼠标 + 触屏共用): 更新落点行 + 跟手/让位偏移动画
     PianoRoll.prototype._updateTrackDrag = function(screenYAbsolute) {
         if (!this._isDraggingTrack || this._draggedTrackLayer < 0) return;
-        var cellH = this._cfg.cellH * this.zoom;
+        var cellH = this._cfg.cellH * this._zoomY();
         var dragged = this._draggedTrackLayer;
         var target = Math.floor((screenYAbsolute - this._cfg.timelineHeight + this.scrollY) / cellH);
         if (!isFinite(target) || target < 0) target = 0;
@@ -1673,7 +2187,7 @@
     PianoRoll.prototype._settleTrackDrag = function() {
         var from = this._draggedTrackLayer;
         var to = this._dragTargetLayer;
-        var cellH = this._cfg.cellH * this.zoom;
+        var cellH = this._cfg.cellH * this._zoomY();
         this._isDraggingTrack = false;
         if (from >= 0 && to >= 0 && from !== to) {
             this._trackAnimPendingReorder = { from: from, to: to };
@@ -1884,7 +2398,7 @@
             return;
         }
         if (hit.type === 'name') {
-            var layout = this._getTrackButtonLayout(this._cfg.cellH * this.zoom);
+            var layout = this._getTrackButtonLayout(this._cfg.cellH * this._zoomY());
             var nameY = this._layerBaseY(hit.layer);
             this._showTrackNameEditor(hit.layer, layout.nameStart, nameY, layout.nameEnd - layout.nameStart);
             return;
@@ -2155,7 +2669,8 @@
             this._mouseDown = true;
             this._dragStartX = x;
             this._dragStartY = y;
-            this._scrollFromSliderX(x);
+            // 点击导航条: 平滑滚动到目标位置 (而非瞬间跳转)
+            this._scrollFromSliderX(x, true);
             return;
         }
 
@@ -2180,8 +2695,29 @@
             return;
         }
 
+        // 片段编辑轨道: 片段选中/拖动 (整体移动 / 左右端点拉伸)
+        if (e.button === 0 && this.segmentsEditMode && y >= this._baseTimelineHeight && y < this._cfg.timelineHeight && x >= pw) {
+            var shit = this._hitSegment(x, y);
+            if (shit) {
+                this._beginSegmentDrag(shit, x, y);
+            } else {
+                this._clearSegmentSelection();
+            }
+            this._mouseDown = true;
+            this._segLaneClick = true;
+            this._pendingPlace = false;
+            this._hasMoved = false;
+            this._isDraggingNote = false;
+            this._isPanning = false;
+            this._mouseButton = e.button;
+            this._dragStartX = x;
+            this._dragStartY = y;
+            e.preventDefault();
+            return;
+        }
+
         // 时间轴标尺: 拖动滑条形式 (按下不跳转, 拖动时保持按下点与播放头的相对偏移, 轻点才跳转)
-        if (y < this._cfg.timelineHeight && x >= pw) {
+        if (y < this._cfg.timelineHeight && x >= pw && !this._segLaneClick) {
             this._isTimelineDrag = true;
             this._mouseDown = true;
             this._timelineDragStartX = x;
@@ -2492,7 +3028,37 @@
             this.requestRender();
         }
 
+        // 片段编辑轨道: 悬停高亮 + 光标 (端点 ew-resize / 片段体 grab)
+        if (this.segmentsEditMode && y >= this._baseTimelineHeight && y < this._cfg.timelineHeight && x >= pw) {
+            var sh = this._hitSegment(x, y);
+            var newSegHover = sh ? { seg: sh.seg, zone: sh.zone } : null;
+            var osh = this._segHover;
+            var changed = (!osh && newSegHover)
+                || (osh && (!newSegHover || osh.seg.id !== newSegHover.seg.id || osh.zone !== newSegHover.zone));
+            if (changed) {
+                this._segHover = newSegHover;
+                this._fullRedrawNeeded = true;
+                this.requestRender();
+            }
+            if (!this._mouseDown) {
+                if (sh && sh.zone !== 'body') this.canvas.style.cursor = 'ew-resize';
+                else this.canvas.style.cursor = sh ? 'grab' : 'default';
+            }
+        } else if (this._segHover) {
+            this._segHover = null;
+            this._fullRedrawNeeded = true;
+            this.requestRender();
+        }
+
         if (!this._mouseDown) return;
+
+        // 片段拖拽: 整体移动 / 左右端点拉伸
+        if (this._segDrag) {
+            this._applySegmentDrag(x, y);
+            return;
+        }
+        // 片段轨道空白处按下 (未命中片段): 不做其他拖拽
+        if (this._segLaneClick) return;
 
         // 歌词片段拖拽: 移动 / 改起点 / 改时长
         if (this._lyricDrag) {
@@ -2504,7 +3070,8 @@
 
         // 顶部滑动条拖拽 (左右翻页滚动视图)
         if (this._isDraggingProgressBar) {
-            this._scrollFromSliderX(x);
+            // 拖动导航条: 直接跟手 (不做缓动动画)
+            this._scrollFromSliderX(x, false);
             return;
         }
 
@@ -2621,6 +3188,13 @@
         var x = e.clientX - rect.left;
         var y = e.clientY - rect.top;
 
+        // 片段轨道按下收口 (空白处点击/片段拖拽结束)
+        if (this._segLaneClick) {
+            this._segLaneClick = false;
+            this._endSegmentDrag();
+            return;
+        }
+
         // 歌词轨道按下收口 (空白处点击/片段拖拽结束)
         if (this._lyricLaneClick) {
             this._lyricLaneClick = false;
@@ -2710,7 +3284,13 @@
         e.preventDefault();
         if (e.ctrlKey || e.metaKey) {
             var delta = -e.deltaY * 0.0025;
-            this.setZoom(this.zoom * (1 + delta));
+            if (this.segmentsEditMode) {
+                // 片段编辑模式: 横向/纵向独立缩放
+                // Ctrl+滚轮 = 横向 (时间轴); Ctrl+Shift+滚轮 = 纵向 (音轨)
+                this.setZoomAxis(e.shiftKey ? 'y' : 'x', 1 + delta, e.offsetX, e.offsetY);
+            } else {
+                this.setZoom(this.zoom * (1 + delta));
+            }
         } else if (e.shiftKey) {
             this.scrollX = Math.max(0, this.scrollX + e.deltaY);
         } else {
@@ -2812,7 +3392,7 @@
                 this._touchStartY = y;
                 this._lastTouchX = x;
                 this._lastTouchY = y;
-                this._scrollFromSliderX(x);
+                this._scrollFromSliderX(x, true);
                 return;
             }
 
@@ -2836,6 +3416,26 @@
                     // 手机端: 长按空白处直接新建片段 (无需双击)
                     this._startLyricLongPress(this._lyricTapTick, this._lyricTapLane, touch.clientX, touch.clientY);
                     this._touchMode = 'lyric-blank';
+                }
+                return;
+            }
+
+            // 片段编辑轨道: 触摸选中/拖动 (必须在时间轴标尺分支之前判定)
+            if (this.segmentsEditMode && y >= this._baseTimelineHeight && y < this._cfg.timelineHeight && x >= pw) {
+                this._touchStartX = x;
+                this._touchStartY = y;
+                this._lastTouchX = x;
+                this._lastTouchY = y;
+                this._touchMoved = false;
+                this._dragStartX = x;
+                this._dragStartY = y;
+                var tShit = this._hitSegment(x, y);
+                if (tShit) {
+                    this._beginSegmentDrag(tShit, x, y);
+                    this._touchMode = 'segment-drag';
+                } else {
+                    this._clearSegmentSelection();
+                    this._touchMode = 'segment-blank';
                 }
                 return;
             }
@@ -3060,6 +3660,20 @@
                 return;
             }
 
+            // 片段编辑轨道: 触摸拖动 (整体移动 / 左右端点拉伸)
+            if (this._touchMode === 'segment-drag' && this._segDrag) {
+                if (dx > 4 || dy > 4) this._touchMoved = true;
+                this._applySegmentDrag(x, y);
+                this._lastTouchX = x;
+                this._lastTouchY = y;
+                return;
+            }
+            if (this._touchMode === 'segment-blank') {
+                this._lastTouchX = x;
+                this._lastTouchY = y;
+                return;
+            }
+
             if (this._touchMode === 'playhead-drag' && this._isDraggingPlayhead) {
                 var tdragTick = this._screenToTick(x);
                 this.playheadTick = tdragTick;
@@ -3087,7 +3701,7 @@
 
             // 顶部滑动条拖拽 (左右翻页滚动视图)
             if (this._touchMode === 'progress-drag' && this._isDraggingProgressBar) {
-                this._scrollFromSliderX(x);
+                this._scrollFromSliderX(x, false);
                 this._lastTouchX = x;
                 this._lastTouchY = y;
                 this._fullRedrawNeeded = true;
@@ -3217,6 +3831,15 @@
         if (this._touchMode === 'playhead-drag') {
             this._isDraggingPlayhead = false;
             this._touchMode = 'none';
+            this._fullRedrawNeeded = true;
+            this.render();
+            return;
+        }
+
+        // 片段编辑轨道: 触摸结束 (提交或取消)
+        if (this._touchMode === 'segment-drag' || this._touchMode === 'segment-blank') {
+            this._touchMode = 'none';
+            this._endSegmentDrag();
             this._fullRedrawNeeded = true;
             this.render();
             return;
@@ -3419,7 +4042,7 @@
         var cfg = this._cfg;
         var pw = this._currentPanelWidth;
         if (pw <= 0) return null;
-        var cellH = cfg.cellH * this.zoom;
+        var cellH = cfg.cellH * this._zoomY();
         var layerStart = Math.floor(this.scrollY / cellH);
         var layerEnd = Math.ceil((this.scrollY + this.displayHeight - cfg.timelineHeight) / cellH);
         var layout = this._getTrackButtonLayout(cellH);
@@ -3831,7 +4454,7 @@
         var ctx = this.ctx;
         var cfg = this._cfg;
         var w = this.displayWidth, h = this.displayHeight;
-        var cellW = cfg.cellW * this.zoom, cellH = cfg.cellH * this.zoom;
+        var cellW = cfg.cellW * this._zoomX(), cellH = cfg.cellH * this._zoomY();
         var pw = this._currentPanelWidth;
         for (var i = 0; i < this._hoverSustainCells.length; i++) {
             var c = this._hoverSustainCells[i];
@@ -3942,7 +4565,7 @@
         if (!note) return;
         var cfg = this._cfg, pw = this._currentPanelWidth;
         var w = this.displayWidth, h = this.displayHeight;
-        var cellW = cfg.cellW * this.zoom, cellH = cfg.cellH * this.zoom;
+        var cellW = cfg.cellW * this._zoomX(), cellH = cfg.cellH * this._zoomY();
         var x = this._tickToScreen(note.tick);
         var y = this._layerToScreen(note.layer);
         if (x + cellW < pw || x > w || y + cellH < cfg.timelineHeight || y > h) return;
@@ -4224,25 +4847,25 @@
     PianoRoll.prototype._scrollToRange = function(minTick, maxTick, minLayer, maxLayer) {
         var cfg = this._cfg;
         var pw = this._currentPanelWidth;
-        var visibleMinTick = Math.floor(this.scrollX / (cfg.cellW * this.zoom));
-        var visibleMaxTick = Math.floor((this.scrollX + (this.displayWidth - pw)) / (cfg.cellW * this.zoom));
-        var visibleMinLayer = Math.floor(this.scrollY / (cfg.cellH * this.zoom));
-        var visibleMaxLayer = Math.floor((this.scrollY + (this.displayHeight - cfg.timelineHeight)) / (cfg.cellH * this.zoom));
+        var visibleMinTick = Math.floor(this.scrollX / (cfg.cellW * this._zoomX()));
+        var visibleMaxTick = Math.floor((this.scrollX + (this.displayWidth - pw)) / (cfg.cellW * this._zoomX()));
+        var visibleMinLayer = Math.floor(this.scrollY / (cfg.cellH * this._zoomY()));
+        var visibleMaxLayer = Math.floor((this.scrollY + (this.displayHeight - cfg.timelineHeight)) / (cfg.cellH * this._zoomY()));
         var needScroll = false;
         var targetScrollX = this.scrollX;
         var targetScrollY = this.scrollY;
         if (maxTick > visibleMaxTick) {
-            targetScrollX = (maxTick + 2) * cfg.cellW * this.zoom - (this.displayWidth - pw);
+            targetScrollX = (maxTick + 2) * cfg.cellW * this._zoomX() - (this.displayWidth - pw);
             needScroll = true;
         } else if (minTick < visibleMinTick) {
-            targetScrollX = (minTick - 1) * cfg.cellW * this.zoom;
+            targetScrollX = (minTick - 1) * cfg.cellW * this._zoomX();
             needScroll = true;
         }
         if (maxLayer > visibleMaxLayer) {
-            targetScrollY = (maxLayer + 1) * cfg.cellH * this.zoom - (this.displayHeight - cfg.timelineHeight);
+            targetScrollY = (maxLayer + 1) * cfg.cellH * this._zoomY() - (this.displayHeight - cfg.timelineHeight);
             needScroll = true;
         } else if (minLayer < visibleMinLayer) {
-            targetScrollY = (minLayer - 1) * cfg.cellH * this.zoom;
+            targetScrollY = (minLayer - 1) * cfg.cellH * this._zoomY();
             needScroll = true;
         }
         if (needScroll) {
@@ -4416,22 +5039,51 @@
         return INSTRUMENT_COLORS[instrument % INSTRUMENT_COLORS.length];
     };
 
+    // 横/纵缩放系数: zoom 为统一基准, zoomX/zoomY 为额外的分轴系数 (默认 1)
+    PianoRoll.prototype._zoomX = function() { return this.zoom * (this.zoomX || 1); };
+    PianoRoll.prototype._zoomY = function() { return this.zoom * (this.zoomY || 1); };
+
     PianoRoll.prototype.setZoom = function(zoom, anchorX, anchorY) {
         var newZoom = Math.max(0.15, Math.min(4, zoom));
         // 双指缩放时保持锚点(手指中心)对应的世界坐标不变
         if (anchorX !== undefined && anchorY !== undefined) {
-            var oldZoom = this.zoom;
             var cellW = this._cfg.cellW;
             var cellH = this._cfg.cellH;
-            var worldX = (anchorX - this._editOriginX() + this.scrollX) / (cellW * oldZoom);
-            var worldY = (anchorY - this._editOriginY() + this.scrollY) / (cellH * oldZoom);
+            var worldX = (anchorX - this._editOriginX() + this.scrollX) / (cellW * this._zoomX());
+            var worldY = (anchorY - this._editOriginY() + this.scrollY) / (cellH * this._zoomY());
             this.zoom = newZoom;
-            this.scrollX = worldX * cellW * this.zoom - anchorX + this._editOriginX();
-            this.scrollY = worldY * cellH * this.zoom - anchorY + this._editOriginY();
+            this.zoomX = 1;
+            this.zoomY = 1;
+            this.scrollX = worldX * cellW * this._zoomX() - anchorX + this._editOriginX();
+            this.scrollY = worldY * cellH * this._zoomY() - anchorY + this._editOriginY();
             this.scrollX = Math.max(0, this.scrollX);
             this.scrollY = Math.max(0, this.scrollY);
         } else {
             this.zoom = newZoom;
+            this.zoomX = 1;
+            this.zoomY = 1;
+        }
+        this._fullRedrawNeeded = true;
+        this.render();
+    };
+
+    // 分轴缩放 (片段编辑模式用): axis = 'x' 横向 / 'y' 纵向
+    PianoRoll.prototype.setZoomAxis = function(axis, factor, anchorX, anchorY) {
+        if (!isFinite(factor) || factor <= 0) return;
+        var cellW = this._cfg.cellW;
+        var cellH = this._cfg.cellH;
+        if (axis === 'y') {
+            var cy = (anchorY !== undefined) ? anchorY : (this.displayHeight / 2);
+            var wy = (cy - this._editOriginY() + this.scrollY) / Math.max(0.0001, cellH * this._zoomY());
+            this.zoomY = Math.max(0.25, Math.min(4, (this.zoomY || 1) * factor));
+            this.scrollY = wy * cellH * this._zoomY() - cy + this._editOriginY();
+            this.scrollY = Math.max(0, this.scrollY);
+        } else {
+            var cx = (anchorX !== undefined) ? anchorX : (this._currentPanelWidth + (this.displayWidth - this._currentPanelWidth) / 2);
+            var wx = (cx - this._editOriginX() + this.scrollX) / Math.max(0.0001, cellW * this._zoomX());
+            this.zoomX = Math.max(0.2, Math.min(6, (this.zoomX || 1) * factor));
+            this.scrollX = wx * cellW * this._zoomX() - cx + this._editOriginX();
+            this.scrollX = Math.max(0, this.scrollX);
         }
         this._fullRedrawNeeded = true;
         this.render();
@@ -4441,14 +5093,14 @@
 
     PianoRoll.prototype.scrollToTick = function(tick) {
         var centerX = this.displayWidth / 2;
-        this.scrollX = tick * this._cfg.cellW * this.zoom + this._currentPanelWidth - centerX;
+        this.scrollX = tick * this._cfg.cellW * this._zoomX() + this._currentPanelWidth - centerX;
         this.scrollX = Math.max(0, this.scrollX);
         this._fullRedrawNeeded = true;
         this.render();
     };
 
     PianoRoll.prototype.getCurrentTickScreenX = function(tick) {
-        return tick * this._cfg.cellW * this.zoom - this.scrollX + this._currentPanelWidth;
+        return tick * this._cfg.cellW * this._zoomX() - this.scrollX + this._currentPanelWidth;
     };
 
     PianoRoll.prototype.setNotesData = function(notes) {
@@ -4640,6 +5292,7 @@
     // 标记索引为脏 (在 addNote/removeNote/paste/moveNote 时调用)
     PianoRoll.prototype._markNoteIndexDirty = function() {
         this._noteIndexDirty = true;
+        this._miniMapDirty = true;   // 音符变化 -> 时间栏缩略 map 需重建
     };
 
     PianoRoll.prototype.render = function() {
@@ -4648,8 +5301,8 @@
         var h = this.displayHeight;
         var cfg = this._cfg;
         var pw = this._currentPanelWidth;
-        var cellW = cfg.cellW * this.zoom;
-        var cellH = cfg.cellH * this.zoom;
+        var cellW = cfg.cellW * this._zoomX();
+        var cellH = cfg.cellH * this._zoomY();
 
         // 清理动画状态 (仅在动画循环未运行时处理, 避免重复)
         if (!this._animLoopRunning) {
@@ -4732,6 +5385,9 @@
         // (背景模式时时间轴半透明, 音符透过可见; 非背景模式时时间轴不透明, 完全覆盖音符)
         this._drawProgressBar();
         this._drawTimeline();
+
+        // 片段分割线: 常驻显示 (无论是否处于片段编辑模式), 青色虚线竖线
+        this._drawSegmentMarkers(ctx, w, pw);
 
         // 左侧音轨信息区: 始终在音符之上绘制, 覆盖音符
         // (信息栏透明时, 音符透过半透明背景可见并逐渐滑出屏幕; 不透明时音符被完全遮挡)
@@ -4819,16 +5475,26 @@
         ctx.fillStyle = 'rgba(0, 0, 0, ' + pbAlpha + ')';
         ctx.fillRect(0, barY, w, barHeight);
 
+        // ===== 音符缩略 map (时间栏预览视图) =====
+        if (this._miniMapDirty === undefined) this._miniMapDirty = true;
+        if (this._miniMapDirty) this._rebuildMiniMap();
+        if (this._miniMapCanvas) {
+            ctx.save();
+            ctx.globalAlpha = 0.95;
+            ctx.drawImage(this._miniMapCanvas, 0, barY, w, barHeight);
+            ctx.restore();
+        }
+
         // 滚动窗口 (thumb): 表示当前可视区域在全部内容中的位置
         var maxScroll = this._getMaxScrollX();
-        var contentWidth = Math.max(1, this.totalTicks * (cfg.cellW * this.zoom));
+        var contentWidth = Math.max(1, this.totalTicks * (cfg.cellW * this._zoomX()));
         var visibleWidth = Math.max(1, w - pw);
         var ratio = maxScroll > 0 ? Math.min(1, this.scrollX / maxScroll) : 0;
         var thumbW = Math.max(30, Math.min(w, (visibleWidth / contentWidth) * w));
         var thumbX = ratio * (w - thumbW);
 
-        // 滚动窗口填充
-        ctx.fillStyle = 'rgba(78, 205, 196, 0.32)';
+        // 滚动窗口填充 (降低不透明度, 让下方音符缩略 map 可见)
+        ctx.fillStyle = 'rgba(78, 205, 196, 0.16)';
         ctx.fillRect(thumbX, barY, thumbW, barHeight);
         // 顶部高亮线
         ctx.fillStyle = 'rgba(78, 205, 196, 0.85)';
@@ -4871,8 +5537,6 @@
         this.currentTick = Math.max(0, Math.min(this.totalTicks, tick));
         // 同步播放头位置, 避免 main.js 播放循环用旧值覆盖
         this.playheadTick = this.currentTick;
-        // 立即同步平滑插值, 防止点击时间轴时播放头停留在中间位置
-        this._smoothedPlayheadTick = this.currentTick;
         this._smoothedProgressTick = this.currentTick;
         // 清除播放插值基准, 避免非播放状态下 _getDisplayTick 加上 frac 偏移
         this._lastTickTime = 0;
@@ -4888,12 +5552,14 @@
         // 程序化 seek (如 main.js seekToTick) 自行负责滚动到播放头
         this._fullRedrawNeeded = true;
         this.render();
+        // 播放头插值动画: 平滑移动到新位置, 而不是瞬移
+        this.animatePlayheadTo(this.currentTick);
     };
 
     // 非播放状态下滚动使播放头可见 (仅当播放头在可视区域外时滚动)
     PianoRoll.prototype._scrollToPlayhead = function() {
         if (this.playheadTick === null || this.playheadTick === undefined) return;
-        var cellW = this._cfg.cellW * this.zoom;
+        var cellW = this._cfg.cellW * this._zoomX();
         var pw = this._currentPanelWidth;
         var w = this.displayWidth;
         // 计算播放头在屏幕上的 x 位置
@@ -4934,9 +5600,9 @@
         ctx.fillRect(0, ph, pw, rb - ph);
 
         // 刻度
-        var tickStart = Math.floor(this.scrollX / (cfg.cellW * this.zoom));
-        var tickEnd = Math.ceil((this.scrollX + w - pw) / (cfg.cellW * this.zoom));
-        var cellW = cfg.cellW * this.zoom;
+        var tickStart = Math.floor(this.scrollX / (cfg.cellW * this._zoomX()));
+        var tickEnd = Math.ceil((this.scrollX + w - pw) / (cfg.cellW * this._zoomX()));
+        var cellW = cfg.cellW * this._zoomX();
 
         for (var tick = tickStart; tick <= tickEnd; tick++) {
             var x = this._tickToScreen(tick);
@@ -5007,6 +5673,8 @@
 
         // 歌词临时轨道 (编辑模式): 时间轴标尺下方的一条操作轨
         if (this.lyricsEditMode) this._drawLyricLane(ctx, w, pw);
+        // 片段编辑轨道 (编辑模式)
+        if (this.segmentsEditMode) this._drawSegmentLane(ctx, w, pw);
     };
 
     // ============ 歌词临时轨道绘制 (剪映 / AE 风格, 3 条平行轨道) ============
@@ -5018,7 +5686,7 @@
         var self = this;
         var laneCount = this._laneCount();
         var perH = this._lyricLanePerH;
-        var cellWpx = this._cfg.cellW * this.zoom;
+        var cellWpx = this._cfg.cellW * this._zoomX();
 
         // 轨道底 (整条): 与音轨区底色区分, 略带暖色
         ctx.fillStyle = 'rgba(30, 22, 40, ' + this.panelAlpha + ')';
@@ -5324,7 +5992,7 @@
         ctx.stroke();
 
         // 每行音轨信息
-        var cellH = cfg.cellH * this.zoom;
+        var cellH = cfg.cellH * this._zoomY();
         var layerStart = Math.floor(this.scrollY / cellH);
         var layerEnd = Math.ceil((this.scrollY + h - cfg.timelineHeight) / cellH);
         var layout = this._getTrackButtonLayout(cellH);
@@ -5623,8 +6291,8 @@
         var h = this.displayHeight;
         var cfg = this._cfg;
         var pw = this._currentPanelWidth;
-        var cellW = cfg.cellW * this.zoom;
-        var cellH = cfg.cellH * this.zoom;
+        var cellW = cfg.cellW * this._zoomX();
+        var cellH = cfg.cellH * this._zoomY();
         // 网格透明度 (0-1, 1=完全透明; 背景图片模式下可调低, 不影响音符)
         var gridAlpha = 1 - this.gridOpacity;
 
@@ -5715,8 +6383,8 @@
         var h = this.displayHeight;
         var cfg = this._cfg;
         var pw = this._currentPanelWidth;
-        var cellW = cfg.cellW * this.zoom;
-        var cellH = cfg.cellH * this.zoom;
+        var cellW = cfg.cellW * this._zoomX();
+        var cellH = cfg.cellH * this._zoomY();
         // 音符间隔 (左右内边距, 单位 px; 0-16)
         var notePad = Math.max(0, Math.min(16, this.notePadding || 0));
         var now = performance.now();
@@ -5855,8 +6523,8 @@
         var ctx = this.ctx;
         var cfg = this._cfg;
         var pw = this._currentPanelWidth;
-        var cellW = cfg.cellW * this.zoom;
-        var cellH = cfg.cellH * this.zoom;
+        var cellW = cfg.cellW * this._zoomX();
+        var cellH = cfg.cellH * this._zoomY();
 
         // 缓动函数：cubic ease-out -> 1 - (1-t)^3
         function easeOutCubic(t) {
@@ -5984,7 +6652,7 @@
         var h = this.displayHeight;
         var cfg = this._cfg;
         var pw = this._currentPanelWidth;
-        var cellH = cfg.cellH * this.zoom;
+        var cellH = cfg.cellH * this._zoomY();
 
         var layerStart = Math.floor(this.scrollY / cellH);
         var layerEnd = Math.ceil((this.scrollY + h - cfg.timelineHeight) / cellH);
@@ -6168,7 +6836,7 @@
         var sx = Math.min(rect.x1, rect.x2), ex = Math.max(rect.x1, rect.x2);
         var sy = Math.min(rect.y1, rect.y2), ey = Math.max(rect.y1, rect.y2);
         var cfg = this._cfg;
-        var cellW = cfg.cellW * this.zoom, cellH = cfg.cellH * this.zoom;
+        var cellW = cfg.cellW * this._zoomX(), cellH = cfg.cellH * this._zoomY();
         for (var i = 0; i < this.notes.length; i++) {
             var note = this.notes[i];
             var nx = this._tickToScreen(note.tick), ny = this._layerBaseY(note.layer);

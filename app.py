@@ -10,7 +10,7 @@ import re
 import json
 
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.gzip import GZipMiddleware
 
@@ -354,6 +354,15 @@ async def index():
     with open(os.path.join(SRC_DIR, "index.html"), 'r', encoding='utf-8') as f:
         html = _inject_seo(f.read())
     return HTMLResponse(content=html, headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/robots.txt", include_in_schema=False)
+async def robots_txt():
+    """robots.txt: 允许所有搜索引擎抓取全站"""
+    return PlainTextResponse(
+        content="User-agent: *\nAllow: /\n",
+        headers={"Cache-Control": "public, max-age=86400"}
+    )
 
 
 @app.get("/api/config")

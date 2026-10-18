@@ -22,7 +22,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="static/css/style.css?v=20261017h">
+    <link rel="stylesheet" href="static/css/style.css?v=20261018b">
 </head>
 <body>
 
@@ -31,6 +31,17 @@
 <div id="fps-indicator" aria-live="polite">FPS: --</div>
 
 <div id="app">
+    <!-- ========== 多文件标签页 (仅打开多个文件时显示) ========== -->
+    <div class="editor-tabs" id="editor-tabs" style="display:none;">
+        <div class="editor-tabs-list" id="editor-tabs-list"></div>
+        <button class="editor-tab-add" id="editor-tab-add" type="button" title="新建标签页" aria-label="新建标签页">
+            <i class="fa-solid fa-plus"></i>
+        </button>
+        <button class="editor-tab-all" id="editor-tab-menu" type="button" title="全部标签页" aria-label="全部标签页">
+            <i class="fa-solid fa-chevron-down"></i>
+        </button>
+    </div>
+
     <!-- ========== 顶部工具栏 ========== -->
     <div class="toolbar" id="toolbar">
         <div class="toolbar-section">
@@ -50,6 +61,9 @@
             <button class="toolbar-btn" id="btn-redo" title="重做 (Ctrl+Y)" disabled>
                 <i class="fa-solid fa-rotate-right icon"></i>
             </button>
+            <button class="toolbar-btn" id="btn-segments" title="片段编辑">
+                <i class="fa-solid fa-film icon"></i>
+            </button>
         </div>
 
         <div class="toolbar-section">
@@ -57,6 +71,37 @@
             <input type="number" id="tempo-value" value="20" min="0" max="512" step="0.01" placeholder="t/s" style="width:60px;padding:2px 6px;font-size:12px;text-align:center;background:transparent;border:1px solid var(--ctrl-stroke-default);border-radius:4px;color:var(--text-primary);font-variant-numeric:tabular-nums;" title="速度 (Tick/秒)">
             <button class="toolbar-btn" id="btn-keyboard-piano" title="使用键盘触发钢琴">
                 <i class="fa-solid fa-keyboard"></i>
+            </button>
+        </div>
+
+        <!-- 片段编辑工具栏 (桌面端: 顶部居中图标按钮) -->
+        <div class="segment-toolbar" id="segment-toolbar" style="display:none;">
+            <button class="toolbar-btn seg-tool-btn" id="seg-tb-split" title="分割 (Ctrl+B)" aria-label="分割">
+                <i class="fa-solid fa-scissors"></i>
+            </button>
+            <button class="toolbar-btn seg-tool-btn" id="seg-tb-trim-left" title="左剪裁 (Q)" aria-label="左剪裁">
+                <i class="fa-solid fa-left-long"></i>
+            </button>
+            <button class="toolbar-btn seg-tool-btn" id="seg-tb-trim-right" title="右剪裁 (E)" aria-label="右剪裁">
+                <i class="fa-solid fa-right-long"></i>
+            </button>
+            <span class="toolbar-divider"></span>
+            <button class="toolbar-btn seg-tool-btn" id="seg-tb-copy" title="复制片段 (Ctrl+C)" aria-label="复制">
+                <i class="fa-regular fa-copy"></i>
+            </button>
+            <button class="toolbar-btn seg-tool-btn" id="seg-tb-paste" title="粘贴片段 (Ctrl+V)" aria-label="粘贴">
+                <i class="fa-regular fa-paste"></i>
+            </button>
+            <button class="toolbar-btn seg-tool-btn" id="seg-tb-delete" title="删除片段 (Delete)" aria-label="删除">
+                <i class="fa-solid fa-trash-can"></i>
+            </button>
+            <span class="toolbar-divider"></span>
+            <button class="toolbar-btn seg-tool-btn" id="seg-tb-merge" title="合并全部片段" aria-label="合并全部">
+                <i class="fa-solid fa-object-group"></i>
+            </button>
+            <span class="seg-tool-count" id="seg-tool-count">1</span>
+            <button class="toolbar-btn seg-tool-btn" id="seg-tb-exit" title="退出片段编辑" aria-label="退出">
+                <i class="fa-solid fa-xmark"></i>
             </button>
         </div>
 
@@ -203,6 +248,23 @@
         </div>
         <span class="lyrics-edit-bar-count"><span id="lyrics-edit-bar-count">0</span> 条歌词</span>
         <button class="lyrics-edit-bar-exit" id="lyrics-edit-bar-exit" type="button">退出</button>
+    </div>
+
+    <!-- ========== 片段编辑模式提示条 ========== -->
+    <div class="lyrics-edit-bar segment-edit-bar" id="segment-edit-bar" style="display:none;">
+        <i class="fa-solid fa-film"></i>
+        <span class="lyrics-edit-bar-text">片段编辑：拖动片段可移动，拖动左右端点可剪裁，片段之间允许留空隙</span>
+        <div class="lyrics-edit-bar-ops">
+            <button class="lyrics-op-btn" id="segment-split" type="button" title="在播放头处分割选中片段">分割</button>
+            <button class="lyrics-op-btn" id="segment-trim-left" type="button" title="把选中片段的起点裁到播放头">左剪裁</button>
+            <button class="lyrics-op-btn" id="segment-trim-right" type="button" title="把选中片段的终点裁到播放头">右剪裁</button>
+            <button class="lyrics-op-btn" id="segment-copy" type="button">复制</button>
+            <button class="lyrics-op-btn" id="segment-paste" type="button">粘贴</button>
+            <button class="lyrics-op-btn" id="segment-delete" type="button">删除</button>
+            <button class="lyrics-op-btn" id="segment-merge" type="button" title="把所有片段首尾相接合并为一个完整片段">合并全部</button>
+        </div>
+        <span class="lyrics-edit-bar-count"><span id="segment-count">1</span> 个片段</span>
+        <button class="lyrics-edit-bar-exit" id="segment-edit-exit" type="button">退出</button>
     </div>
 
     <!-- ========== 隐藏的文件输入 ========== -->
@@ -565,6 +627,14 @@
                             <label class="settings-label">
                                 <input type="checkbox" id="settings-streaming-lyrics"> 流式歌词
                             </label>
+                        </div>
+                        <div class="settings-row settings-inline-row">
+                            <label class="settings-label" for="settings-timeline-height">时间栏视图高度</label>
+                            <select id="settings-timeline-height" class="settings-control">
+                                <option value="small" selected>小</option>
+                                <option value="medium">中</option>
+                                <option value="large">大</option>
+                            </select>
                         </div>
                     </div>
                     <!-- ===== 性能 ===== -->
@@ -1471,21 +1541,21 @@
 <script src="static/js/compress_est.js?v=20260926b"></script>
 <script src="static/js/api_client.js?v=20260905a"></script>
 <script src="static/js/custom_dropdown.js?v=20261017d"></script>
-<script src="static/js/i18n.js?v=20261017h"></script>
+<script src="static/js/i18n.js?v=20261018b"></script>
 <script src="static/js/audio_engine.js?v=20260919c"></script>
 <script src="static/js/custom_instruments.js?v=20260905a"></script>
 <script src="static/js/audio_fix_utils.js?v=20260905a"></script>
 <script src="static/js/sf3_player.js?v=20260808a"></script>
 <script src="static/js/spessa_player.js?v=20260918a"></script>
 <script src="static/js/soundfont_loader.js?v=20260808b"></script>
-<script src="static/js/piano_roll.js?v=20261017e"></script>
+<script src="static/js/piano_roll.js?v=20261018b"></script>
 <!-- 本地化第三方库: ZIP 打包 (jszip) / MP3 编码 (lamejs) -->
 <script src="static/vendor/jszip.min.js?v=20260905a"></script>
 <script src="static/vendor/lame.min.js?v=20260905a"></script>
 <!-- 离线渲染引擎: audio_render.js 必须在 main.js 之前加载 -->
 <script src="static/js/render_jsmix.js?v=20260906e"></script>
 <script src="static/js/audio_render.js?v=20260919c"></script>
-<script src="static/js/main.js?v=20261017h"></script>
+<script src="static/js/main.js?v=20261018b"></script>
 
 <script>
 // 桌面应用（含 MSIX 安装版）内：外部链接交给系统默认浏览器打开。

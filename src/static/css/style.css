@@ -783,6 +783,191 @@ input[type="number"]:focus::-webkit-outer-spin-button {
     display: block;
 }
 
+/* ===== 多文件标签页 ===== */
+.editor-tabs {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 30px;
+    padding: 0 6px;
+    background: rgba(12, 16, 28, 0.92);
+    border-bottom: 1px solid var(--ctrl-stroke-default);
+    flex-shrink: 0;
+    overflow: hidden;
+    position: relative;
+    z-index: 99;
+}
+.editor-tabs-list {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+}
+.editor-tabs-list::-webkit-scrollbar { height: 3px; }
+.editor-tab {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 24px;
+    max-width: 190px;
+    padding: 0 4px 0 9px;
+    border-radius: 5px 5px 0 0;
+    border: 1px solid transparent;
+    border-bottom: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    user-select: none;
+    flex-shrink: 0;
+}
+.editor-tab:hover { background: rgba(255,255,255,0.06); }
+.editor-tab.active {
+    background: rgba(76, 194, 255, 0.14);
+    border-color: rgba(76, 194, 255, 0.35);
+    color: var(--text-primary);
+}
+.editor-tab-title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 140px;
+}
+.editor-tab-dirty {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #ffb43c;
+    flex-shrink: 0;
+    display: none;
+}
+.editor-tab.is-dirty .editor-tab-dirty { display: block; }
+.editor-tab-close {
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: none;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--text-tertiary);
+    font-size: 10px;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.editor-tab-close:hover {
+    background: rgba(233, 69, 96, 0.3);
+    color: #fff;
+}
+.editor-tab-add,
+.editor-tab-all {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid var(--ctrl-stroke-default);
+    border-radius: 4px;
+    background: var(--ctrl-fill-default);
+    color: var(--text-secondary);
+    font-size: 10px;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.editor-tab-add { margin-left: 4px; }
+.editor-tab-add:hover,
+.editor-tab-all:hover { color: var(--text-primary); border-color: var(--accent); }
+.editor-tab-all { display: none; }
+
+/* 手机端: 标签栏只留一个下拉按钮, 减少横向占位 */
+@media (max-width: 768px) {
+    .editor-tabs { height: 28px; }
+    .editor-tabs-list { display: none; }
+    .editor-tab-add { display: none; }
+    .editor-tab-all { display: flex; margin-left: auto; }
+    .editor-tabs::before {
+        content: attr(data-count-label);
+        font-size: 11px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+    }
+}
+
+/* ===== 片段编辑工具栏 (桌面端: 顶部工具栏内居中) ===== */
+.segment-toolbar {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: rgba(90, 200, 255, 0.10);
+    border: 1px solid rgba(90, 200, 255, 0.35);
+    z-index: 6;
+}
+.segment-toolbar .seg-tool-btn {
+    width: 26px;
+    min-width: 26px;
+    height: 26px;
+    padding: 0;
+    color: #bfe6ff;
+}
+.segment-toolbar .seg-tool-btn:hover {
+    background: rgba(90, 200, 255, 0.22);
+    color: #ffffff;
+}
+.segment-toolbar .seg-tool-count {
+    font-size: 11px;
+    color: #5ac8ff;
+    padding: 0 4px;
+    font-variant-numeric: tabular-nums;
+}
+/* 手机端: 顶部横向空间不足, 改用悬浮提示条上的文字按钮 */
+@media (max-width: 768px) {
+    .segment-toolbar { display: none !important; }
+    .segment-edit-bar { display: flex; }
+}
+@media (min-width: 769px) {
+    .segment-edit-bar { display: none !important; }
+}
+
+/* ===== 片段编辑模式 (剪映风格) ===== */
+.segment-edit-bar {
+    border-color: rgba(90, 200, 255, 0.5);
+}
+.segment-edit-bar > i {
+    color: #5ac8ff;
+}
+.segment-edit-bar .lyrics-edit-bar-count {
+    color: #5ac8ff;
+    background: rgba(90, 200, 255, 0.14);
+}
+/* 片段编辑的操作按钮在桌面端也保持可见 (覆盖歌词条的桌面端隐藏规则) */
+.segment-edit-bar .lyrics-edit-bar-ops {
+    display: flex;
+}
+.segment-edit-bar .lyrics-op-btn {
+    border-color: rgba(90, 200, 255, 0.4);
+    background: rgba(90, 200, 255, 0.12);
+}
+.segment-edit-bar .lyrics-op-btn:hover {
+    background: rgba(90, 200, 255, 0.26);
+}
+#btn-segments.active {
+    background: rgba(90, 200, 255, 0.22);
+    color: #5ac8ff;
+}
+
 /* 歌词编辑模式提示条 (顶部居中) */
 .lyrics-edit-bar {
     position: fixed;

@@ -9,8 +9,8 @@
 
 *编曲、编辑、试听、导出，全程无需安装。*
 
-[![Stars](https://img.shields.io/github/stars/COM1919/MiauNoteBlock?style=for-the-badge&logo=github&color=f2b705)](https://github.com/COM1919/MiauNoteBlock/stargazers)
-[![License](https://img.shields.io/github/license/COM1919/MiauNoteBlock?style=for-the-badge&color=3da639)](./LICENSE)
+[![Stars](https://img.shields.io/github/stars/omninbs/MiauNoteBlock?style=for-the-badge&logo=github&color=f2b705)](https://github.com/omninbs/MiauNoteBlock/stargazers)
+[![License](https://img.shields.io/github/license/omninbs/MiauNoteBlock?style=for-the-badge&color=3da639)](./LICENSE)
 [![Website](https://img.shields.io/badge/在线体验-webnbs.com-4a90d9?style=for-the-badge&logo=googlechrome&logoColor=white)](https://webnbs.com)
 [![Languages](https://img.shields.io/badge/多语言-10%20种-8a63d2?style=for-the-badge&logo=googletranslate&logoColor=white)](#-支持的界面语言)
 [![PRs Welcome](https://img.shields.io/badge/欢迎-PR-brightgreen?style=for-the-badge&logo=git&logoColor=white)](#-参与贡献)

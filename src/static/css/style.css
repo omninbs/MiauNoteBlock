@@ -932,6 +932,19 @@ input[type="number"]:focus::-webkit-outer-spin-button {
     padding: 0 4px;
     font-variant-numeric: tabular-nums;
 }
+/* 缩放按钮: 方向图标 + 小号 +/- 标记 */
+.segment-toolbar .seg-zoom-btn {
+    position: relative;
+}
+.segment-toolbar .seg-zoom-sign {
+    position: absolute;
+    right: 1px;
+    bottom: 0;
+    font-size: 10px;
+    line-height: 1;
+    font-weight: 700;
+    color: #eaf7ff;
+}
 /* 手机端: 顶部横向空间不足, 改用悬浮提示条上的文字按钮 */
 @media (max-width: 768px) {
     .segment-toolbar { display: none !important; }

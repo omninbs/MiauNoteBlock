@@ -2312,6 +2312,76 @@
         if (Object.prototype.hasOwnProperty.call(_segmentsI18n, _nl)) Object.assign(UI_TEXT[_nl], _segmentsI18n[_nl]);
     }
 
+    // ============ 片段编辑分轴缩放词条 (9 种非中文语言) ============
+    var _segZoomI18n = {
+        'en-US': {
+            '横向放大 (Ctrl+=)': 'Zoom in horizontally (Ctrl+=)',
+            '横向缩小 (Ctrl+-)': 'Zoom out horizontally (Ctrl+-)',
+            '纵向放大 (Alt+=)': 'Zoom in vertically (Alt+=)',
+            '纵向缩小 (Alt+-)': 'Zoom out vertically (Alt+-)',
+            '重置缩放 (Ctrl+0)': 'Reset zoom (Ctrl+0)'
+        },
+        'ja-JP': {
+            '横向放大 (Ctrl+=)': '横方向を拡大 (Ctrl+=)',
+            '横向缩小 (Ctrl+-)': '横方向を縮小 (Ctrl+-)',
+            '纵向放大 (Alt+=)': '縦方向を拡大 (Alt+=)',
+            '纵向缩小 (Alt+-)': '縦方向を縮小 (Alt+-)',
+            '重置缩放 (Ctrl+0)': 'ズームをリセット (Ctrl+0)'
+        },
+        'ko-KR': {
+            '横向放大 (Ctrl+=)': '가로 확대 (Ctrl+=)',
+            '横向缩小 (Ctrl+-)': '가로 축소 (Ctrl+-)',
+            '纵向放大 (Alt+=)': '세로 확대 (Alt+=)',
+            '纵向缩小 (Alt+-)': '세로 축소 (Alt+-)',
+            '重置缩放 (Ctrl+0)': '확대/축소 초기화 (Ctrl+0)'
+        },
+        'pt-BR': {
+            '横向放大 (Ctrl+=)': 'Ampliar na horizontal (Ctrl+=)',
+            '横向缩小 (Ctrl+-)': 'Reduzir na horizontal (Ctrl+-)',
+            '纵向放大 (Alt+=)': 'Ampliar na vertical (Alt+=)',
+            '纵向缩小 (Alt+-)': 'Reduzir na vertical (Alt+-)',
+            '重置缩放 (Ctrl+0)': 'Redefinir zoom (Ctrl+0)'
+        },
+        'id-ID': {
+            '横向放大 (Ctrl+=)': 'Perbesar horizontal (Ctrl+=)',
+            '横向缩小 (Ctrl+-)': 'Perkecil horizontal (Ctrl+-)',
+            '纵向放大 (Alt+=)': 'Perbesar vertikal (Alt+=)',
+            '纵向缩小 (Alt+-)': 'Perkecil vertikal (Alt+-)',
+            '重置缩放 (Ctrl+0)': 'Atur ulang zoom (Ctrl+0)'
+        },
+        'es-ES': {
+            '横向放大 (Ctrl+=)': 'Ampliar horizontalmente (Ctrl+=)',
+            '横向缩小 (Ctrl+-)': 'Reducir horizontalmente (Ctrl+-)',
+            '纵向放大 (Alt+=)': 'Ampliar verticalmente (Alt+=)',
+            '纵向缩小 (Alt+-)': 'Reducir verticalmente (Alt+-)',
+            '重置缩放 (Ctrl+0)': 'Restablecer zoom (Ctrl+0)'
+        },
+        'ru-RU': {
+            '横向放大 (Ctrl+=)': 'Увеличить по горизонтали (Ctrl+=)',
+            '横向缩小 (Ctrl+-)': 'Уменьшить по горизонтали (Ctrl+-)',
+            '纵向放大 (Alt+=)': 'Увеличить по вертикали (Alt+=)',
+            '纵向缩小 (Alt+-)': 'Уменьшить по вертикали (Alt+-)',
+            '重置缩放 (Ctrl+0)': 'Сбросить масштаб (Ctrl+0)'
+        },
+        'de-DE': {
+            '横向放大 (Ctrl+=)': 'Horizontal vergrößern (Ctrl+=)',
+            '横向缩小 (Ctrl+-)': 'Horizontal verkleinern (Ctrl+-)',
+            '纵向放大 (Alt+=)': 'Vertikal vergrößern (Alt+=)',
+            '纵向缩小 (Alt+-)': 'Vertikal verkleinern (Alt+-)',
+            '重置缩放 (Ctrl+0)': 'Zoom zurücksetzen (Ctrl+0)'
+        },
+        'fr-FR': {
+            '横向放大 (Ctrl+=)': 'Agrandir horizontalement (Ctrl+=)',
+            '横向缩小 (Ctrl+-)': 'Réduire horizontalement (Ctrl+-)',
+            '纵向放大 (Alt+=)': 'Agrandir verticalement (Alt+=)',
+            '纵向缩小 (Alt+-)': 'Réduire verticalement (Alt+-)',
+            '重置缩放 (Ctrl+0)': 'Réinitialiser le zoom (Ctrl+0)'
+        }
+    };
+    for (_nl in _segZoomI18n) {
+        if (Object.prototype.hasOwnProperty.call(_segZoomI18n, _nl)) Object.assign(UI_TEXT[_nl], _segZoomI18n[_nl]);
+    }
+
     // ============ 多文件标签页 / 批量导出 词条 (9 种非中文语言) ============
     var _tabsI18n = {
         'en-US': {

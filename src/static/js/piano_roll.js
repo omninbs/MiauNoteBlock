@@ -1200,27 +1200,53 @@
         var prev = this._segmentPreview;
         var top = this._baseTimelineHeight;
         var bottom = this.displayHeight;
-        var drawn = {};
-        ctx.save();
-        ctx.strokeStyle = 'rgba(90, 200, 255, 0.5)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([4, 3]);
+        // 收集去重后的分割 tick (拖动中使用预览位置)
+        var ticks = [];
+        var seen = {};
         for (var i = 0; i < list.length; i++) {
             var s = list[i];
             var st = s.start, en = s.end;
             if (prev && prev.id === s.id) { st = prev.start; en = prev.end; }
-            var ticks = [st, en];
-            for (var k = 0; k < 2; k++) {
-                var tick = ticks[k];
-                if (drawn[tick]) continue;
-                drawn[tick] = true;
-                var x = this._tickToScreen(tick);
-                if (x < pw || x > w) continue;
+            if (!seen[st]) { seen[st] = true; ticks.push(st); }
+            if (!seen[en]) { seen[en] = true; ticks.push(en); }
+        }
+
+        // ---- 顶部时间栏 (导航条 + 标尺) 上的分割标记: 实线 + 向下小三角 ----
+        ctx.save();
+        ctx.strokeStyle = 'rgba(90, 200, 255, 0.85)';
+        ctx.fillStyle = '#5ac8ff';
+        ctx.lineWidth = 1;
+        for (var t = 0; t < ticks.length; t++) {
+            var tx = this._tickToScreen(ticks[t]);
+            if (tx < pw || tx > w) continue;
+            ctx.beginPath();
+            ctx.moveTo(tx + 0.5, 0);
+            ctx.lineTo(tx + 0.5, top);
+            ctx.stroke();
+            // 指向编辑区的小三角 (便于在缩略图上定位分割点)
+            if (top >= 8) {
                 ctx.beginPath();
-                ctx.moveTo(x + 0.5, top);
-                ctx.lineTo(x + 0.5, bottom);
-                ctx.stroke();
+                ctx.moveTo(tx, top);
+                ctx.lineTo(tx - 4, top - 6);
+                ctx.lineTo(tx + 4, top - 6);
+                ctx.closePath();
+                ctx.fill();
             }
+        }
+        ctx.restore();
+
+        // ---- 编辑区: 青色虚线 ----
+        ctx.save();
+        ctx.strokeStyle = 'rgba(90, 200, 255, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 3]);
+        for (var k = 0; k < ticks.length; k++) {
+            var x = this._tickToScreen(ticks[k]);
+            if (x < pw || x > w) continue;
+            ctx.beginPath();
+            ctx.moveTo(x + 0.5, top);
+            ctx.lineTo(x + 0.5, bottom);
+            ctx.stroke();
         }
         ctx.setLineDash([]);
         ctx.restore();
@@ -2716,17 +2742,13 @@
             return;
         }
 
-        // 时间轴标尺: 拖动滑条形式 (按下不跳转, 拖动时保持按下点与播放头的相对偏移, 轻点才跳转)
+        // 时间轴标尺: 拖动时播放头直接跟随鼠标 (像素级, 不吸附网格)
         if (y < this._cfg.timelineHeight && x >= pw && !this._segLaneClick) {
             this._isTimelineDrag = true;
             this._mouseDown = true;
             this._timelineDragStartX = x;
             this._timelineDragMoved = false;
-            var phTick = (this._smoothedPlayheadTick !== undefined && this._smoothedPlayheadTick !== null)
-                ? this._smoothedPlayheadTick : this.playheadTick;
-            var phX = this._tickToScreen(phTick);
-            // 记录鼠标与播放头的相对偏移, 拖动时保持该偏移, 避免一开始就跳转到鼠标位置
-            this._timelineDragOffsetX = phX - x;
+            this._timelineDragFloatTick = null;
             return;
         }
 
@@ -2740,10 +2762,15 @@
                 this._mouseDown = true;
                 this._dragStartX = x;
                 this._dragStartY = y;
-                var dragTick = this._screenToTickNearest(x);
-                this.playheadTick = dragTick;
-                this._smoothedPlayheadTick = dragTick;
-                this.seekToTick(dragTick);
+                // 按下即使用鼠标的浮点位置: 播放头像素级跟随鼠标
+                var dragFloat = Math.max(0, this._screenToTickFloat(x));
+                this._playheadDragFloatTick = dragFloat;
+                this.playheadTick = dragFloat;
+                this._smoothedPlayheadTick = dragFloat;
+                this._smoothedProgressTick = dragFloat;
+                this.redrawPlaybackOverlay();
+                this._fullRedrawNeeded = true;
+                this.requestRender();
                 return;
             }
         }
@@ -3075,23 +3102,34 @@
             return;
         }
 
-        // 时间轴标尺拖拽 (拖动滑条: 保持按下时的相对偏移, 不跳转到鼠标位置)
+        // 时间轴标尺拖拽: 播放头像素级跟随鼠标
         if (this._isTimelineDrag) {
-            if (Math.abs(x - this._timelineDragStartX) > this._dragThreshold) {
+            // 未超过拖动阈值时不改变播放头, 交给 mouseup 处理"点击跳转"
+            if (!this._timelineDragMoved) {
+                if (Math.abs(x - this._timelineDragStartX) <= this._dragThreshold) return;
                 this._timelineDragMoved = true;
             }
-            var rdragTick = this._screenToTick(x + this._timelineDragOffsetX);
-            this.seekToTick(rdragTick);
-            if (this.onTimelineSeek) this.onTimelineSeek(rdragTick);
+            var tfTick = Math.max(0, this._screenToTickFloat(x));
+            this._timelineDragFloatTick = tfTick;
+            this.playheadTick = tfTick;
+            this._smoothedPlayheadTick = tfTick;
+            this._smoothedProgressTick = tfTick;
+            this.redrawPlaybackOverlay();
+            this._fullRedrawNeeded = true;
+            this.requestRender();
             return;
         }
 
-        // 播放头拖拽
+        // 播放头拖拽: 播放头像素级跟随鼠标
         if (this._isDraggingPlayhead) {
-            var dragTick = this._screenToTick(x);
-            this.playheadTick = dragTick;
-            this._smoothedPlayheadTick = dragTick;
-            this.seekToTick(dragTick);
+            var pfTick = Math.max(0, this._screenToTickFloat(x));
+            this._playheadDragFloatTick = pfTick;
+            this.playheadTick = pfTick;
+            this._smoothedPlayheadTick = pfTick;
+            this._smoothedProgressTick = pfTick;
+            this.redrawPlaybackOverlay();
+            this._fullRedrawNeeded = true;
+            this.requestRender();
             return;
         }
 
@@ -3204,22 +3242,37 @@
             return;
         }
 
-        // 播放头拖拽结束
+        // 播放头拖拽结束: 吸附到最近整数 tick 并同步状态栏
         if (this._isDraggingPlayhead) {
             this._isDraggingPlayhead = false;
+            var pFloat = (this._playheadDragFloatTick != null) ? this._playheadDragFloatTick : this.currentTick;
+            this._playheadDragFloatTick = null;
+            var pSnap = Math.max(0, Math.round(pFloat));
+            this.seekToTick(pSnap, true);
+            if (this.onTimelineSeek) this.onTimelineSeek(pSnap, true);
             return;
         }
 
-        // 时间轴标尺拖拽结束 (未滑动的轻点 → 跳转到点击位置)
+        // 时间轴标尺拖拽结束
         if (this._isTimelineDrag) {
             this._isTimelineDrag = false;
             if (!this._timelineDragMoved) {
+                // 轻点: 跳转到点击位置 (带平滑动画)
                 var rupTick = this._screenToTickNearest(this._timelineDragStartX);
                 if (rupTick >= 0) {
-                    this.seekToTick(rupTick);
-                    if (this.onTimelineSeek) this.onTimelineSeek(rupTick);
+                    this.seekToTick(rupTick, false);
+                    if (this.onTimelineSeek) this.onTimelineSeek(rupTick, false);
                 }
+            } else {
+                // 拖动结束: 吸附到最近整数 tick
+                var tFloat = (this._timelineDragFloatTick != null)
+                    ? this._timelineDragFloatTick
+                    : this._screenToTickFloat(this._timelineDragStartX);
+                var tSnap = Math.max(0, Math.round(tFloat));
+                this.seekToTick(tSnap, true);
+                if (this.onTimelineSeek) this.onTimelineSeek(tSnap, true);
             }
+            this._timelineDragFloatTick = null;
             return;
         }
 
@@ -3282,15 +3335,16 @@
 
     PianoRoll.prototype._onWheel = function(e) {
         e.preventDefault();
-        if (e.ctrlKey || e.metaKey) {
-            var delta = -e.deltaY * 0.0025;
-            if (this.segmentsEditMode) {
-                // 片段编辑模式: 横向/纵向独立缩放
-                // Ctrl+滚轮 = 横向 (时间轴); Ctrl+Shift+滚轮 = 纵向 (音轨)
-                this.setZoomAxis(e.shiftKey ? 'y' : 'x', 1 + delta, e.offsetX, e.offsetY);
-            } else {
-                this.setZoom(this.zoom * (1 + delta));
-            }
+        var factor = Math.max(0.2, 1 - e.deltaY * 0.0025);
+        // 片段编辑模式: 横向/纵向分开缩放 (公认快捷键)
+        //   Ctrl + 滚轮 = 横向缩放 (时间轴)
+        //   Alt  + 滚轮 = 纵向缩放 (音轨高度)
+        if (this.segmentsEditMode && e.altKey) {
+            this.setZoomAxis('y', factor, e.offsetX, e.offsetY);
+        } else if (this.segmentsEditMode && (e.ctrlKey || e.metaKey)) {
+            this.setZoomAxis('x', factor, e.offsetX, e.offsetY);
+        } else if (e.ctrlKey || e.metaKey) {
+            this.setZoom(this.zoom * factor);
         } else if (e.shiftKey) {
             this.scrollX = Math.max(0, this.scrollX + e.deltaY);
         } else {
@@ -3440,7 +3494,7 @@
                 return;
             }
 
-            // 时间轴标尺: 拖动滑条形式 (按下不跳转, 拖动时保持按下点与播放头的相对偏移, 轻点才跳转)
+            // 时间轴标尺: 拖动时播放头直接跟随手指 (像素级, 不吸附网格)
             if (y < this._cfg.timelineHeight && x >= pw) {
                 this._isTimelineDrag = true;
                 this._touchMode = 'timeline-drag';
@@ -3450,11 +3504,7 @@
                 this._lastTouchY = y;
                 this._timelineDragStartX = x;
                 this._timelineDragMoved = false;
-                var tphTick = (this._smoothedPlayheadTick !== undefined && this._smoothedPlayheadTick !== null)
-                    ? this._smoothedPlayheadTick : this.playheadTick;
-                var tphX = this._tickToScreen(tphTick);
-                // 记录手指与播放头的相对偏移, 拖动时保持该偏移, 避免一开始就跳转到手指位置
-                this._timelineDragOffsetX = tphX - x;
+                this._timelineDragFloatTick = null;
                 return;
             }
 
@@ -3470,10 +3520,12 @@
                     this._touchStartY = y;
                     this._lastTouchX = x;
                     this._lastTouchY = y;
-                    var pdragTick = this._screenToTickNearest(x);
-                this.playheadTick = pdragTick;
-                this._smoothedPlayheadTick = pdragTick;
-                this.seekToTick(pdragTick);
+                    var pdragTick = Math.max(0, this._screenToTickFloat(x));
+                    this._playheadDragFloatTick = pdragTick;
+                    this.playheadTick = pdragTick;
+                    this._smoothedPlayheadTick = pdragTick;
+                    this._smoothedProgressTick = pdragTick;
+                    this.redrawPlaybackOverlay();
                     return;
                 }
             }
@@ -3675,23 +3727,34 @@
             }
 
             if (this._touchMode === 'playhead-drag' && this._isDraggingPlayhead) {
-                var tdragTick = this._screenToTick(x);
+                var tdragTick = Math.max(0, this._screenToTickFloat(x));
+                this._playheadDragFloatTick = tdragTick;
                 this.playheadTick = tdragTick;
                 this._smoothedPlayheadTick = tdragTick;
-                this.seekToTick(tdragTick);
+                this._smoothedProgressTick = tdragTick;
+                this.redrawPlaybackOverlay();
                 this._lastTouchX = x;
                 this._lastTouchY = y;
                 return;
             }
 
-            // 时间轴标尺拖拽 (拖动滑条: 保持按下时的相对偏移, 不跳转到手指位置)
+            // 时间轴标尺拖拽: 播放头像素级跟随手指
             if (this._touchMode === 'timeline-drag' && this._isTimelineDrag) {
-                if (Math.abs(x - this._timelineDragStartX) > 10 || Math.abs(y - this._touchStartY) > 10) {
+                // 未超过阈值: 不移动播放头, 交给 touchend 判定轻点跳转
+                if (!this._timelineDragMoved) {
+                    if (Math.abs(x - this._timelineDragStartX) <= 10 && Math.abs(y - this._touchStartY) <= 10) {
+                        this._lastTouchX = x;
+                        this._lastTouchY = y;
+                        return;
+                    }
                     this._timelineDragMoved = true;
                 }
-                var tdragTick = this._screenToTick(x + this._timelineDragOffsetX);
-                this.seekToTick(tdragTick);
-                if (this.onTimelineSeek) this.onTimelineSeek(tdragTick);
+                var tdragFloat = Math.max(0, this._screenToTickFloat(x));
+                this._timelineDragFloatTick = tdragFloat;
+                this.playheadTick = tdragFloat;
+                this._smoothedPlayheadTick = tdragFloat;
+                this._smoothedProgressTick = tdragFloat;
+                this.redrawPlaybackOverlay();
                 this._lastTouchX = x;
                 this._lastTouchY = y;
                 this._fullRedrawNeeded = true;
@@ -3831,6 +3894,11 @@
         if (this._touchMode === 'playhead-drag') {
             this._isDraggingPlayhead = false;
             this._touchMode = 'none';
+            var tpFloat = (this._playheadDragFloatTick != null) ? this._playheadDragFloatTick : this.currentTick;
+            this._playheadDragFloatTick = null;
+            var tpSnap = Math.max(0, Math.round(tpFloat));
+            this.seekToTick(tpSnap, true);
+            if (this.onTimelineSeek) this.onTimelineSeek(tpSnap, true);
             this._fullRedrawNeeded = true;
             this.render();
             return;
@@ -3873,17 +3941,27 @@
             return;
         }
 
-        // 时间轴标尺拖拽结束 (未滑动的轻点 → 跳转到点击位置)
+        // 时间轴标尺拖拽结束
         if (this._touchMode === 'timeline-drag') {
             this._isTimelineDrag = false;
             this._touchMode = 'none';
             if (!this._timelineDragMoved) {
+                // 轻点: 跳转到点击位置 (带平滑动画)
                 var tuptick = this._screenToTickNearest(this._timelineDragStartX);
                 if (tuptick >= 0) {
-                    this.seekToTick(tuptick);
-                    if (this.onTimelineSeek) this.onTimelineSeek(tuptick);
+                    this.seekToTick(tuptick, false);
+                    if (this.onTimelineSeek) this.onTimelineSeek(tuptick, false);
                 }
+            } else {
+                // 拖动结束: 吸附到最近整数 tick
+                var tfl = (this._timelineDragFloatTick != null)
+                    ? this._timelineDragFloatTick
+                    : this._screenToTickFloat(this._timelineDragStartX);
+                var tsnap = Math.max(0, Math.round(tfl));
+                this.seekToTick(tsnap, true);
+                if (this.onTimelineSeek) this.onTimelineSeek(tsnap, true);
             }
+            this._timelineDragFloatTick = null;
             this._fullRedrawNeeded = true;
             this.render();
             return;
@@ -5069,7 +5147,7 @@
 
     // 分轴缩放 (片段编辑模式用): axis = 'x' 横向 / 'y' 纵向
     PianoRoll.prototype.setZoomAxis = function(axis, factor, anchorX, anchorY) {
-        if (!isFinite(factor) || factor <= 0) return;
+        if (!isFinite(factor) || factor <= 0.05) return;
         var cellW = this._cfg.cellW;
         var cellH = this._cfg.cellH;
         if (axis === 'y') {
@@ -5085,6 +5163,14 @@
             this.scrollX = wx * cellW * this._zoomX() - cx + this._editOriginX();
             this.scrollX = Math.max(0, this.scrollX);
         }
+        this._fullRedrawNeeded = true;
+        this.render();
+    };
+
+    // 重置片段模式的分轴缩放
+    PianoRoll.prototype.resetZoomAxis = function() {
+        this.zoomX = 1;
+        this.zoomY = 1;
         this._fullRedrawNeeded = true;
         this.render();
     };
@@ -5533,7 +5619,7 @@
         this._drawProgressBar();
     };
 
-    PianoRoll.prototype.seekToTick = function(tick) {
+    PianoRoll.prototype.seekToTick = function(tick, immediate) {
         this.currentTick = Math.max(0, Math.min(this.totalTicks, tick));
         // 同步播放头位置, 避免 main.js 播放循环用旧值覆盖
         this.playheadTick = this.currentTick;
@@ -5551,9 +5637,20 @@
         // 注意: 不在此处 scrollToPlayhead, 避免进度条拖拽/时间栏点击时意外翻页
         // 程序化 seek (如 main.js seekToTick) 自行负责滚动到播放头
         this._fullRedrawNeeded = true;
-        this.render();
-        // 播放头插值动画: 平滑移动到新位置, 而不是瞬移
-        this.animatePlayheadTo(this.currentTick);
+        // 拖动中 (immediate): 播放头直接跟手, 不做补间
+        if (immediate) {
+            if (this._playheadAnimRAF) {
+                cancelAnimationFrame(this._playheadAnimRAF);
+                this._playheadAnimRAF = null;
+            }
+            this._smoothedPlayheadTick = this.currentTick;
+            this.render();
+            this.redrawPlaybackOverlay();
+        } else {
+            this.render();
+            // 点击跳转: 平滑移动到新位置
+            this.animatePlayheadTo(this.currentTick);
+        }
     };
 
     // 非播放状态下滚动使播放头可见 (仅当播放头在可视区域外时滚动)

@@ -52,6 +52,7 @@
         segmentClipboard: null,   // { duration, notes: [{ rel, layer, instrument, key, velocity, pan, pitch }] }
         _segmentIdSeq: 0,
         _segmentsTouched: false,  // 用户使用过片段编辑后, 空洞放音符会自动建片段
+        _segmentsEdited: false,   // 用户改变过片段边界(裁剪/分割/删除)后, 不再自动覆盖全曲
         // 多文件标签页: [{ id, title, snapshot, dirty }]
         tabs: [],
         tabSeq: 0,
@@ -1068,10 +1069,29 @@
         for (var i = 0; i < segs.length; i++) {
             if (segs[i].end > end) end = segs[i].end;
         }
-        // 与状态栏显示的歌曲总长一致 (至少 64 tick), 避免新工程片段过短
-        var mt = getSongLengthTicks();
+        // 直接按当前音符的实际末尾计算 (不依赖 state.maxTick 的更新时机)
+        var notes = state.notes || [];
+        var maxTick = 0;
+        for (var n = 0; n < notes.length; n++) {
+            if (isFinite(notes[n].tick) && notes[n].tick > maxTick) maxTick = notes[n].tick;
+        }
+        var mt = Math.max(maxTick + 4, getSongLengthTicks());
         if (mt > end) end = mt;
-        return Math.max(16, end);
+        return Math.max(64, end);
+    }
+
+    // 单片段且用户尚未裁剪/分割时, 保持"默认片段覆盖全曲"
+    function segmentFollowSongEnd() {
+        if (!Array.isArray(state.segments)) return false;
+        if (state.segments.length !== 1) return false;
+        if (state._segmentsEdited) return false;
+        var s = state.segments[0];
+        var full = segmentSongEnd();
+        var changed = false;
+        if (s.start !== 0) { s.start = 0; changed = true; }
+        if (s.end < full) { s.end = full; changed = true; }
+        if (changed) segmentSync();
+        return changed;
     }
 
     function segmentEnsure() {
@@ -1079,7 +1099,9 @@
         if (typeof state._segmentIdSeq !== 'number') state._segmentIdSeq = 0;
         if (state.segments.length === 0) {
             state.segments.push({ id: ++state._segmentIdSeq, start: 0, end: segmentSongEnd() });
+            return;
         }
+        segmentFollowSongEnd();
     }
 
     function segmentSorted() {
@@ -1178,6 +1200,7 @@
         newEnd = Math.max(newStart + 1, Math.floor(newEnd));
         if (newStart === seg.start && newEnd === seg.end) return;
         pushUndo();
+        state._segmentsEdited = true;
         var oStart = seg.start, oEnd = seg.end;
         if (mode === 'body') {
             // 整体移动: 片段范围内的音符跟随平移
@@ -1208,6 +1231,7 @@
         var seg = segmentAt(at) || segmentSelected();
         if (!seg || at <= seg.start || at >= seg.end) return false;
         pushUndo();
+        state._segmentsEdited = true;
         var right = { id: ++state._segmentIdSeq, start: at, end: seg.end };
         seg.end = at;
         state.segments.push(right);
@@ -1222,6 +1246,7 @@
         var at = Math.floor(state.currentTick || 0);
         if (!seg || at <= seg.start || at >= seg.end) return false;
         pushUndo();
+        state._segmentsEdited = true;
         segmentDropNotes(seg.start, at);
         seg.start = at;
         segmentAfterEdit();
@@ -1234,6 +1259,7 @@
         var at = Math.floor(state.currentTick || 0);
         if (!seg || at <= seg.start || at >= seg.end) return false;
         pushUndo();
+        state._segmentsEdited = true;
         segmentDropNotes(at, seg.end);
         seg.end = at;
         segmentAfterEdit();
@@ -1298,6 +1324,7 @@
         var seg = segmentSelected();
         if (!seg) return false;
         pushUndo();
+        state._segmentsEdited = true;
         segmentDropNotes(seg.start, seg.end);
         var keep = [];
         var segs = state.segments || [];
@@ -1345,6 +1372,9 @@
         for (var k = 0; k < merged.length; k++) state.notes.push(merged[k]);
         var end = Math.max(pos, maxTick + 1);
         state.segments = [{ id: ++state._segmentIdSeq, start: 0, end: end }];
+        // 合并回完整片段后, 重新允许跟随全曲自动扩展
+        state._segmentsEdited = false;
+        segmentEnsure();
         if (state.pianoRoll) state.pianoRoll.segmentSelectedId = state.segments[0].id;
         segmentAfterEdit();
         return true;
@@ -1472,6 +1502,7 @@
         state.segmentClipboard = null;
         state._segmentIdSeq = 0;
         state._segmentsTouched = false;
+        state._segmentsEdited = false;
         segmentEnsure();
         segmentSync();
         state.song = {
@@ -1576,6 +1607,7 @@
             segments: JSON.parse(JSON.stringify(state.segments || [])),
             segmentSeq: state._segmentIdSeq || 0,
             segmentsTouched: !!state._segmentsTouched,
+            segmentsEdited: !!state._segmentsEdited,
             importedFileName: state.importedFileName || '',
             fileId: state.currentFileId || null,
             zoom: state.pianoRoll ? state.pianoRoll.zoom : 1,
@@ -1596,6 +1628,7 @@
         state.segments = JSON.parse(JSON.stringify(s.segments || []));
         state._segmentIdSeq = s.segmentSeq || 0;
         state._segmentsTouched = !!s.segmentsTouched;
+        state._segmentsEdited = !!s.segmentsEdited;
         state.importedFileName = s.importedFileName || '';
         state.currentFileId = s.fileId || null;
         state.song = Object.assign({}, s.meta || {}, {
@@ -1647,6 +1680,7 @@
         var tabs = state.tabs || [];
         if (tabs.length <= 1) {
             wrap.style.display = 'none';
+            list.textContent = '';
             return;
         }
         wrap.style.display = '';
@@ -1721,7 +1755,8 @@
             id: 'tab_' + (++state.tabSeq),
             title: 'Untitled',
             snapshot: tabCapture(),
-            dirty: false
+            dirty: false,
+            pristine: false
         };
         state.tabs.push(tab);
         state.activeTabId = tab.id;
@@ -1762,6 +1797,7 @@
         var tab = tabGetActive();
         if (!tab) return;
         tab.title = (state.song && (state.song.name || state.song.song_name)) || tab.title || 'Untitled';
+        tab.pristine = false;
         if (!tab.dirty) {
             tab.dirty = true;
             renderTabs();
@@ -1918,10 +1954,34 @@
                 id: 'tab_' + (++state.tabSeq),
                 title: (state.song && (state.song.name || state.song.song_name)) || 'Untitled',
                 snapshot: tabCapture(),
-                dirty: false
+                dirty: false,
+                pristine: true
             });
             state.activeTabId = state.tabs[0].id;
         }
+        renderTabs();
+    }
+
+    // 打开文件前准备: 总是用新标签页承载即将载入的文件
+    // 例外: 应用启动后的初始空标签 (pristine) 可直接复用, 避免留下空标签
+    function tabOpenInNewTabIfNeeded() {
+        tabStash();
+        var cur = tabGetActive();
+        var canReuse = !!cur && cur.pristine && !cur.dirty && (state.tabs || []).length === 1;
+        if (canReuse) {
+            cur.pristine = false;
+            return;
+        }
+        var tab = {
+            id: 'tab_' + (++state.tabSeq),
+            title: 'Untitled',
+            snapshot: tabCapture(),
+            dirty: false,
+            pristine: false
+        };
+        state.tabs.push(tab);
+        state.activeTabId = tab.id;
+        exitSegmentsEditMode();
         renderTabs();
     }
 
@@ -3428,6 +3488,8 @@
                 var note = state.pianoRoll.addNote(noteData);
                 state.notes = state.pianoRoll.getNotes();
                 buildNoteIndex(state.notes);
+                // 默认单片段: 先跟随全曲长度自动扩展 (新音符落在末尾之外也能覆盖)
+                segmentFollowSongEnd();
                 // 裁剪后的空洞中放置音符: 自动创建/扩展片段
                 segmentAdoptTick(note.tick);
                 updateNoteCount();
@@ -3456,6 +3518,8 @@
                 }
                 state.notes = state.pianoRoll.getNotes();
                 buildNoteIndex(state.notes);
+                // 默认单片段: 先跟随全曲长度自动扩展
+                segmentFollowSongEnd();
                 // 整组放置: 对每个落点检查是否需要新建片段
                 for (var ga = 0; ga < added.length; ga++) {
                     if (added[ga] && isFinite(added[ga].tick)) segmentAdoptTick(added[ga].tick);
@@ -3591,9 +3655,9 @@
                 state.pianoRoll.selectNotes(Object.keys(merged));
             };
 
-            // 时间轴点击跳转回调
-            state.pianoRoll.onTimelineSeek = function(tick) {
-                seekToTick(tick);
+            // 时间轴点击跳转回调 (immediate=true 表示拖动中, 直接跟手)
+            state.pianoRoll.onTimelineSeek = function(tick, immediate) {
+                seekToTick(tick, immediate);
             };
 
             // 歌词轨道: 片段双击编辑 / 空白双击新建 / 拖动结束提交
@@ -5692,6 +5756,31 @@
                     // 注意: 多数浏览器会拦截 Ctrl+W 关闭标签页, 此处尽力处理
                     if (segmentTrimRight()) e.preventDefault();
                     return;
+                } else if (segCtrl && (segKey === '=' || segKey === '+')) {
+                    // 横向放大 (标准: Ctrl + =)
+                    segZoomAxis('x', 1.2);
+                    e.preventDefault();
+                    return;
+                } else if (segCtrl && (segKey === '-' || segKey === '_')) {
+                    // 横向缩小 (标准: Ctrl + -)
+                    segZoomAxis('x', 1 / 1.2);
+                    e.preventDefault();
+                    return;
+                } else if (segCtrl && segKey === '0') {
+                    // 重置缩放 (标准: Ctrl + 0)
+                    if (state.pianoRoll) state.pianoRoll.resetZoomAxis();
+                    e.preventDefault();
+                    return;
+                } else if (e.altKey && (segKey === '=' || segKey === '+')) {
+                    // 纵向放大 (Alt + =)
+                    segZoomAxis('y', 1.2);
+                    e.preventDefault();
+                    return;
+                } else if (e.altKey && (segKey === '-' || segKey === '_')) {
+                    // 纵向缩小 (Alt + -)
+                    segZoomAxis('y', 1 / 1.2);
+                    e.preventDefault();
+                    return;
                 } else if (segCtrl && segKey === 'c') {
                     if (segmentCopy()) { e.preventDefault(); return; }
                 } else if (segCtrl && segKey === 'v') {
@@ -6351,7 +6440,7 @@
         pr.playheadTick = state.currentTick;
     }
 
-    function seekToTick(tick) {
+    function seekToTick(tick, immediate) {
         var totalTicks = getSongLengthTicks();
         if (tick < 0) tick = 0;
         if (tick > totalTicks) tick = totalTicks;
@@ -6364,12 +6453,15 @@
             state.pianoRoll.currentTick = tick;
             state.pianoRoll._smoothedProgressTick = tick;
             // 非播放状态下用补间动画平滑移动播放头; 播放中直接同步, 避免与播放循环冲突
-            if (state.pianoRoll.isPlaying) {
+            if (state.pianoRoll.isPlaying || immediate) {
                 state.pianoRoll._smoothedPlayheadTick = tick;
             }
             state.pianoRoll._lastTickTime = 0;
             state.pianoRoll.render();
-            if (!state.pianoRoll.isPlaying) state.pianoRoll.animatePlayheadTo(tick);
+            if (!state.pianoRoll.isPlaying) {
+                if (immediate) state.pianoRoll.redrawPlaybackOverlay();
+                else state.pianoRoll.animatePlayheadTo(tick);
+            }
         }
     }
 
@@ -9504,6 +9596,31 @@
         bindSegButton('seg-tb-paste', segActionPaste);
         bindSegButton('seg-tb-delete', segActionDelete);
         bindSegButton('seg-tb-merge', segActionMerge);
+        // 分轴缩放按钮 (触屏也可用)
+        bindSegButton('seg-zoom-x-in', function() { segZoomAxis('x', 1.2); });
+        bindSegButton('seg-zoom-x-out', function() { segZoomAxis('x', 1 / 1.2); });
+        bindSegButton('seg-zoom-y-in', function() { segZoomAxis('y', 1.2); });
+        bindSegButton('seg-zoom-y-out', function() { segZoomAxis('y', 1 / 1.2); });
+        bindSegButton('seg-zoom-reset', function() {
+            if (state.pianoRoll) state.pianoRoll.resetZoomAxis();
+        });
+        // 片段模式: 拦截页面级 Ctrl/Alt + 滚轮, 避免浏览器缩放整个页面
+        document.addEventListener('wheel', function(e) {
+            if (!state.segmentsEditMode || !state.pianoRoll) return;
+            if (!(e.ctrlKey || e.metaKey || e.altKey)) return;
+            // 画布内部由 canvas 自己的 wheel 处理
+            if (e.target === state.pianoRoll.canvas) return;
+            e.preventDefault();
+            var factor = Math.max(0.2, 1 - e.deltaY * 0.0025);
+            if (e.altKey) state.pianoRoll.setZoomAxis('y', factor);
+            else state.pianoRoll.setZoomAxis('x', factor);
+        }, { passive: false });
+    }
+
+    // 分轴缩放: axis='x' 横向 / 'y' 纵向
+    function segZoomAxis(axis, factor) {
+        if (!state.pianoRoll) return;
+        state.pianoRoll.setZoomAxis(axis, factor);
     }
 
     // ---- 播放时的歌词浮层 (屏幕中间偏下, 多条轨道同时触达时按行显示) ----
@@ -12152,6 +12269,8 @@
     // 应用解析出的 NBS 歌曲数据到编辑器 (resolveMissingCustomInstruments 通过后调用)
     function applyLoadedSongData(data, file, inputEl) {
         if (!data || !data.song) return;
+        // 打开文件: 若当前标签页已有内容, 则用新标签页打开
+        tabOpenInNewTabIfNeeded();
         var song = data.song;
         state.song = song;
         state.notes = song.notes || [];
@@ -12167,6 +12286,7 @@
         exitSegmentsEditMode();
         state._segmentIdSeq = 0;
         state._segmentsTouched = false;
+        state._segmentsEdited = false;
         var loadedSegs = Array.isArray(song.segments) ? song.segments : null;
         state.segments = [];
         if (loadedSegs && loadedSegs.length) {
@@ -12201,6 +12321,10 @@
         state.redoStack = [];
         updateUndoRedoButtons();
 
+        // 音符索引已就绪, 让默认片段覆盖整首歌曲
+        segmentEnsure();
+        segmentSync();
+
         if (state.pianoRoll) {
             state.pianoRoll._setupCanvas();
             state.pianoRoll.setNotes(state.notes);
@@ -12213,6 +12337,11 @@
         updateTrackPanelUI();
         handleStop();
         markDirty();
+        // 打开的文件尚未修改: 写入标签页快照并清除未保存圆点
+        tabStash();
+        var _openedTab = tabGetActive();
+        if (_openedTab) _openedTab.dirty = false;
+        renderTabs();
         inputEl.value = '';
     }
 
@@ -18271,6 +18400,8 @@ function buildTimbreFittingRows(info) {
             return;
         }
         // 设置当前文件 ID, 后续保存将覆盖此文件
+        // 打开历史文件: 当前标签页有内容时, 用新标签页打开
+        tabOpenInNewTabIfNeeded();
         state.currentFileId = id;
         state.song = song;
         if (!state.song.layers) state.song.layers = [];
@@ -18300,11 +18431,18 @@ function buildTimbreFittingRows(info) {
         state.undoStack = [];
         state.redoStack = [];
         updateUndoRedoButtons();
+        segmentEnsure();
+        segmentSync();
         if (state.pianoRoll) state.pianoRoll.setNotes(state.notes);
         updateSongInfo();
         updateTrackPanelUI();
         handleStop();
         markDirty();
+        // 历史文件已存在: 清除未保存圆点
+        tabStash();
+        var _histTab = tabGetActive();
+        if (_histTab) _histTab.dirty = false;
+        renderTabs();
     }
 
     function loadFileFromLocalStorage(id) {
@@ -19335,6 +19473,7 @@ function buildTimbreFittingRows(info) {
         // 载入的文件写入当前标签页快照, 并刷新标题
         tabStash();
         renderTabs();
+        updateSongInfo();
     }
 
     var STORAGE_KEY = 'noteblockweb_data';
@@ -19378,6 +19517,7 @@ function buildTimbreFittingRows(info) {
                 } : null,
                 lyrics: JSON.parse(JSON.stringify(state.lyrics || [])),
                 segments: JSON.parse(JSON.stringify(state.segments || [])),
+                segmentsEdited: !!state._segmentsEdited,
                 currentFileId: state.currentFileId || null,
                 savedAt: Date.now()
             };
@@ -19479,6 +19619,7 @@ function buildTimbreFittingRows(info) {
             syncLyricsToRoll();
             // 片段分割信息随自动保存一并恢复
             state._segmentIdSeq = 0;
+            state._segmentsEdited = !!data.segmentsEdited;
             state.segments = [];
             var _savedSegs = Array.isArray(data.segments) ? data.segments : [];
             for (var _sgi = 0; _sgi < _savedSegs.length; _sgi++) {

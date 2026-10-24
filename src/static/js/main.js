@@ -46,12 +46,14 @@
         activeLyricId: null,
         _activeLyric: null,
         lyricClipboard: [],   // 歌词片段剪贴板: [{ text, duration, lane, relTick }]
-        // 片段编辑: [{ id, start, end }] (真剪辑型, 区间 [start, end) 的 tick)
+        // 片段编辑: 多轨剪辑模型
+        // segments: [{ id, lane, start, end, name, notes:[{rel,layer,...}] }]
         segments: [],
+        segmentLanes: [],         // [{ id, muted, solo, volume, height }]
         segmentsEditMode: false,
-        segmentClipboard: null,   // { duration, notes: [{ rel, layer, instrument, key, velocity, pan, pitch }] }
+        segmentClipboard: null,   // { duration, notes, lane, start, name }
         _segmentIdSeq: 0,
-        _segmentsTouched: false,  // 用户使用过片段编辑后, 空洞放音符会自动建片段
+        _segmentsTouched: false,  // 用户使用过片段编辑
         _segmentsEdited: false,   // 用户改变过片段边界(裁剪/分割/删除)后, 不再自动覆盖全曲
         // 多文件标签页: [{ id, title, snapshot, dirty }]
         tabs: [],
@@ -613,7 +615,7 @@
             var packageChk = null;
             if (customNos && customNos.length) {
                 var warnWrap = document.createElement('div');
-                warnWrap.style.cssText = 'margin-top:12px;border:1px solid rgba(255,180,60,0.45);border-radius:var(--radius-sm,6px);padding:10px 12px;background:rgba(255,180,60,0.08);';
+                warnWrap.style.cssText = 'margin-top:12px;border:1px solid rgba(255,255,255,0.10);border-left:2px solid rgba(230,168,74,0.75);border-radius:var(--radius-sm,6px);padding:10px 12px;background:rgba(255,255,255,0.035);';
                 var warnTitle = document.createElement('div');
                 warnTitle.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:var(--accent-orange,#ffb43c);margin-bottom:6px;';
                 warnTitle.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i><span>本作品使用了 ' + customNos.length + ' 个自定义音色</span>';
@@ -637,9 +639,9 @@
             var lyricsChk = null;
             if (hasLyrics) {
                 var lyWrap = document.createElement('div');
-                lyWrap.style.cssText = 'margin-top:12px;border:1px solid rgba(78,205,196,0.45);border-radius:var(--radius-sm,6px);padding:10px 12px;background:rgba(78,205,196,0.08);';
+                lyWrap.style.cssText = 'margin-top:12px;border:1px solid rgba(255,255,255,0.10);border-left:2px solid rgba(74,144,217,0.75);border-radius:var(--radius-sm,6px);padding:10px 12px;background:rgba(255,255,255,0.035);';
                 var lyTitle = document.createElement('div');
-                lyTitle.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:var(--accent,#4ecdc4);margin-bottom:6px;';
+                lyTitle.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text-primary,#e4e8ec);margin-bottom:6px;';
                 lyTitle.innerHTML = '<i class="fa-solid fa-microphone-lines"></i><span>' + i18nText('本作品包含歌词标注') + '</span>';
                 lyWrap.appendChild(lyTitle);
                 var lyLbl = document.createElement('label');
@@ -659,9 +661,9 @@
             var mergeSegRadio = null;
             if (segCount > 1) {
                 var segWrap = document.createElement('div');
-                segWrap.style.cssText = 'margin-top:12px;border:1px solid rgba(90,200,255,0.45);border-radius:var(--radius-sm,6px);padding:10px 12px;background:rgba(90,200,255,0.08);';
+                segWrap.style.cssText = 'margin-top:12px;border:1px solid rgba(255,255,255,0.10);border-left:2px solid rgba(74,144,217,0.75);border-radius:var(--radius-sm,6px);padding:10px 12px;background:rgba(255,255,255,0.035);';
                 var segTitle = document.createElement('div');
-                segTitle.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:#5ac8ff;margin-bottom:6px;';
+                segTitle.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text-primary,#e4e8ec);margin-bottom:6px;';
                 segTitle.innerHTML = '<i class="fa-solid fa-film"></i><span>' + i18nText('本作品包含') + ' ' + segCount + ' ' + i18nText('个片段') + '</span>';
                 segWrap.appendChild(segTitle);
 
@@ -673,7 +675,7 @@
                     r.name = 'nbs-export-segment-mode';
                     r.value = value;
                     r.checked = !!checked;
-                    r.style.cssText = 'accent-color:#5ac8ff;width:14px;height:14px;margin-top:2px;flex-shrink:0;';
+                    r.style.cssText = 'accent-color:var(--accent,#4a90d9);width:14px;height:14px;margin-top:2px;flex-shrink:0;';
                     lbl.appendChild(r);
                     lbl.appendChild(document.createTextNode(labelText));
                     segWrap.appendChild(lbl);
@@ -691,6 +693,44 @@
             overlay.appendChild(box);
             document.body.appendChild(overlay);
             _appDialogStack.push(overlay);
+
+            // ---------- NBS 版本 (从设置移到导出弹窗, 导出时决定) ----------
+            var versionSel = document.createElement('select');
+            var vWrap = document.createElement('div');
+            vWrap.style.cssText = 'margin-top:12px;display:flex;align-items:center;gap:8px;';
+            var vLabel = document.createElement('label');
+            vLabel.textContent = i18nText('NBS 版本');
+            vLabel.style.cssText = 'font-size:12px;color:var(--text-secondary);white-space:nowrap;flex-shrink:0;';
+            versionSel.style.cssText = 'flex:1;height:28px;padding:0 8px;font-size:12px;border:1px solid var(--ctrl-stroke-default,#444);border-radius:var(--radius-sm,6px);background:var(--ctrl-fill-default,#1c1c1c);color:var(--text-primary,#fff);';
+            var vOptions = [['4', 'V4'], ['5', 'V5'], ['6', 'V6']];
+            for (var vi = 0; vi < vOptions.length; vi++) {
+                var opt = document.createElement('option');
+                opt.value = vOptions[vi][0];
+                opt.textContent = vOptions[vi][1];
+                versionSel.appendChild(opt);
+            }
+            var vDefault = 5;
+            try {
+                var savedVer = parseInt(localStorage.getItem('nbs_export_version'), 10);
+                if (savedVer === 4 || savedVer === 5 || savedVer === 6) vDefault = savedVer;
+            } catch (e) {}
+            // 含铜号角 (16~19) 或自定义音色 (>=20) 时只有 V6 能完整保存, 版本被锁定
+            if (options.lockV6) {
+                vDefault = 6;
+                versionSel.disabled = true;
+                versionSel.style.opacity = '0.6';
+                versionSel.style.cursor = 'not-allowed';
+            }
+            versionSel.value = String(vDefault);
+            vWrap.appendChild(vLabel);
+            vWrap.appendChild(versionSel);
+            body.appendChild(vWrap);
+            if (options.lockV6) {
+                var vHint = document.createElement('div');
+                vHint.style.cssText = 'font-size:11px;color:var(--text-tertiary,#888);line-height:1.6;margin-top:4px;';
+                vHint.textContent = i18nText('作品使用了铜号角或自定义音色，仅 V6 可以完整保存，版本已锁定为 V6。');
+                body.appendChild(vHint);
+            }
 
             var result = null;
             var close = function() { _closeAppDialog(overlay, resolve, result); };
@@ -712,7 +752,8 @@
                     packageZip: !!(packageChk && packageChk.checked),
                     lyricsZip: !!(lyricsChk && lyricsChk.checked),
                     segmentsZip: !!(segmentsZipRadio && segmentsZipRadio.checked),
-                    mergeSegments: !!(mergeSegRadio && mergeSegRadio.checked)
+                    mergeSegments: !!(mergeSegRadio && mergeSegRadio.checked),
+                    nbsVersion: parseInt(versionSel.value, 10) || 5
                 };
                 close();
             };
@@ -970,8 +1011,9 @@
             maxTick: state.maxTick,
             // 歌词标注随快照一并记录, 使歌词编辑同样可撤销/重做
             lyrics: JSON.parse(JSON.stringify(state.lyrics || [])),
-            // 片段分割信息随快照记录, 使片段编辑同样可撤销/重做
-            segments: JSON.parse(JSON.stringify(state.segments || []))
+            // 片段数据随快照记录, 使片段编辑同样可撤销/重做
+            segments: JSON.parse(JSON.stringify(state.segments || [])),
+            segmentLanes: JSON.parse(JSON.stringify(state.segmentLanes || []))
         };
     }
 
@@ -984,6 +1026,7 @@
         state.maxTick = snapshot.maxTick;
         state.lyrics = JSON.parse(JSON.stringify(snapshot.lyrics || []));
         state.segments = JSON.parse(JSON.stringify(snapshot.segments || []));
+        state.segmentLanes = JSON.parse(JSON.stringify(snapshot.segmentLanes || []));
         rebuildFromNotes();
         updateTrackPanelUI();
         // 歌词恢复后重建索引并同步到轨道
@@ -1056,20 +1099,151 @@
         updateProgressUI();
     }
 
-    // ============ 片段编辑 (真剪辑型) ============
-    // 数据模型: state.segments = [{ id, start, end }], 区间为 [start, end) 的 tick
-    // 语义:
-    //   - 片段覆盖范围内的音符属于该片段
-    //   - 片段之间的空隙表示被剪掉 / 删除的内容
-    //   - 移动片段会真正平移该范围内的音符; 拉伸端点会真正丢弃超出范围的音符
-    //   - 所有操作都走 pushUndo, 支持撤销 / 重做
+    // ============ 片段编辑 (多轨剪辑型, 真剪辑) ============
+    // 数据模型:
+    //   state.segmentLanes = [{ id, muted, solo, volume, height }]   // 从上到下的片段轨道
+    //   state.segments = [{ id, lane, start, end, name,
+    //                       notes: [{ rel, layer, instrument, key, velocity, pan, pitch }] }]
+    //   - rel   : 相对片段 start 的 tick
+    //   - layer : 片段内部的相对轨道号 (缝合时按 lane 顺序重新映射为全局 layer)
+    //   - 片段音符独立存储; 切回 NBS / 播放 / 导出时由 segmentCompose() 缝合为 state.notes
+    var SEG_DEFAULT_LANE_H = 52;
+
+    function segmentEnsureLanes() {
+        if (!Array.isArray(state.segmentLanes)) state.segmentLanes = [];
+        if (state.segmentLanes.length === 0) {
+            state.segmentLanes.push({
+                id: 1, muted: false, solo: false, volume: 100, height: SEG_DEFAULT_LANE_H
+            });
+        }
+        for (var i = 0; i < state.segmentLanes.length; i++) {
+            var ln = state.segmentLanes[i];
+            if (!ln.id) ln.id = i + 1;
+            if (typeof ln.muted !== 'boolean') ln.muted = false;
+            if (typeof ln.solo !== 'boolean') ln.solo = false;
+            if (!isFinite(ln.volume)) ln.volume = 100;
+            if (!isFinite(ln.height) || ln.height < 24) ln.height = SEG_DEFAULT_LANE_H;
+        }
+    }
+
+    // 确保最下方始终保留一条「空轨道」, 方便用户继续向下拖入新轨道
+    // (只检查最后一条 lane 是否被占用; 中间的空轨道保留不动)
+    function segmentEnsureEmptyLane() {
+        segmentEnsureLanes();
+        var lanes = state.segmentLanes;
+        var lastIdx = lanes.length - 1;
+        var used = {};
+        var segs = state.segments || [];
+        for (var i = 0; i < segs.length; i++) used[segs[i].lane] = true;
+        if (!used[lastIdx]) return false;
+        lanes.push({
+            id: lanes.length + 1, muted: false, solo: false,
+            volume: 100, height: SEG_DEFAULT_LANE_H
+        });
+        return true;
+    }
+
+    // MIDI 导入: 按通道生成片段轨道
+    // - 每个 MIDI 通道一条片段轨 (片段覆盖整曲)
+    // - 通道 9 (打击乐) 合并为一条片段轨
+    // - 无法映射通道的音符 (如速度变化器) 归入「其他」轨, 保证不丢音符
+    // 每条 lane 记录 channel, 供再次进入片段模式时按通道还原音符归属
+    function segmentBuildChannelSplit(song) {
+        var notes = (song && song.notes) || [];
+        var channelMap = (song && song.layer_channel_map) || {};
+        var groups = {};      // key -> { channel, notes: [] }
+        var order = [];
+        for (var i = 0; i < notes.length; i++) {
+            var n = notes[i];
+            var ch = channelMap[n.layer];
+            var key = (ch === undefined || ch === null) ? 'x' : String(ch);
+            if (!groups[key]) {
+                groups[key] = { channel: (key === 'x') ? null : ch, notes: [] };
+                order.push(key);
+            }
+            groups[key].notes.push(n);
+        }
+        if (!order.length) return false;
+
+        // 排序: 旋律通道按通道号升序, 打击乐 (9) 放最后, 未映射的更后
+        order.sort(function(a, b) {
+            if (a === 'x') return 1;
+            if (b === 'x') return -1;
+            var ca = groups[a].channel, cb = groups[b].channel;
+            if (ca === 9) return 1;
+            if (cb === 9) return -1;
+            return ca - cb;
+        });
+
+        var endTick = 0;
+        for (var e = 0; e < notes.length; e++) {
+            if (isFinite(notes[e].tick) && notes[e].tick > endTick) endTick = notes[e].tick;
+        }
+        endTick = Math.max(64, endTick + 1);
+
+        var seq = 0;
+        var lanes = [];
+        var segments = [];
+        for (var oi = 0; oi < order.length; oi++) {
+            var g = groups[order[oi]];
+            var lane = {
+                id: lanes.length + 1, muted: false, solo: false,
+                volume: 100, height: SEG_DEFAULT_LANE_H,
+                channel: (g.channel === null ? undefined : g.channel),
+                name: ''
+            };
+            // 轨道名: 打击乐 / 通道号或音色名 / 其他
+            if (g.channel === 9) {
+                lane.name = '打击乐';
+            } else if (g.channel === null) {
+                lane.name = '其他';
+            } else {
+                var firstLayer = isFinite(g.notes[0].layer) ? g.notes[0].layer : 0;
+                var layerInfo = (song.layers && song.layers[firstLayer]) ? song.layers[firstLayer] : null;
+                lane.name = (layerInfo && layerInfo.name) ? layerInfo.name : ('通道 ' + g.channel);
+            }
+            lanes.push(lane);
+
+            var segNotes = [];
+            for (var ni = 0; ni < g.notes.length; ni++) {
+                var gn = g.notes[ni];
+                segNotes.push({
+                    rel: gn.tick,
+                    layer: isFinite(gn.layer) ? gn.layer : 0,
+                    instrument: gn.instrument,
+                    key: gn.key,
+                    velocity: isFinite(gn.velocity) ? gn.velocity : 100,
+                    pan: isFinite(gn.pan) ? gn.pan : 100,
+                    pitch: gn.pitch || 0
+                });
+            }
+            segments.push({
+                id: ++seq, lane: lanes.length - 1,
+                start: 0, end: endTick,
+                name: lane.name,
+                notes: segNotes
+            });
+        }
+        // 末尾保留一条空轨, 方便继续拖入新轨
+        lanes.push({
+            id: lanes.length + 1, muted: false, solo: false,
+            volume: 100, height: SEG_DEFAULT_LANE_H
+        });
+
+        state.segmentLanes = lanes;
+        state.segments = segments;
+        state._segmentIdSeq = seq;
+        // 多片段时不参与「单片段自动跟随全曲长度」逻辑
+        state._segmentsEdited = true;
+        return true;
+    }
+
     function segmentSongEnd() {
         var end = 0;
         var segs = state.segments || [];
         for (var i = 0; i < segs.length; i++) {
             if (segs[i].end > end) end = segs[i].end;
         }
-        // 直接按当前音符的实际末尾计算 (不依赖 state.maxTick 的更新时机)
         var notes = state.notes || [];
         var maxTick = 0;
         for (var n = 0; n < notes.length; n++) {
@@ -1095,27 +1269,248 @@
     }
 
     function segmentEnsure() {
+        segmentEnsureLanes();
         if (!Array.isArray(state.segments)) state.segments = [];
         if (typeof state._segmentIdSeq !== 'number') state._segmentIdSeq = 0;
         if (state.segments.length === 0) {
-            state.segments.push({ id: ++state._segmentIdSeq, start: 0, end: segmentSongEnd() });
+            state.segments.push({
+                id: ++state._segmentIdSeq, lane: 0, start: 0, end: segmentSongEnd(),
+                name: '片段 1', notes: []
+            });
+            segmentEnsureEmptyLane();
             return;
         }
+        for (var i = 0; i < state.segments.length; i++) {
+            var s = state.segments[i];
+            if (!isFinite(s.lane)) s.lane = 0;
+            if (!Array.isArray(s.notes)) s.notes = [];
+            if (!s.name) s.name = '片段 ' + (i + 1);
+            if (!isFinite(s.id)) s.id = ++state._segmentIdSeq;
+        }
         segmentFollowSongEnd();
+        segmentEnsureEmptyLane();
+    }
+
+    function segmentLaneCount() {
+        return (state.segmentLanes || []).length;
     }
 
     function segmentSorted() {
         return (state.segments || []).slice().sort(function(a, b) { return a.start - b.start; });
     }
 
+    function segmentSelectedIds() {
+        var pr = state.pianoRoll;
+        if (!pr) return [];
+        var ids = pr.segmentSelectedIds;
+        if (Array.isArray(ids)) return ids.slice();
+        if (pr.segmentSelectedId != null) return [pr.segmentSelectedId];
+        return [];
+    }
+
     function segmentSelected() {
-        var id = state.pianoRoll ? state.pianoRoll.segmentSelectedId : null;
-        if (id == null) return null;
+        var ids = segmentSelectedIds();
+        if (!ids.length) return null;
+        return segmentById(ids[0]);
+    }
+
+    function segmentById(id) {
         var segs = state.segments || [];
         for (var i = 0; i < segs.length; i++) {
             if (segs[i].id === id) return segs[i];
         }
         return null;
+    }
+
+    // 某条 lane 内 [start, end) 是否与其他片段重叠
+    function segmentLaneOverlaps(lane, start, end, excludeId) {
+        var segs = state.segments || [];
+        for (var i = 0; i < segs.length; i++) {
+            var s = segs[i];
+            if (s.id === excludeId) continue;
+            if (s.lane !== lane) continue;
+            if (start < s.end && end > s.start) return true;
+        }
+        return false;
+    }
+
+    // 把绝对 tick 的音符放入片段 (rel 相对片段起点)
+    function pushSegmentNote(seg, nt) {
+        seg.notes.push({
+            rel: nt.tick - seg.start,
+            layer: isFinite(nt.layer) ? nt.layer : 0,
+            instrument: nt.instrument, key: nt.key,
+            velocity: isFinite(nt.velocity) ? nt.velocity : 100,
+            pan: isFinite(nt.pan) ? nt.pan : 100, pitch: nt.pitch || 0
+        });
+    }
+
+    // 从当前 state.notes 重新捕获片段内容 (进入片段模式时调用)
+    // 落在所有片段之外的音符 (裁剪后的空洞): 单片段未编辑时扩展片段, 否则按簇新建片段
+    function segmentCaptureFromSong() {
+        segmentEnsure();
+        var segs = state.segments;
+        for (var i = 0; i < segs.length; i++) segs[i].notes = [];
+        var orphans = [];
+        var notes = state.notes || [];
+        var lanes = state.segmentLanes || [];
+        for (var n = 0; n < notes.length; n++) {
+            var nt = notes[n];
+            var placed = false;
+            var fallbackSeg = null;
+            // 音符所属 MIDI 通道: 自动分割生成的多片段轨道要按通道归位,
+            // 否则所有音符都会落进第一条片段 (整曲片段会互相重叠)
+            var ntChannel = (state.layerChannelMap && nt.layer !== undefined)
+                ? state.layerChannelMap[nt.layer] : undefined;
+            for (var k = 0; k < segs.length; k++) {
+                if (!(nt.tick >= segs[k].start && nt.tick < segs[k].end)) continue;
+                if (!fallbackSeg) fallbackSeg = segs[k];
+                var laneCh = lanes[segs[k].lane] ? lanes[segs[k].lane].channel : undefined;
+                if (ntChannel !== undefined && laneCh !== undefined && laneCh === ntChannel) {
+                    pushSegmentNote(segs[k], nt);
+                    placed = true;
+                    break;
+                }
+            }
+            if (!placed && fallbackSeg) {
+                pushSegmentNote(fallbackSeg, nt);
+                placed = true;
+            }
+            if (!placed) orphans.push(nt);
+        }
+        if (!orphans.length) return;
+        if (segs.length === 1 && !state._segmentsEdited) {
+            var maxT = 0;
+            for (var o = 0; o < orphans.length; o++) {
+                if (orphans[o].tick > maxT) maxT = orphans[o].tick;
+            }
+            segs[0].end = Math.max(segs[0].end, maxT + 1);
+            for (var o2 = 0; o2 < orphans.length; o2++) {
+                var no = orphans[o2];
+                segs[0].notes.push({
+                    rel: no.tick - segs[0].start,
+                    layer: isFinite(no.layer) ? no.layer : 0,
+                    instrument: no.instrument, key: no.key,
+                    velocity: isFinite(no.velocity) ? no.velocity : 100,
+                    pan: isFinite(no.pan) ? no.pan : 100, pitch: no.pitch || 0
+                });
+            }
+            return;
+        }
+        orphans.sort(function(a, b) { return a.tick - b.tick; });
+        var clusters = [];
+        for (var q = 0; q < orphans.length; q++) {
+            var tk = orphans[q].tick;
+            var last = clusters[clusters.length - 1];
+            if (last && tk - last.end <= 32) last.items.push(orphans[q]);
+            else clusters.push({ start: tk, end: tk + 1, items: [orphans[q]] });
+            last = clusters[clusters.length - 1];
+            if (tk + 1 > last.end) last.end = tk + 1;
+        }
+        for (var c = 0; c < clusters.length; c++) {
+            var cl = clusters[c];
+            var lane = 0;
+            while (lane < segmentLaneCount()
+                && segmentLaneOverlaps(lane, cl.start, cl.end, null)) lane++;
+            if (lane >= segmentLaneCount()) {
+                state.segmentLanes.push({
+                    id: state.segmentLanes.length + 1, muted: false, solo: false,
+                    volume: 100, height: SEG_DEFAULT_LANE_H
+                });
+            }
+            var ns = {
+                id: ++state._segmentIdSeq, lane: lane,
+                start: cl.start, end: Math.max(cl.end, cl.start + 1),
+                name: '片段 ' + (state.segments.length + 1), notes: []
+            };
+            for (var it = 0; it < cl.items.length; it++) {
+                var oi = cl.items[it];
+                ns.notes.push({
+                    rel: oi.tick - ns.start,
+                    layer: isFinite(oi.layer) ? oi.layer : 0,
+                    instrument: oi.instrument, key: oi.key,
+                    velocity: isFinite(oi.velocity) ? oi.velocity : 100,
+                    pan: isFinite(oi.pan) ? oi.pan : 100, pitch: oi.pitch || 0
+                });
+            }
+            state.segments.push(ns);
+        }
+        segmentEnsureEmptyLane();
+    }
+
+    // 缝合: 片段 -> state.notes (绝对 tick + 全局 layer)
+    // 静音 / 非独奏 lane: velocity = 0 (保留音符, 导出后可还原分组)
+    function segmentCompose() {
+        segmentEnsureLanes();
+        var lanes = state.segmentLanes;
+        var anySolo = false;
+        for (var a = 0; a < lanes.length; a++) if (lanes[a].solo) anySolo = true;
+        var base = 0;
+        var out = [];
+        var seq = 0;
+        var layerChannelOut = null;   // 片段合成后的 layer -> MIDI 通道 (自动分轨工程用)
+        for (var li = 0; li < lanes.length; li++) {
+            var lane = lanes[li];
+            var segs = [];
+            for (var si = 0; si < (state.segments || []).length; si++) {
+                if (state.segments[si].lane === li) segs.push(state.segments[si]);
+            }
+            segs.sort(function(x, y) { return x.start - y.start; });
+            var used = {};
+            for (var s1 = 0; s1 < segs.length; s1++) {
+                var sn = segs[s1].notes || [];
+                for (var n1 = 0; n1 < sn.length; n1++) {
+                    used[isFinite(sn[n1].layer) ? sn[n1].layer : 0] = true;
+                }
+            }
+            var rels = Object.keys(used).map(Number).sort(function(x, y) { return x - y; });
+            var map = {};
+            for (var r = 0; r < rels.length; r++) map[rels[r]] = base + r;
+            // 记录本轨合成后的新 layer 归属, 再次进入片段模式时按通道归位
+            if (lane.channel !== undefined) {
+                if (!layerChannelOut) layerChannelOut = {};
+                for (var rk in map) {
+                    if (map.hasOwnProperty(rk)) layerChannelOut[map[rk]] = lane.channel;
+                }
+            }
+            var audible = !lane.muted && (!anySolo || lane.solo);
+            var vol = Math.max(0, Math.min(100, isFinite(lane.volume) ? lane.volume : 100));
+            for (var s2 = 0; s2 < segs.length; s2++) {
+                var seg = segs[s2];
+                var sn2 = seg.notes || [];
+                for (var n2 = 0; n2 < sn2.length; n2++) {
+                    var nn = sn2[n2];
+                    var relLayer = isFinite(nn.layer) ? nn.layer : 0;
+                    var vel = isFinite(nn.velocity) ? nn.velocity : 100;
+                    if (!audible) vel = 0;
+                    else vel = Math.max(0, Math.min(100, Math.round(vel * vol / 100)));
+                    var lid = map[relLayer];
+                    if (lid === undefined) lid = base;
+                    out.push({
+                        id: 'sg' + seg.id + '_' + n2 + '_' + (seq++),
+                        tick: Math.max(0, Math.floor(seg.start + (nn.rel || 0))),
+                        layer: lid, instrument: nn.instrument, key: nn.key,
+                        velocity: vel,
+                        pan: isFinite(nn.pan) ? nn.pan : 100,
+                        pitch: nn.pitch || 0
+                    });
+                }
+            }
+            base += rels.length;
+        }
+        state.notes = out;
+        if (state.song) state.song.notes = out;
+        if (layerChannelOut) state.layerChannelMap = layerChannelOut;
+        var layerCount = Math.max(1, base);
+        if (state.song && Array.isArray(state.song.layers)) {
+            while (state.song.layers.length < layerCount) {
+                state.song.layers.push({
+                    name: 'Layer ' + (state.song.layers.length + 1),
+                    volume: 100, stereo: 100, lock: 0
+                });
+            }
+        }
+        return out;
     }
 
     function segmentAt(tick) {
@@ -1143,99 +1538,138 @@
     }
 
     function segmentSync() {
-        if (state.pianoRoll) state.pianoRoll.setSegments(state.segments || []);
+        if (state.pianoRoll) {
+            state.pianoRoll.setSegments(state.segments || []);
+            state.pianoRoll.setSegmentLanes(state.segmentLanes || []);
+        }
         var n = (state.segments || []).length;
         var cnt = $('segment-count');
         if (cnt) cnt.textContent = String(n);
         var cnt2 = $('seg-tool-count');
         if (cnt2) cnt2.textContent = String(n);
+        if (state.segmentsEditMode) renderSegmentSidePanel();
+        syncNbsLayerGroups();
     }
 
-    // 音符落在片段之外 (裁剪后留下的空洞) 时, 自动为其创建/扩展到片段中
-    // 仅在用户使用过片段编辑后生效, 避免普通编辑时意外产生分割线
+    // NBS 模式: 依据片段轨道把 NBS 层分组, 供画布与音轨栏绘制横向分割线
+    // 每条片段轨道的片段里出现的 layer 归为同一组; 空层并入上一组
+    function syncNbsLayerGroups() {
+        if (!state.pianoRoll) return;
+        var groups = [];
+        var segs = state.segments || [];
+        var total = state.pianoRoll.trackCount
+            || (state.song && state.song.layers ? state.song.layers.length : 0);
+        if (segs.length > 0 && total > 0) {
+            var laneOfLayer = {};
+            for (var i = 0; i < segs.length; i++) {
+                var ns = segs[i].notes || [];
+                for (var j = 0; j < ns.length; j++) {
+                    var L = isFinite(ns[j].layer) ? ns[j].layer : 0;
+                    if (laneOfLayer[L] === undefined) laneOfLayer[L] = segs[i].lane;
+                }
+            }
+            var cur = null;
+            for (var L2 = 0; L2 < total; L2++) {
+                var lane = laneOfLayer[L2];
+                if (lane === undefined) {
+                    if (cur) cur.to = L2;
+                    continue;
+                }
+                if (!cur || cur.lane !== lane) {
+                    cur = { lane: lane, from: L2, to: L2 };
+                    groups.push(cur);
+                } else {
+                    cur.to = L2;
+                }
+            }
+            if (groups.length < 2) groups = [];
+        }
+        state.pianoRoll.setLayerGroups(groups);
+    }
+
+    // 兼容旧调用: 新模型下片段内容在进入片段模式时统一捕获,
+    // 这里只负责让默认片段跟随歌曲长度变化
     function segmentAdoptTick(tick) {
-        if (!state._segmentsTouched) return false;
-        if (!isFinite(tick)) return false;
-        if (!Array.isArray(state.segments)) state.segments = [];
-        tick = Math.max(0, Math.floor(tick));
-        var segs = state.segments;
-        for (var i = 0; i < segs.length; i++) {
-            if (tick >= segs[i].start && tick < segs[i].end) return false;
-        }
-        if (typeof state._segmentIdSeq !== 'number') state._segmentIdSeq = 0;
-        // 紧邻已有片段时直接扩展该片段 (形成连续片段, 避免碎片化)
-        for (var j = 0; j < segs.length; j++) {
-            if (segs[j].end === tick) {
-                segs[j].end = tick + 4;
-                segmentSync();
-                return true;
-            }
-            if (segs[j].start === tick + 1) {
-                segs[j].start = tick;
-                segmentSync();
-                return true;
-            }
-        }
-        segs.push({ id: ++state._segmentIdSeq, start: tick, end: tick + 4 });
-        segmentSync();
-        return true;
+        return segmentFollowSongEnd();
     }
 
     function segmentAfterEdit() {
+        // 保证始终有一条空轨道可拖入
+        segmentEnsureEmptyLane();
+        // 片段是权威数据: 先缝合回 NBS 音符, 再刷新索引与界面
+        segmentCompose();
         if (state.pianoRoll) state.pianoRoll.clearSelection();
         rebuildFromNotes();
         segmentSync();
         markDirty();
     }
 
-    // 拖动片段提交: mode = 'body'(整体移动) / 'left'(左端点) / 'right'(右端点)
-    function segmentCommitDrag(id, newStart, newEnd, mode) {
-        var segs = state.segments || [];
-        var seg = null;
-        for (var i = 0; i < segs.length; i++) {
-            if (segs[i].id === id) { seg = segs[i]; break; }
-        }
+    // 拖动片段提交: mode = 'body'(移动, 可换 lane) / 'left' / 'right'
+    function segmentCommitDrag(id, newStart, newEnd, newLane, mode) {
+        var seg = segmentById(id);
         if (!seg) return;
         newStart = Math.max(0, Math.floor(newStart));
         newEnd = Math.max(newStart + 1, Math.floor(newEnd));
-        if (newStart === seg.start && newEnd === seg.end) return;
+        if (typeof newLane !== 'number' || !isFinite(newLane)) newLane = seg.lane;
+        newLane = Math.max(0, Math.min(segmentLaneCount() - 1, newLane));
+        // 同一 lane 内不允许时间重叠: 非法落点直接放弃
+        if (segmentLaneOverlaps(newLane, newStart, newEnd, seg.id)) return;
+        if (newStart === seg.start && newEnd === seg.end && newLane === seg.lane) return;
         pushUndo();
         state._segmentsEdited = true;
         var oStart = seg.start, oEnd = seg.end;
-        if (mode === 'body') {
-            // 整体移动: 片段范围内的音符跟随平移
-            var delta = newStart - oStart;
-            if (delta !== 0) {
-                for (var k = 0; k < state.notes.length; k++) {
-                    var n = state.notes[k];
-                    if (n.tick >= oStart && n.tick < oEnd) n.tick = Math.max(0, n.tick + delta);
-                }
+        if (mode === 'left') {
+            var cutL = newStart - oStart;
+            if (cutL > 0) {
+                seg.notes = seg.notes.filter(function(n) { return (n.rel || 0) >= cutL; });
+                for (var i = 0; i < seg.notes.length; i++) seg.notes[i].rel = (seg.notes[i].rel || 0) - cutL;
             }
             seg.start = newStart;
-            seg.end = newEnd;
-        } else if (mode === 'left') {
-            // 左端点右移 = 裁掉左侧内容; 左移 = 扩大范围 (不恢复已删音符)
-            if (newStart > oStart) segmentDropNotes(oStart, newStart);
-            seg.start = newStart;
+            seg.end = Math.max(newStart + 1, oEnd);
+            seg.lane = newLane;
         } else if (mode === 'right') {
-            // 右端点左移 = 裁掉右侧内容; 右移 = 扩大范围
-            if (newEnd < oEnd) segmentDropNotes(newEnd, oEnd);
+            var maxRel = newEnd - oStart;
+            seg.notes = seg.notes.filter(function(n) { return (n.rel || 0) < maxRel; });
             seg.end = newEnd;
+            seg.lane = newLane;
+        } else {
+            seg.start = newStart;
+            seg.end = newEnd;
+            seg.lane = newLane;
         }
         segmentAfterEdit();
     }
 
-    // 在播放头处分割选中片段 (不改变任何音符)
+    // 在播放头处分割选中片段
     function segmentSplit() {
         var at = Math.max(0, Math.floor(state.currentTick || 0));
         var seg = segmentAt(at) || segmentSelected();
         if (!seg || at <= seg.start || at >= seg.end) return false;
         pushUndo();
         state._segmentsEdited = true;
-        var right = { id: ++state._segmentIdSeq, start: at, end: seg.end };
+        var cut = at - seg.start;
+        var leftNotes = [], rightNotes = [];
+        for (var i = 0; i < seg.notes.length; i++) {
+            var nn = seg.notes[i];
+            if ((nn.rel || 0) < cut) leftNotes.push(nn);
+            else {
+                var c = {};
+                for (var k in nn) if (Object.prototype.hasOwnProperty.call(nn, k)) c[k] = nn[k];
+                c.rel = (nn.rel || 0) - cut;
+                rightNotes.push(c);
+            }
+        }
+        var right = {
+            id: ++state._segmentIdSeq, lane: seg.lane, start: at, end: seg.end,
+            name: seg.name + '·2', notes: rightNotes
+        };
+        seg.notes = leftNotes;
         seg.end = at;
         state.segments.push(right);
-        if (state.pianoRoll) state.pianoRoll.segmentSelectedId = right.id;
+        if (state.pianoRoll) {
+            state.pianoRoll.segmentSelectedIds = [right.id];
+            state.pianoRoll.segmentSelectedId = right.id;
+        }
         segmentAfterEdit();
         return true;
     }
@@ -1245,11 +1679,7 @@
         var seg = segmentSelected();
         var at = Math.floor(state.currentTick || 0);
         if (!seg || at <= seg.start || at >= seg.end) return false;
-        pushUndo();
-        state._segmentsEdited = true;
-        segmentDropNotes(seg.start, at);
-        seg.start = at;
-        segmentAfterEdit();
+        segmentCommitDrag(seg.id, at, seg.end, seg.lane, 'left');
         return true;
     }
 
@@ -1258,11 +1688,7 @@
         var seg = segmentSelected();
         var at = Math.floor(state.currentTick || 0);
         if (!seg || at <= seg.start || at >= seg.end) return false;
-        pushUndo();
-        state._segmentsEdited = true;
-        segmentDropNotes(at, seg.end);
-        seg.end = at;
-        segmentAfterEdit();
+        segmentCommitDrag(seg.id, seg.start, at, seg.lane, 'right');
         return true;
     }
 
@@ -1270,120 +1696,289 @@
         var seg = segmentSelected();
         if (!seg) return false;
         var arr = [];
-        for (var i = 0; i < state.notes.length; i++) {
-            var n = state.notes[i];
-            if (n.tick < seg.start || n.tick >= seg.end) continue;
+        for (var i = 0; i < seg.notes.length; i++) {
+            var n = seg.notes[i];
             arr.push({
-                rel: n.tick - seg.start, layer: n.layer, instrument: n.instrument,
-                key: n.key, velocity: n.velocity, pan: n.pan, pitch: n.pitch
+                rel: n.rel || 0, layer: n.layer || 0, instrument: n.instrument,
+                key: n.key, velocity: n.velocity, pan: n.pan, pitch: n.pitch || 0
             });
         }
-        state.segmentClipboard = { duration: seg.end - seg.start, notes: arr };
+        state.segmentClipboard = {
+            duration: seg.end - seg.start, notes: arr,
+            lane: seg.lane, start: seg.start, name: seg.name
+        };
         return true;
     }
 
-    // 粘贴: 以播放头为起点, 覆盖目标区间的音符与片段
+    // 粘贴: 放到被复制片段的正下方一行 + 相同起点 (用户确认的规则)
     function segmentPaste() {
         var clip = state.segmentClipboard;
         if (!clip || !clip.notes) return false;
-        var at = Math.max(0, Math.floor(state.currentTick || 0));
+        var at = Math.max(0, Math.floor(clip.start || 0));
         var dur = Math.max(1, clip.duration || 1);
-        var ne = at + dur;
-        pushUndo();
-        segmentDropNotes(at, ne);
-        // 裁剪 / 移除与粘贴区间重叠的片段
-        var segs = state.segments || [];
-        var keep = [];
-        for (var i = 0; i < segs.length; i++) {
-            var s = segs[i];
-            if (s.end <= at || s.start >= ne) { keep.push(s); continue; }
-            if (s.start < at) keep.push({ id: s.id, start: s.start, end: at });
-            if (s.end > ne) keep.push({ id: ++state._segmentIdSeq, start: ne, end: s.end });
+        var lane = Math.min(segmentLaneCount() - 1, (clip.lane || 0) + 1);
+        while (lane < segmentLaneCount() && segmentLaneOverlaps(lane, at, at + dur, null)) lane++;
+        if (lane >= segmentLaneCount()) {
+            state.segmentLanes.push({
+                id: state.segmentLanes.length + 1, muted: false, solo: false,
+                volume: 100, height: SEG_DEFAULT_LANE_H
+            });
         }
+        pushUndo();
         var nid = ++state._segmentIdSeq;
-        keep.push({ id: nid, start: at, end: ne });
-        state.segments = keep;
-        // 生成音符 (新 id, 避免与原片段重复)
-        var stamp = Date.now().toString(36);
-        for (var j = 0; j < clip.notes.length; j++) {
-            var c = clip.notes[j];
-            state.notes.push({
-                id: 'seg_' + nid + '_' + j + '_' + stamp,
-                tick: at + c.rel, layer: c.layer, instrument: c.instrument,
+        var notes = [];
+        for (var i = 0; i < clip.notes.length; i++) {
+            var c = clip.notes[i];
+            notes.push({
+                rel: c.rel || 0, layer: c.layer || 0, instrument: c.instrument,
                 key: c.key, velocity: c.velocity,
                 pan: (c.pan === undefined ? 100 : c.pan), pitch: c.pitch || 0
             });
         }
-        if (state.pianoRoll) state.pianoRoll.segmentSelectedId = nid;
+        state.segments.push({
+            id: nid, lane: lane, start: at, end: at + dur,
+            name: (clip.name || '片段') + ' 副本', notes: notes
+        });
+        if (state.pianoRoll) {
+            state.pianoRoll.segmentSelectedIds = [nid];
+            state.pianoRoll.segmentSelectedId = nid;
+        }
         segmentAfterEdit();
         return true;
     }
 
-    // 删除片段: 丢弃其范围内音符, 该区间变为空隙
+    // 删除选中片段 (支持多选)
     function segmentDelete() {
-        var seg = segmentSelected();
-        if (!seg) return false;
+        var ids = segmentSelectedIds();
+        if (!ids.length) return false;
         pushUndo();
         state._segmentsEdited = true;
-        segmentDropNotes(seg.start, seg.end);
         var keep = [];
-        var segs = state.segments || [];
-        for (var i = 0; i < segs.length; i++) {
-            if (segs[i].id !== seg.id) keep.push(segs[i]);
+        for (var i = 0; i < state.segments.length; i++) {
+            if (ids.indexOf(state.segments[i].id) < 0) keep.push(state.segments[i]);
         }
         state.segments = keep;
-        if (state.pianoRoll) state.pianoRoll.segmentSelectedId = null;
+        if (state.pianoRoll) {
+            state.pianoRoll.segmentSelectedIds = [];
+            state.pianoRoll.segmentSelectedId = null;
+        }
         segmentAfterEdit();
         return true;
     }
 
-    // 合并全部片段: 首尾相接紧凑化 (丢弃空隙) 后合并为一个完整片段
+    // 右键「合并片段」: 仅同 lane 且首尾相接的两个选中片段
+    function segmentMergeSelected() {
+        var ids = segmentSelectedIds();
+        if (ids.length !== 2) return false;
+        var a = segmentById(ids[0]), b = segmentById(ids[1]);
+        if (!a || !b) return false;
+        if (a.lane !== b.lane) return false;
+        var left = a.start <= b.start ? a : b;
+        var right = left === a ? b : a;
+        if (left.end !== right.start) return false;
+        pushUndo();
+        state._segmentsEdited = true;
+        var notes = left.notes.slice();
+        var off = right.start - left.start;
+        for (var i = 0; i < right.notes.length; i++) {
+            var nn = right.notes[i];
+            notes.push({
+                rel: (nn.rel || 0) + off, layer: nn.layer || 0, instrument: nn.instrument,
+                key: nn.key, velocity: nn.velocity, pan: nn.pan, pitch: nn.pitch || 0
+            });
+        }
+        left.end = right.end;
+        left.notes = notes;
+        state.segments = state.segments.filter(function(s) { return s.id !== right.id; });
+        if (state.pianoRoll) {
+            state.pianoRoll.segmentSelectedIds = [left.id];
+            state.pianoRoll.segmentSelectedId = left.id;
+        }
+        segmentAfterEdit();
+        return true;
+    }
+
+    // 合并全部片段: 按 lane 从上到下、时间从左到右首尾相接, 合成 lane0 的单片段
     function segmentMergeAll() {
-        var wasEmpty = !state.segments || state.segments.length === 0;
         segmentEnsure();
         var sorted = segmentSorted();
-        if (sorted.length <= 1) {
-            if (wasEmpty) { segmentAfterEdit(); return true; }
-            return false;
-        }
+        if (sorted.length <= 1) return false;
         pushUndo();
-        var oldNotes = state.notes.slice();
-        var used = {};
-        var merged = [];
         var pos = 0;
-        var maxTick = 0;
+        var merged = [];
         for (var i = 0; i < sorted.length; i++) {
             var s = sorted[i];
             var span = Math.max(1, s.end - s.start);
-            var delta = pos - s.start;
-            for (var j = 0; j < oldNotes.length; j++) {
-                if (used[j]) continue;
-                var n = oldNotes[j];
-                if (n.tick < s.start || n.tick >= s.end) continue;
-                used[j] = true;
-                n.tick = Math.max(0, n.tick + delta);
-                if (n.tick > maxTick) maxTick = n.tick;
-                merged.push(n);
+            for (var j = 0; j < s.notes.length; j++) {
+                var nn = s.notes[j];
+                merged.push({
+                    rel: pos + (nn.rel || 0), layer: nn.layer || 0,
+                    instrument: nn.instrument, key: nn.key, velocity: nn.velocity,
+                    pan: nn.pan, pitch: nn.pitch || 0
+                });
             }
             pos += span;
         }
-        // 空隙内的音符随空隙一起丢弃 (真剪辑语义)
-        state.notes.length = 0;
-        for (var k = 0; k < merged.length; k++) state.notes.push(merged[k]);
-        var end = Math.max(pos, maxTick + 1);
-        state.segments = [{ id: ++state._segmentIdSeq, start: 0, end: end }];
-        // 合并回完整片段后, 重新允许跟随全曲自动扩展
+        state.segments = [{
+            id: ++state._segmentIdSeq, lane: 0, start: 0,
+            end: Math.max(pos, 1), name: '片段 1', notes: merged
+        }];
+        state.segmentLanes = [{
+            id: 1, muted: false, solo: false, volume: 100, height: SEG_DEFAULT_LANE_H
+        }];
         state._segmentsEdited = false;
-        segmentEnsure();
-        if (state.pianoRoll) state.pianoRoll.segmentSelectedId = state.segments[0].id;
+        if (state.pianoRoll) {
+            state.pianoRoll.segmentSelectedIds = [state.segments[0].id];
+            state.pianoRoll.segmentSelectedId = state.segments[0].id;
+        }
         segmentAfterEdit();
         return true;
+    }
+
+    // 右键「导出片段」: 以该片段为完整歌曲导出 NBS (tick 从 0 开始)
+    function segmentExportOne(id) {
+        var seg = segmentById(id);
+        if (!seg) return;
+        var used = {};
+        for (var i = 0; i < seg.notes.length; i++) used[seg.notes[i].layer || 0] = true;
+        var rels = Object.keys(used).map(Number).sort(function(a, b) { return a - b; });
+        var map = {};
+        for (var r = 0; r < rels.length; r++) map[rels[r]] = r;
+        var notes = [];
+        for (var j = 0; j < seg.notes.length; j++) {
+            var n = seg.notes[j];
+            notes.push({
+                id: 'part_' + j, tick: n.rel || 0, layer: map[n.layer || 0] || 0,
+                instrument: n.instrument, key: n.key, velocity: n.velocity,
+                pan: isFinite(n.pan) ? n.pan : 100, pitch: n.pitch || 0
+            });
+        }
+        var song = {
+            name: seg.name || '片段',
+            song_name: seg.name || '片段',
+            author: (state.song && state.song.author) || '',
+            original_author: (state.song && state.song.original_author) || '',
+            description: (state.song && state.song.description) || '',
+            tempo: (state.song && state.song.tempo) || state.tempo || 20,
+            solo_layers: [],
+            notes: notes,
+            layers: rels.map(function(_, idx) {
+                return { name: 'Layer ' + (idx + 1), volume: 100, stereo: 100, lock: 0 };
+            })
+        };
+        NBSClient.saveNBS(song).then(function(blob) {
+            dlBlob(blob, (seg.name || 'segment') + '.nbs');
+        }).catch(function(err) {
+            showAppAlert('片段导出失败: ' + (err && err.message ? err.message : '未知错误'),
+                { title: '导出失败', icon: 'fa-solid fa-triangle-exclamation' });
+        });
+    }
+
+    // 侧边板 (轨道头): 每行 = 一条片段轨道 lane
+    function renderSegmentSidePanel() {
+        var panel = $('segment-side-panel');
+        var pr = state.pianoRoll;
+        if (!panel || !pr) return;
+        if (!state.segmentsEditMode) { panel.style.display = 'none'; return; }
+        if (window.innerWidth <= 768) { panel.style.display = 'none'; return; }
+        panel.style.display = 'block';
+        var top = pr.getSegmentAreaTop ? pr.getSegmentAreaTop() : 0;
+        var availH = Math.max(0, pr.displayHeight - top);
+        panel.style.top = top + 'px';
+        panel.style.height = availH + 'px';
+        panel.style.width = (pr.getSegmentPanelWidth ? pr.getSegmentPanelWidth() : 120) + 'px';
+        var html = '';
+        for (var i = 0; i < state.segmentLanes.length; i++) {
+            var ln = state.segmentLanes[i];
+            var relY = pr.getSegmentLaneRelTop ? pr.getSegmentLaneRelTop(i) : 0;
+            var rh = ln.height;
+            if (relY + rh < 0 || relY > availH) continue;
+            html += '<div class="seg-lane-row" data-lane="' + i + '" style="top:' + relY + 'px;height:' + rh + 'px;">'
+                + '<div class="seg-lane-title"><span class="seg-lane-name" title="' + escapeHtml(ln.name || '') + '">'
+                + escapeHtml(ln.name || (i18nText('轨道') + ' ' + (i + 1)))
+                + '</span>'
+                + '<span>'
+                + '<button class="seg-lane-btn' + (ln.muted ? ' active' : '') + '" data-act="mute" title="' + i18nText('静音') + '">M</button>'
+                + '<button class="seg-lane-btn' + (ln.solo ? ' active' : '') + '" data-act="solo" title="' + i18nText('独奏') + '">S</button>'
+                + '</span></div>'
+                + '<input type="range" class="seg-lane-vol" data-lane="' + i + '" min="0" max="100" step="1" value="' + Math.round(ln.volume) + '">'
+                + '<div class="seg-lane-resize" data-lane="' + i + '"></div>'
+                + '</div>';
+        }
+        panel.innerHTML = html;
+    }
+
+    var _segLaneResize = null;
+    function bindSegmentSidePanel() {
+        var panel = $('segment-side-panel');
+        if (!panel || panel._bound) return;
+        panel._bound = true;
+        panel.addEventListener('click', function(e) {
+            var btn = e.target.closest ? e.target.closest('.seg-lane-btn') : null;
+            if (!btn) return;
+            var row = btn.closest('.seg-lane-row');
+            if (!row) return;
+            var idx = parseInt(row.getAttribute('data-lane'), 10);
+            var ln = state.segmentLanes[idx];
+            if (!ln) return;
+            var act = btn.getAttribute('data-act');
+            if (act === 'mute') ln.muted = !ln.muted;
+            else if (act === 'solo') ln.solo = !ln.solo;
+            segmentAfterEdit();
+        });
+        panel.addEventListener('input', function(e) {
+            if (!e.target || !e.target.classList || !e.target.classList.contains('seg-lane-vol')) return;
+            var idx = parseInt(e.target.getAttribute('data-lane'), 10);
+            var ln = state.segmentLanes[idx];
+            if (!ln) return;
+            ln.volume = parseFloat(e.target.value);
+            segmentCompose();
+            if (state.pianoRoll) state.pianoRoll.setNotes(state.notes);
+            rebuildFromNotes();
+            markDirty();
+        });
+        panel.addEventListener('mousedown', function(e) {
+            var rz = e.target.closest ? e.target.closest('.seg-lane-resize') : null;
+            if (!rz) return;
+            e.preventDefault();
+            var idx = parseInt(rz.getAttribute('data-lane'), 10);
+            _segLaneResize = { idx: idx, startY: e.clientY, startH: state.segmentLanes[idx].height };
+            var move = function(ev) {
+                if (!_segLaneResize) return;
+                var h = Math.max(28, Math.min(180, _segLaneResize.startH + (ev.clientY - _segLaneResize.startY)));
+                state.segmentLanes[_segLaneResize.idx].height = h;
+                if (state.pianoRoll) state.pianoRoll.render();
+                renderSegmentSidePanel();
+            };
+            var up = function() {
+                _segLaneResize = null;
+                document.removeEventListener('mousemove', move);
+                document.removeEventListener('mouseup', up);
+                try {
+                    localStorage.setItem('segment_lane_heights', JSON.stringify(
+                        state.segmentLanes.map(function(l) { return l.height; })));
+                } catch (er) {}
+                markDirty();
+            };
+            document.addEventListener('mousemove', move);
+            document.addEventListener('mouseup', up);
+        });
+    }
+
+    // 片段工具栏定位: 与画布内几何共用同一算法 (时间栏在顶部时贴其下方, 否则固定在顶部工具栏下方)
+    function syncSegmentToolbarTop() {
+        var tb = $('segment-toolbar');
+        if (!tb) return;
+        var pr = state.pianoRoll;
+        var top = (pr && pr.getSegmentToolbarTop) ? pr.getSegmentToolbarTop() : 64;
+        tb.style.top = top + 'px';
     }
 
     function enterSegmentsEditMode() {
         segmentEnsure();
+        // 进入片段模式前, 把 NBS 当前音符重新捕获进片段 (NBS 是唯一编辑音符的地方)
+        segmentCaptureFromSong();
         state._segmentsTouched = true;
-        // 片段编辑需要看见播放头来确定剪裁位置: 无播放头时从当前 tick 显示
         if (state.pianoRoll && state.pianoRoll.playheadTick == null) {
             var pt = Math.max(0, Math.floor(state.currentTick || 0));
             state.pianoRoll.playheadTick = pt;
@@ -1394,27 +1989,70 @@
         state.segmentsEditMode = true;
         if (state.pianoRoll) {
             state.pianoRoll.setSegments(state.segments);
+            state.pianoRoll.setSegmentLanes(state.segmentLanes);
             state.pianoRoll.setSegmentsEditMode(true);
         }
         var bar = $('segment-edit-bar');
         if (bar) bar.style.display = '';
         var tb = $('segment-toolbar');
-        if (tb) tb.style.display = 'flex';
+        if (tb) {
+            tb.style.display = 'flex';
+            syncSegmentToolbarTop();
+        }
+        // 片段模式: 用 body class 统一隐藏 NBS 专属控件 (折叠音轨按钮 / 绘图工具条)
+        document.body.classList.add('segment-edit-mode');
+        syncTrackPanelToggleButton();
         var btn = $('btn-segments');
         if (btn) btn.classList.add('active');
+        var sw = $('edit-mode-switch');
+        if (sw) {
+            sw.setAttribute('data-mode', 'segment');
+            sw.setAttribute('aria-checked', 'true');
+            var on = sw.querySelector('.ems-opt-nbs'), off = sw.querySelector('.ems-opt-seg');
+            if (on) on.classList.remove('active');
+            if (off) off.classList.add('active');
+        }
+        bindSegmentSidePanel();
         segmentSync();
+        renderSegmentSidePanel();
     }
 
     function exitSegmentsEditMode() {
         if (!state.segmentsEditMode) return;
         state.segmentsEditMode = false;
-        if (state.pianoRoll) state.pianoRoll.setSegmentsEditMode(false);
+        // 退出时把片段结果缝合回 NBS
+        segmentCompose();
+        if (state.pianoRoll) {
+            state.pianoRoll.setSegmentsEditMode(false);
+            state.pianoRoll.setNotes(state.notes);
+        }
+        rebuildFromNotes();
+        // 片段合成后层号会重排, 重新计算 NBS 视图的轨道分组
+        syncNbsLayerGroups();
         var bar = $('segment-edit-bar');
         if (bar) bar.style.display = 'none';
         var tb = $('segment-toolbar');
         if (tb) tb.style.display = 'none';
+        // 恢复 NBS 专属控件 (由 body class 控制)
+        document.body.classList.remove('segment-edit-mode');
+        syncTrackPanelToggleButton();
         var btn = $('btn-segments');
         if (btn) btn.classList.remove('active');
+        var panel = $('segment-side-panel');
+        if (panel) panel.style.display = 'none';
+        var sw = $('edit-mode-switch');
+        if (sw) {
+            sw.setAttribute('data-mode', 'nbs');
+            sw.setAttribute('aria-checked', 'false');
+            var on = sw.querySelector('.ems-opt-nbs'), off = sw.querySelector('.ems-opt-seg');
+            if (on) on.classList.add('active');
+            if (off) off.classList.remove('active');
+        }
+    }
+
+    function toggleSegmentsEditMode() {
+        if (state.segmentsEditMode) exitSegmentsEditMode();
+        else enterSegmentsEditMode();
     }
 
     // ============ 音符索引 ============
@@ -1499,6 +2137,7 @@
         // 新建文件: 片段重置为整个工程一个片段
         exitSegmentsEditMode();
         state.segments = [];
+        state.segmentLanes = [];
         state.segmentClipboard = null;
         state._segmentIdSeq = 0;
         state._segmentsTouched = false;
@@ -1605,6 +2244,7 @@
             selectedPianoKey: state.selectedPianoKey,
             lyrics: JSON.parse(JSON.stringify(state.lyrics || [])),
             segments: JSON.parse(JSON.stringify(state.segments || [])),
+            segmentLanes: JSON.parse(JSON.stringify(state.segmentLanes || [])),
             segmentSeq: state._segmentIdSeq || 0,
             segmentsTouched: !!state._segmentsTouched,
             segmentsEdited: !!state._segmentsEdited,
@@ -1626,6 +2266,7 @@
         state.selectedPianoKey = s.selectedPianoKey;
         state.lyrics = JSON.parse(JSON.stringify(s.lyrics || []));
         state.segments = JSON.parse(JSON.stringify(s.segments || []));
+        state.segmentLanes = JSON.parse(JSON.stringify(s.segmentLanes || []));
         state._segmentIdSeq = s.segmentSeq || 0;
         state._segmentsTouched = !!s.segmentsTouched;
         state._segmentsEdited = !!s.segmentsEdited;
@@ -2254,22 +2895,13 @@
         // 录制时音符动画: 现已常开 (原「录制时显示音符动画」开关已移除)
         state.recordingAnimationEnabled = true;
 
-        // NBS 导出版本选择
-        var nbsVersionSel = $('settings-nbs-version');
-        if (nbsVersionSel) {
-            try {
-                var savedVer = localStorage.getItem('nbs_export_version');
-                if (savedVer !== null) {
-                    nbsVersionSel.value = savedVer;
-                    window.NBS_EXPORT_VERSION = parseInt(savedVer) || 5;
-                }
-            } catch(e) {}
-            nbsVersionSel.addEventListener('change', function() {
-                var v = parseInt(this.value) || 5;
-                window.NBS_EXPORT_VERSION = v;
-                try { localStorage.setItem('nbs_export_version', String(v)); } catch(e) {}
-            });
-        }
+        // NBS 导出版本已移入「导出 NBS」弹窗, 那里会读取/写入 nbs_export_version
+        try {
+            var savedExportVer = parseInt(localStorage.getItem('nbs_export_version'), 10);
+            if (savedExportVer === 4 || savedExportVer === 5 || savedExportVer === 6) {
+                window.NBS_EXPORT_VERSION = savedExportVer;
+            }
+        } catch (e) {}
 
         // 音量透明度开关 (默认开启)
         var volOpacityChk = $('settings-volume-opacity');
@@ -2290,6 +2922,8 @@
         function applyTimelineBarLevel(level) {
             if (level !== 'small' && level !== 'medium' && level !== 'large') level = 'small';
             if (state.pianoRoll) state.pianoRoll.setTimelineBarHeight(level);
+            // 时间栏高度变化会影响片段工具栏与片段绘画区的位置
+            if (state.segmentsEditMode) syncSegmentToolbarTop();
         }
         if (timelineHSelect) {
             var savedTimelineLevel = 'small';
@@ -2305,6 +2939,110 @@
                 try { localStorage.setItem('timeline_view_height', lv); } catch(e) {}
                 applyTimelineBarLevel(lv);
             });
+        }
+
+        // 时间栏位置 (NBS / 片段 各自独立) + 缩略地图纵轴模式
+        var timelinePosNbsSel = $('settings-timeline-pos-nbs');
+        var timelinePosSegSel = $('settings-timeline-pos-seg');
+        var timelineMapModeSel = $('settings-timeline-map-mode');
+        var segmentPreviewModeSel = $('settings-segment-preview-mode');
+        if (timelinePosNbsSel) {
+            var posNbs = 'top';
+            try {
+                if (localStorage.getItem('timeline_pos_nbs') === 'bottom') posNbs = 'bottom';
+            } catch (e1) {}
+            timelinePosNbsSel.value = posNbs;
+            if (!state.segmentsEditMode && state.pianoRoll && state.pianoRoll.setTimelinePosition) {
+                state.pianoRoll.setTimelinePosition(posNbs);
+            }
+            timelinePosNbsSel.addEventListener('change', function() {
+                try { localStorage.setItem('timeline_pos_nbs', this.value); } catch (e2) {}
+                if (!state.segmentsEditMode && state.pianoRoll && state.pianoRoll.setTimelinePosition) {
+                    state.pianoRoll.setTimelinePosition(this.value);
+                }
+            });
+        }
+        if (timelinePosSegSel) {
+            var posSeg = 'bottom';
+            try {
+                if (localStorage.getItem('timeline_pos_segment') === 'top') posSeg = 'top';
+            } catch (e3) {}
+            timelinePosSegSel.value = posSeg;
+            timelinePosSegSel.addEventListener('change', function() {
+                try { localStorage.setItem('timeline_pos_segment', this.value); } catch (e4) {}
+                if (state.segmentsEditMode && state.pianoRoll && state.pianoRoll.setTimelinePosition) {
+                    state.pianoRoll.setTimelinePosition(this.value);
+                }
+                // 时间栏位置变化会影响片段工具栏的落点
+                syncSegmentToolbarTop();
+            });
+        }
+        if (timelineMapModeSel) {
+            var mapMode = 'track';
+            try {
+                if (localStorage.getItem('timeline_map_mode') === 'pitch') mapMode = 'pitch';
+            } catch (e5) {}
+            timelineMapModeSel.value = mapMode;
+            if (state.pianoRoll && state.pianoRoll.setTimelineMapMode) {
+                state.pianoRoll.setTimelineMapMode(mapMode);
+            }
+            timelineMapModeSel.addEventListener('change', function() {
+                try { localStorage.setItem('timeline_map_mode', this.value); } catch (e6) {}
+                if (state.pianoRoll && state.pianoRoll.setTimelineMapMode) {
+                    state.pianoRoll.setTimelineMapMode(this.value);
+                }
+            });
+        }
+        if (segmentPreviewModeSel) {
+            var segPrevMode = 'track';
+            try {
+                if (localStorage.getItem('segment_preview_mode') === 'pitch') segPrevMode = 'pitch';
+            } catch (e7) {}
+            segmentPreviewModeSel.value = segPrevMode;
+            if (state.pianoRoll && state.pianoRoll.setSegmentPreviewMode) {
+                state.pianoRoll.setSegmentPreviewMode(segPrevMode);
+            }
+            segmentPreviewModeSel.addEventListener('change', function() {
+                try { localStorage.setItem('segment_preview_mode', this.value); } catch (e8) {}
+                if (state.pianoRoll && state.pianoRoll.setSegmentPreviewMode) {
+                    state.pianoRoll.setSegmentPreviewMode(this.value);
+                }
+            });
+        }
+
+        // NBS 模式下的片段可视化: 轨道分组横线 (默认开) / 片段边界竖线 (默认关)
+        var segLaneDivChk = $('settings-seg-lane-dividers');
+        var segBoundaryChk = $('settings-seg-boundary-lines');
+        if (segLaneDivChk) {
+            try {
+                var savedLd = localStorage.getItem('segment_lane_dividers');
+                segLaneDivChk.checked = savedLd === null ? true : savedLd === '1';
+            } catch(e) { segLaneDivChk.checked = true; }
+            segLaneDivChk.addEventListener('change', function() {
+                try { localStorage.setItem('segment_lane_dividers', this.checked ? '1' : '0'); } catch(e) {}
+                if (state.pianoRoll && state.pianoRoll.setSegmentLaneDividersEnabled) {
+                    state.pianoRoll.setSegmentLaneDividersEnabled(this.checked);
+                }
+            });
+        }
+        if (segBoundaryChk) {
+            try {
+                segBoundaryChk.checked = localStorage.getItem('segment_boundary_lines') === '1';
+            } catch(e) { segBoundaryChk.checked = false; }
+            segBoundaryChk.addEventListener('change', function() {
+                try { localStorage.setItem('segment_boundary_lines', this.checked ? '1' : '0'); } catch(e) {}
+                if (state.pianoRoll && state.pianoRoll.setSegmentBoundariesVisible) {
+                    state.pianoRoll.setSegmentBoundariesVisible(this.checked);
+                }
+            });
+        }
+        if (state.pianoRoll) {
+            if (state.pianoRoll.setSegmentLaneDividersEnabled) {
+                state.pianoRoll.setSegmentLaneDividersEnabled(segLaneDivChk ? segLaneDivChk.checked : true);
+            }
+            if (state.pianoRoll.setSegmentBoundariesVisible) {
+                state.pianoRoll.setSegmentBoundariesVisible(segBoundaryChk ? segBoundaryChk.checked : false);
+            }
         }
 
         // 音符触发时轨道高亮 (总开关默认关闭; 子选项默认开启)
@@ -3454,6 +4192,9 @@
 
             // 设置回调
             // 片段编辑: 选中片段 / 拖动提交 (端点剪裁与整体移动都会真正改动音符)
+            state.pianoRoll.onSegmentScroll = function() {
+                if (state.segmentsEditMode) renderSegmentSidePanel();
+            };
             state.pianoRoll.onSegmentSelect = function(id) {
                 state.pianoRoll.segmentSelectedId = id;
             };
@@ -4527,7 +5268,7 @@
         }
         if (!note || !pr._tickToScreen || !pr._layerToScreen) return;
         var pw = pr._currentPanelWidth, th = pr._cfg.timelineHeight;
-        var cellW = pr._cfg.cellW * pr.zoom, cellH = pr._cfg.cellH * pr.zoom;
+        var cellW = pr._cfg.cellW * pr._zoomX(), cellH = pr._cfg.cellH * pr._zoomY();
         var cw = pr.displayWidth, ch = pr.displayHeight;
         var sx = pr._tickToScreen(note.tick);
         var sy = pr._layerToScreen(note.layer);
@@ -6426,6 +7167,8 @@
         // 同步 pianoRoll 的总 tick 数, 保证进度条/时间轴比例正确
         if (state.pianoRoll) {
             state.pianoRoll.totalTicks = totalTicks;
+            // 歌曲变短后 scrollX 可能越界, 钳制回合法范围
+            if (state.pianoRoll._clampScrollX) state.pianoRoll._clampScrollX();
         }
         var timeEl = $('progress-time');
         if (timeEl) {
@@ -6504,7 +7247,8 @@
                 var cfg = state.pianoRoll._cfg;
                 var pw = state.pianoRoll._currentPanelWidth;
                 var dw = state.pianoRoll.displayWidth;
-                var cellW = cfg.cellW * state.pianoRoll.zoom;
+                // 使用统一的 _zoomX(): 片段模式走独立横向缩放, 避免 scrollX 计算错误跳到极端位置
+                var cellW = cfg.cellW * state.pianoRoll._zoomX();
                 if (state.pianoRoll.smoothScrollEnabled) {
                     // 平滑翻页: tick 对齐播放头固定位置 (允许负 scrollX)
                     var playheadX = pw + (dw - pw) / 3;
@@ -6514,6 +7258,11 @@
                     var centerX = pw + (dw - pw) / 2;
                     state.pianoRoll.scrollX = state.currentTick * cellW + pw - centerX;
                     if (state.pianoRoll.scrollX < 0) state.pianoRoll.scrollX = 0;
+                }
+                // 钳制滚动上限, 防止视图跑到歌曲范围之外 (修复播放后内容不显示)
+                var maxSX = state.pianoRoll._getMaxScrollX();
+                if (isFinite(maxSX) && state.pianoRoll.scrollX > maxSX) {
+                    state.pianoRoll.scrollX = Math.max(0, maxSX);
                 }
                 state.pianoRoll.playheadTick = state.currentTick;
                 state.pianoRoll._smoothedPlayheadTick = state.currentTick;
@@ -6667,7 +7416,8 @@
                 if (state.pianoRoll.smoothScrollEnabled) {
                     var visibleWidth = state.pianoRoll.displayWidth - state.pianoRoll._currentPanelWidth;
                     var playheadX = state.pianoRoll._currentPanelWidth + visibleWidth / 3;
-                    var cellW = state.pianoRoll._cfg.cellW * state.pianoRoll.zoom;
+                    // 使用 _zoomX(): 片段模式走独立横向缩放, 避免 scrollX 跳到极端位置
+                    var cellW = state.pianoRoll._cfg.cellW * state.pianoRoll._zoomX();
                     var targetScrollX = state.pianoRoll._getDisplayTick() * cellW + state.pianoRoll._currentPanelWidth - playheadX;
                     state.pianoRoll.scrollX = Math.max(0, Math.min(targetScrollX, state.pianoRoll._getMaxScrollX()));
                     state.pianoRoll._fullRedrawNeeded = true;
@@ -8419,6 +9169,13 @@
     function syncTrackPanelToggleButton() {
         var trackPanelToggle = $('track-panel-toggle');
         if (!trackPanelToggle || !state.pianoRoll) return;
+        // 片段模式没有 NBS 音轨栏, 该按钮必须隐藏
+        // (内联 !important 才能压过样式表里同样的 display:flex !important)
+        if (document.body.classList.contains('segment-edit-mode')) {
+            trackPanelToggle.style.setProperty('display', 'none', 'important');
+            return;
+        }
+        trackPanelToggle.style.removeProperty('display');
         var widthRef = (state.pianoRoll._panelTargetWidth !== undefined && state.pianoRoll._panelTargetWidth !== null)
             ? state.pianoRoll._panelTargetWidth
             : state.pianoRoll._currentPanelWidth;
@@ -9127,6 +9884,11 @@
     // 窗口 resize 时重定位 (因为容器宽度变化)
     window.addEventListener('resize', function() {
         updateRadioTempoSlider();
+        // 画布重排后片段工具栏的落点可能变化 (时间栏高度/位置相关)
+        if (state.segmentsEditMode) {
+            syncSegmentToolbarTop();
+            requestAnimationFrame(syncSegmentToolbarTop);
+        }
     });
 
     // ============ 歌词标注 ============
@@ -9604,6 +10366,45 @@
         bindSegButton('seg-zoom-reset', function() {
             if (state.pianoRoll) state.pianoRoll.resetZoomAxis();
         });
+        // 编辑模式切换滑块 (桌面端状态栏左下角)
+        var modeSwitch = $('edit-mode-switch');
+        if (modeSwitch) {
+            modeSwitch.addEventListener('click', function(e) {
+                var opt = e.target.closest ? e.target.closest('.ems-opt') : null;
+                var wantSeg = opt ? (opt.getAttribute('data-mode') === 'segment') : !state.segmentsEditMode;
+                if (wantSeg && !state.segmentsEditMode) enterSegmentsEditMode();
+                else if (!wantSeg && state.segmentsEditMode) exitSegmentsEditMode();
+            });
+        }
+        // 片段编辑器回调
+        if (state.pianoRoll) {
+            state.pianoRoll.onSegmentCommit = function(id, s, e2, lane, mode) {
+                segmentCommitDrag(id, s, e2, lane, mode);
+            };
+            state.pianoRoll.onSegmentOpen = function(seg) {
+                if (!seg) return;
+                var at = Math.max(0, Math.floor(seg.start || 0));
+                exitSegmentsEditMode();
+                seekToTick(at);
+                if (state.pianoRoll && state.pianoRoll.scrollToTick) {
+                    state.pianoRoll.scrollToTick(at);
+                }
+            };
+            state.pianoRoll.onSegmentContextMenu = function(segId, cx, cy) {
+                showSegmentContextMenu(segId, cx, cy);
+            };
+            state.pianoRoll.onSegmentLaneHeightChange = function() {
+                try {
+                    localStorage.setItem('segment_lane_heights', JSON.stringify(
+                        (state.segmentLanes || []).map(function(l) { return l.height; })));
+                } catch (er) {}
+                renderSegmentSidePanel();
+                markDirty();
+            };
+            state.pianoRoll.onSegmentSelectionChange = function() {
+                // 选中变化时仅需要保持工具栏状态; 计数与侧边板无需刷新
+            };
+        }
         // 片段模式: 拦截页面级 Ctrl/Alt + 滚轮, 避免浏览器缩放整个页面
         document.addEventListener('wheel', function(e) {
             if (!state.segmentsEditMode || !state.pianoRoll) return;
@@ -9611,16 +10412,87 @@
             // 画布内部由 canvas 自己的 wheel 处理
             if (e.target === state.pianoRoll.canvas) return;
             e.preventDefault();
-            var factor = Math.max(0.2, 1 - e.deltaY * 0.0025);
-            if (e.altKey) state.pianoRoll.setZoomAxis('y', factor);
-            else state.pianoRoll.setZoomAxis('x', factor);
+            var dy = e.deltaY || 0;
+            if (e.deltaMode === 1) dy *= 16;
+            else if (e.deltaMode === 2) dy *= 100;
+            if (!dy) return;
+            var factor = Math.max(0.2, Math.min(5, 1 - dy * 0.0025));
+            if (e.altKey) state.pianoRoll.zoomSegmentLanes(factor);
+            else state.pianoRoll.zoomSegment(factor);
         }, { passive: false });
     }
 
-    // 分轴缩放: axis='x' 横向 / 'y' 纵向
+    // 片段缩放按钮: 横向走 zoomSegment (播放指示器锚点), 纵向调整轨道高度
     function segZoomAxis(axis, factor) {
         if (!state.pianoRoll) return;
-        state.pianoRoll.setZoomAxis(axis, factor);
+        if (axis === 'y') state.pianoRoll.zoomSegmentLanes(factor);
+        else state.pianoRoll.zoomSegment(factor);
+    }
+
+    // ---- 片段右键菜单 ----
+    var _segMenuEl = null;
+    function hideSegmentContextMenu() {
+        var el = $('segment-context-menu');
+        if (el) el.style.display = 'none';
+    }
+    function showSegmentContextMenu(segId, cx, cy) {
+        var menu = $('segment-context-menu');
+        if (!menu) return;
+        var ids = segmentSelectedIds();
+        var canMerge = false;
+        if (ids.length === 2) {
+            var a = segmentById(ids[0]), b = segmentById(ids[1]);
+            if (a && b && a.lane === b.lane) {
+                var left = a.start <= b.start ? a : b;
+                var right = left === a ? b : a;
+                canMerge = (left.end === right.start);
+            }
+        }
+        var seg = segmentById(segId) || segmentSelected();
+        var html = '';
+        html += '<div class="seg-menu-item' + (canMerge ? '' : ' disabled') + '" data-act="merge">'
+            + '<i class="fa-solid fa-object-union"></i><span>' + i18nText('合并片段') + '</span></div>';
+        html += '<div class="seg-menu-item" data-act="export">'
+            + '<i class="fa-solid fa-file-arrow-down"></i><span>' + i18nText('导出片段为 NBS') + '</span></div>';
+        html += '<div class="seg-menu-sep"></div>';
+        html += '<div class="seg-menu-item" data-act="copy"><i class="fa-regular fa-copy"></i><span>'
+            + i18nText('复制片段') + '</span></div>';
+        html += '<div class="seg-menu-item' + (state.segmentClipboard ? '' : ' disabled')
+            + '" data-act="paste"><i class="fa-regular fa-paste"></i><span>' + i18nText('粘贴片段') + '</span></div>';
+        html += '<div class="seg-menu-item" data-act="delete"><i class="fa-solid fa-trash-can"></i><span>'
+            + i18nText('删除片段') + '</span></div>';
+        html += '<div class="seg-menu-sep"></div>';
+        html += '<div class="seg-menu-item" data-act="mergeAll"><i class="fa-solid fa-object-group"></i><span>'
+            + i18nText('合并全部片段') + '</span></div>';
+        menu.innerHTML = html;
+        menu.style.display = 'block';
+        // 边界翻转
+        var mw = menu.offsetWidth || 160;
+        var mh = menu.offsetHeight || 200;
+        var x = Math.min(cx, window.innerWidth - mw - 8);
+        var y = Math.min(cy, window.innerHeight - mh - 8);
+        menu.style.left = Math.max(8, x) + 'px';
+        menu.style.top = Math.max(8, y) + 'px';
+        menu.onclick = function(ev) {
+            var item = ev.target.closest ? ev.target.closest('.seg-menu-item') : null;
+            if (!item || item.classList.contains('disabled')) return;
+            var act = item.getAttribute('data-act');
+            if (act === 'merge') segmentMergeSelected();
+            else if (act === 'export') { if (seg) segmentExportOne(seg.id); }
+            else if (act === 'copy') segmentCopy();
+            else if (act === 'paste') segmentPaste();
+            else if (act === 'delete') segmentDelete();
+            else if (act === 'mergeAll') segmentMergeAll();
+            hideSegmentContextMenu();
+        };
+        if (!_segMenuEl) {
+            _segMenuEl = menu;
+            document.addEventListener('mousedown', function(ev) {
+                if (menu.style.display === 'none') return;
+                if (menu.contains(ev.target)) return;
+                hideSegmentContextMenu();
+            }, true);
+        }
     }
 
     // ---- 播放时的歌词浮层 (屏幕中间偏下, 多条轨道同时触达时按行显示) ----
@@ -9759,25 +10631,48 @@
         };
     }
 
-    // 导出片段分割信息 (segments.json): 记录每个片段的 [start, end) 与紧凑化后的总长度
+    // 导出片段分组信息 (segments.json): 记录每条轨道与每个片段的 lane / 时间范围 / 名称
+    // 同时记录每条 lane 对应的全局 NBS 轨道号, 导入时可据此从缝合 NBS 精确切回片段
     function buildSegmentsJson() {
         var sorted = segmentSorted();
+        var lanes = [];
+        var base = 0;
+        for (var li = 0; li < (state.segmentLanes || []).length; li++) {
+            var ln = state.segmentLanes[li];
+            var used = {};
+            for (var si = 0; si < sorted.length; si++) {
+                if (sorted[si].lane !== li) continue;
+                var sn = sorted[si].notes || [];
+                for (var ni = 0; ni < sn.length; ni++) used[sn[ni].layer || 0] = true;
+            }
+            var rels = Object.keys(used).map(Number).sort(function(a, b) { return a - b; });
+            var layers = [];
+            for (var r = 0; r < rels.length; r++) layers.push(base + r);
+            lanes.push({
+                muted: !!ln.muted, solo: !!ln.solo,
+                volume: isFinite(ln.volume) ? ln.volume : 100,
+                height: isFinite(ln.height) ? ln.height : SEG_DEFAULT_LANE_H,
+                layers: layers
+            });
+            base += rels.length;
+        }
         var segs = [];
         var total = 0;
         for (var i = 0; i < sorted.length; i++) {
             var s = sorted[i];
-            segs.push({ start: s.start, end: s.end });
+            segs.push({ lane: s.lane, start: s.start, end: s.end, name: s.name });
             total += Math.max(1, s.end - s.start);
         }
         return {
             type: 'noteblock-web-segments',
-            formatVersion: 1,
+            formatVersion: 2,
+            lanes: lanes,
             segments: segs,
             totalLength: total
         };
     }
 
-    // 从作品包还原片段分割信息; 包内没有该文件时静默跳过 (-1)
+    // 从作品包还原片段分组; 包内没有该文件时静默跳过 (-1)
     function importSegmentsFromZip(zipFile, meta) {
         var name = (meta && meta.segments) ? meta.segments : 'segments.json';
         var f = zipFile.file(name);
@@ -9788,14 +10683,56 @@
             var arr = (data && Array.isArray(data.segments)) ? data.segments
                 : (Array.isArray(data) ? data : null);
             if (!arr) return -1;
+            // 恢复 lane 定义 (含全局轨道映射)
+            state.segmentLanes = [];
+            var laneLayers = [];
+            if (data && Array.isArray(data.lanes)) {
+                for (var li = 0; li < data.lanes.length; li++) {
+                    var ld = data.lanes[li] || {};
+                    state.segmentLanes.push({
+                        id: li + 1,
+                        muted: !!ld.muted, solo: !!ld.solo,
+                        // 导出时音量已烘焙进音符, 导入后重置为 100 避免二次衰减
+                        volume: 100,
+                        height: isFinite(ld.height) ? ld.height : SEG_DEFAULT_LANE_H
+                    });
+                    laneLayers.push(Array.isArray(ld.layers) ? ld.layers.slice() : []);
+                }
+            }
+            if (!state.segmentLanes.length) {
+                state.segmentLanes.push({
+                    id: 1, muted: false, solo: false, volume: 100, height: SEG_DEFAULT_LANE_H
+                });
+                laneLayers.push([]);
+            }
             state.segments = [];
             state._segmentIdSeq = 0;
+            var maxLane = laneLayers.length - 1;
             for (var i = 0; i < arr.length; i++) {
                 var s = arr[i];
                 if (!s || !isFinite(s.start) || !isFinite(s.end)) continue;
                 var st = Math.max(0, Math.floor(s.start));
                 var en = Math.max(st + 1, Math.floor(s.end));
-                state.segments.push({ id: ++state._segmentIdSeq, start: st, end: en });
+                var lane = isFinite(s.lane) ? Math.max(0, Math.min(maxLane, s.lane)) : 0;
+                var gl = laneLayers[lane] || [];
+                var notes = [];
+                for (var k = 0; k < state.notes.length; k++) {
+                    var nt = state.notes[k];
+                    if (nt.tick < st || nt.tick >= en) continue;
+                    var relLayer = gl.indexOf(nt.layer);
+                    if (gl.length && relLayer < 0) continue;
+                    if (!gl.length) relLayer = isFinite(nt.layer) ? nt.layer : 0;
+                    notes.push({
+                        rel: nt.tick - st, layer: relLayer,
+                        instrument: nt.instrument, key: nt.key,
+                        velocity: isFinite(nt.velocity) ? nt.velocity : 100,
+                        pan: isFinite(nt.pan) ? nt.pan : 100, pitch: nt.pitch || 0
+                    });
+                }
+                state.segments.push({
+                    id: ++state._segmentIdSeq, lane: lane, start: st, end: en,
+                    name: s.name || ('片段 ' + (i + 1)), notes: notes
+                });
             }
             segmentEnsure();
             segmentSync();
@@ -11959,6 +12896,10 @@
         if (isOpen) {
             keyboard.classList.add('collapsing');
             if (btn) btn.classList.remove('active');
+            // 立即释放底部预留: 若等动画结束再释放, 期间切到片段模式会让时间栏停在半空
+            if (state.pianoRoll && state.pianoRoll.setBottomReserve) {
+                state.pianoRoll.setBottomReserve(0);
+            }
             setTimeout(function() {
                 keyboard.style.display = 'none';
                 keyboard.classList.remove('collapsing');
@@ -11980,6 +12921,10 @@
             keyboard.classList.remove('collapsing');
             if (container) container.classList.add('keyboard-open');
             if (btn) btn.classList.add('active');
+            // 底部时间栏让位于键盘上方
+            if (state.pianoRoll) {
+                if (state.pianoRoll.setBottomReserve) state.pianoRoll.setBottomReserve(keyboard.offsetHeight || 148);
+            }
             updatePianoKeyboardHighlight();
             // 默认滚动到完整 88 键键盘的水平中心
             // 先设置 display 后需要等待下一帧, 以确保元素已有尺寸
@@ -12288,6 +13233,18 @@
         state._segmentsTouched = false;
         state._segmentsEdited = false;
         var loadedSegs = Array.isArray(song.segments) ? song.segments : null;
+        state.segmentLanes = [];
+        if (Array.isArray(song.segmentLanes)) {
+            for (var _li = 0; _li < song.segmentLanes.length; _li++) {
+                var _ln = song.segmentLanes[_li] || {};
+                state.segmentLanes.push({
+                    id: _li + 1,
+                    muted: !!_ln.muted, solo: !!_ln.solo,
+                    volume: isFinite(_ln.volume) ? _ln.volume : 100,
+                    height: isFinite(_ln.height) ? _ln.height : SEG_DEFAULT_LANE_H
+                });
+            }
+        }
         state.segments = [];
         if (loadedSegs && loadedSegs.length) {
             for (var _si = 0; _si < loadedSegs.length; _si++) {
@@ -12295,10 +13252,39 @@
                 if (!_sg || !isFinite(_sg.start) || !isFinite(_sg.end)) continue;
                 var _ss = Math.max(0, Math.floor(_sg.start));
                 var _se = Math.max(_ss + 1, Math.floor(_sg.end));
-                state.segments.push({ id: ++state._segmentIdSeq, start: _ss, end: _se });
+                var _snotes = [];
+                if (Array.isArray(_sg.notes)) {
+                    for (var _ni = 0; _ni < _sg.notes.length; _ni++) {
+                        var _sn = _sg.notes[_ni];
+                        if (!_sn) continue;
+                        _snotes.push({
+                            rel: isFinite(_sn.rel) ? _sn.rel : 0,
+                            layer: isFinite(_sn.layer) ? _sn.layer : 0,
+                            instrument: _sn.instrument, key: _sn.key,
+                            velocity: isFinite(_sn.velocity) ? _sn.velocity : 100,
+                            pan: isFinite(_sn.pan) ? _sn.pan : 100,
+                            pitch: _sn.pitch || 0
+                        });
+                    }
+                }
+                state.segments.push({
+                    id: ++state._segmentIdSeq,
+                    lane: isFinite(_sg.lane) ? _sg.lane : 0,
+                    start: _ss, end: _se,
+                    name: _sg.name || ('片段 ' + (_si + 1)),
+                    notes: _snotes
+                });
             }
         }
         segmentEnsure();
+        // 旧格式 / 无片段音符数据: 从当前 NBS 音符重新捕获
+        var _segHasNotes = false;
+        for (var _chk = 0; _chk < state.segments.length; _chk++) {
+            if (state.segments[_chk].notes && state.segments[_chk].notes.length) { _segHasNotes = true; break; }
+        }
+        if (!_segHasNotes && state.notes && state.notes.length) {
+            segmentCaptureFromSong();
+        }
         segmentSync();
         // NBS 文件没有 MIDI 映射，清除残留的 MIDI 音轨状态
         state.layerChannelMap = {};
@@ -12335,6 +13321,8 @@
         // 切换文件时重置轨道状态, 再根据 NBS 文件中的 lock 字段初始化
         state.tracks = [];
         updateTrackPanelUI();
+        // 载入的工程可能带有片段轨道分组, 重新计算 NBS 视图分割线
+        syncNbsLayerGroups();
         handleStop();
         markDirty();
         // 打开的文件尚未修改: 写入标签页快照并清除未保存圆点
@@ -13947,25 +14935,23 @@
         }
 
         // 新文件时重置延音轨道选择
-        // 1) 已保存过非空选择 → 沿用用户的选择
+        // 1) 已保存过配置 → 沿用用户保存的选择 (空数组也视为有效选择)
         // 2) 否则 → 依据本文件 GM 音色自动判定延音轨道 (持续型音色默认启用延音)
-        var _savedMidiSettings = null;
-        try { _savedMidiSettings = JSON.parse(localStorage.getItem('midi_import_settings')); } catch(e) {}
-        var _savedSustain = (_savedMidiSettings && Array.isArray(_savedMidiSettings.sustain_track_indices))
-            ? _savedMidiSettings.sustain_track_indices.slice() : null;
-        if (_savedSustain && _savedSustain.length > 0) {
-            _sustainTrackIndices = _savedSustain;
+        var _midiPrefs = loadMidiPrefs();
+        var _prefsSustain = (_midiPrefs && Array.isArray(_midiPrefs.sustain_track_indices))
+            ? _midiPrefs.sustain_track_indices.slice() : null;
+        if (_prefsSustain) {
+            _sustainTrackIndices = _prefsSustain;
         } else {
             _sustainTrackIndices = detectSustainTrackIndices(info);
-            // 自动判定到延音轨道, 且"延音处理"当前为不保留 (或未保存过) 时, 默认切换为"按轨道选择"
+            // 自动判定到延音轨道, 且"延音处理"当前为不保留时, 默认切换为"按轨道选择"
             if (_sustainTrackIndices.length > 0) {
                 var _knlSel = $('midi-keep-note-length');
-                var _savedKnl = _savedMidiSettings ? _savedMidiSettings.keep_note_length : undefined;
-                if (_knlSel && _knlSel.value === 'none' && (!_savedKnl || _savedKnl === 'none')) {
-                    _knlSel.value = 'sustain';
-                }
+                if (_knlSel && _knlSel.value === 'none') _knlSel.value = 'sustain';
             }
         }
+        // 恢复保存的打击乐音色/音高映射
+        applySavedPercussionPrefs(_midiPrefs);
         updateSustainTracksUI();
         updateSnapGridInfo();
 
@@ -14292,6 +15278,8 @@
 
     var _midiTrackStates = {};  // { trackIndex: { muted, solo, excluded } }
     var _sustainTrackIndices = []; // 用户手动选择的需要应用延音的 MIDI 轨道索引
+    // MIDI 导入配置: 仅内存缓存, 按「文件内容哈希」区分, 刷新页面即清空 (不持久化)
+    var _midiPrefsByHash = {};
     var _midiTrackPlayback = {
         playing: false,
         startTime: 0,
@@ -14568,6 +15556,7 @@
             + '<div class="settings-header">'
             + '<i class="fa-solid fa-list-check"></i>'
             + '<h4>选择延音轨道</h4>'
+            + '<button class="settings-mini-btn" id="sustain-tracks-reset-btn" title="恢复默认的延音轨道选择（仅重置这一项）">重置配置</button>'
             + '<button class="settings-close-btn" id="sustain-tracks-close-x" title="关闭">&times;</button>'
             + '</div>'
             + '<div class="settings-body" style="overflow-y:auto;">'
@@ -14589,12 +15578,25 @@
         }
         wrapper.querySelector('#sustain-tracks-close-x').addEventListener('click', close);
         wrapper.querySelector('#sustain-tracks-cancel-btn').addEventListener('click', close);
+        // 重置配置: 仅恢复延音轨道的默认勾选 (依据 GM 持续型音色自动判定)
+        var sustainResetBtn = wrapper.querySelector('#sustain-tracks-reset-btn');
+        if (sustainResetBtn) sustainResetBtn.addEventListener('click', function() {
+            _sustainTrackIndices = detectSustainTrackIndices(state._midiInfo || {});
+            var allBoxes = wrapper.querySelectorAll('.sustain-track-checkbox');
+            for (var b = 0; b < allBoxes.length; b++) {
+                allBoxes[b].checked = _sustainTrackIndices.indexOf(parseInt(allBoxes[b].value, 10)) !== -1;
+            }
+            updateSustainTracksUI();
+            // 配置默认保存: 重置后立即写入, 不依赖「确定」
+            saveMidiPrefs(collectMidiSettings());
+        });
         wrapper.querySelector('#sustain-tracks-ok-btn').addEventListener('click', function() {
             var selected = [];
             var boxes = wrapper.querySelectorAll('.sustain-track-checkbox:checked');
             for (var j = 0; j < boxes.length; j++) selected.push(parseInt(boxes[j].value));
             _sustainTrackIndices = selected;
             updateSustainTracksUI();
+            saveMidiPrefs(collectMidiSettings());
             close();
         });
         wrapper.addEventListener('click', function(e) { if (e.target === wrapper) close(); });
@@ -17569,6 +18571,8 @@ function buildTimbreFittingRows(info) {
             octave_mode: $('midi-octave-mode') ? parseInt($('midi-octave-mode').value) || 0 : 0,
             // 智能音色替代开关 (仅在模式 2/3 下有效, 模式 0/1 灰显无效)
             smart_substitute_enabled: $('midi-smart-substitute') ? $('midi-smart-substitute').checked : true,
+            // 自动分割片段: 按 MIDI 通道拆成多条片段轨道 (默认开启)
+            auto_split_segments: $('midi-auto-split-segments') ? $('midi-auto-split-segments').checked : true,
         };
 
         // 收集音色替代配置
@@ -17622,30 +18626,6 @@ function buildTimbreFittingRows(info) {
             settings.percussion_pitches[note] = parseInt(pp.value);
         }
 
-        // 记住设置
-        if ($('midi-remember') && $('midi-remember').checked) {
-            try {
-                var saved = {
-                    remove_silent: settings.remove_silent,
-                    name_layers: settings.name_layers,
-                    name_after_patches: settings.name_after_patches,
-                    tempo_changes: settings.tempo_changes,
-                    octave_mode: settings.octave_mode,
-                    force_fold_enabled: settings.force_fold_enabled,
-                    smart_substitute_enabled: settings.smart_substitute_enabled,
-                    read_velocity: settings.read_velocity,
-                    precision: settings.precision,
-                    keep_note_length: settings.keep_note_length,
-                    dedupe_notes: settings.dedupe_notes,
-                    dedupe_reorder: settings.dedupe_reorder,
-                    sustain_track_indices: (settings.sustain_tracks || []).slice(),
-                    snap_enabled: settings.snap_enabled,
-                    snap_beat: settings.snap_beat,
-                };
-                localStorage.setItem('midi_import_settings', JSON.stringify(saved));
-            } catch(e) {}
-        }
-
         // 收集音色拟合设置
         settings.timbre_fitting = collectTimbreFitting();
 
@@ -17657,39 +18637,103 @@ function buildTimbreFittingRows(info) {
             }
         }
 
+        // 导入配置默认保存 (音色拟合由 saveTimbreFitting 单独持久化)
+        saveMidiPrefs(settings);
+
         return settings;
     }
 
-    function loadMidiSettings() {
+    // 生成可持久化的导入配置快照
+    function buildMidiPrefs(settings) {
+        return {
+            version: 2,
+            basic: {
+                remove_silent: settings.remove_silent,
+                name_layers: settings.name_layers,
+                name_after_patches: settings.name_after_patches,
+                tempo_changes: settings.tempo_changes,
+                octave_mode: settings.octave_mode,
+                force_fold_enabled: settings.force_fold_enabled,
+                smart_substitute_enabled: settings.smart_substitute_enabled,
+                read_velocity: settings.read_velocity,
+                precision: settings.precision,
+                keep_note_length: settings.keep_note_length,
+                dedupe_notes: settings.dedupe_notes,
+                dedupe_reorder: settings.dedupe_reorder,
+                snap_enabled: settings.snap_enabled,
+                snap_beat: settings.snap_beat,
+                auto_split_segments: !!settings.auto_split_segments
+            },
+            sustain_track_indices: (settings.sustain_tracks || []).slice(),
+            percussion_instruments: settings.percussion_instruments || {},
+            percussion_pitches: settings.percussion_pitches || {}
+        };
+    }
+
+    function saveMidiPrefs(settings) {
         try {
-            var saved = JSON.parse(localStorage.getItem('midi_import_settings'));
-            if (saved) {
-                if (saved.remove_silent !== undefined && $('midi-remove-silent')) $('midi-remove-silent').checked = saved.remove_silent;
-                if (saved.name_layers !== undefined && $('midi-name-layers')) $('midi-name-layers').checked = saved.name_layers;
-                if (saved.name_after_patches !== undefined) {
-                    var val = saved.name_after_patches ? 'patches' : 'channels';
-                    var radios = document.getElementsByName('midi-name-mode');
-                    for (var i = 0; i < radios.length; i++) {
-                        radios[i].checked = (radios[i].value === val);
-                    }
+            _midiPrefsCache = buildMidiPrefs(settings);
+            localStorage.setItem(MIDI_PREFS_KEY, JSON.stringify(_midiPrefsCache));
+        } catch(e) {}
+    }
+
+    function loadMidiPrefs() {
+        if (_midiPrefsCache) return _midiPrefsCache;
+        try {
+            var prefs = JSON.parse(localStorage.getItem(MIDI_PREFS_KEY));
+            if (prefs && typeof prefs === 'object') _midiPrefsCache = prefs;
+        } catch(e) {}
+        return _midiPrefsCache;
+    }
+
+    // 把保存的打击乐映射写回弹窗表格
+    function applySavedPercussionPrefs(prefs) {
+        if (!prefs) return;
+        var insts = prefs.percussion_instruments || {};
+        var pitches = prefs.percussion_pitches || {};
+        var instSelects = document.querySelectorAll('.midi-perc-instrument-select');
+        for (var i = 0; i < instSelects.length; i++) {
+            var note = parseInt(instSelects[i].getAttribute('data-perc'));
+            if (insts[note] !== undefined) instSelects[i].value = String(insts[note]);
+        }
+        var pitchSelects = document.querySelectorAll('.midi-perc-pitch-select');
+        for (var j = 0; j < pitchSelects.length; j++) {
+            var pn = parseInt(pitchSelects[j].getAttribute('data-note'));
+            if (pitches[pn] !== undefined) pitchSelects[j].value = String(pitches[pn]);
+        }
+    }
+
+    function loadMidiSettings() {
+        var prefs = loadMidiPrefs();
+        if (!prefs) return;
+        try {
+            var saved = prefs.basic || {};
+            if (saved.remove_silent !== undefined && $('midi-remove-silent')) $('midi-remove-silent').checked = saved.remove_silent;
+            if (saved.name_layers !== undefined && $('midi-name-layers')) $('midi-name-layers').checked = saved.name_layers;
+            if (saved.name_after_patches !== undefined) {
+                var val = saved.name_after_patches ? 'patches' : 'channels';
+                var radios = document.getElementsByName('midi-name-mode');
+                for (var i = 0; i < radios.length; i++) {
+                    radios[i].checked = (radios[i].value === val);
                 }
-                if (saved.tempo_changes !== undefined && $('midi-tempo-changes')) $('midi-tempo-changes').checked = saved.tempo_changes;
-                if (saved.octave_mode !== undefined && $('midi-octave-mode')) $('midi-octave-mode').value = saved.octave_mode;
-                if (saved.force_fold_enabled !== undefined && $('midi-force-fold')) $('midi-force-fold').checked = saved.force_fold_enabled;
-                if (saved.smart_substitute_enabled !== undefined && $('midi-smart-substitute')) $('midi-smart-substitute').checked = saved.smart_substitute_enabled;
-                if (saved.read_velocity !== undefined && $('midi-read-velocity')) $('midi-read-velocity').checked = saved.read_velocity;
-                if (saved.precision !== undefined && $('midi-precision')) $('midi-precision').value = saved.precision;
-                if (saved.keep_note_length !== undefined && $('midi-keep-note-length')) $('midi-keep-note-length').value = saved.keep_note_length;
-                if (saved.dedupe_notes !== undefined && $('midi-dedupe-notes')) $('midi-dedupe-notes').checked = saved.dedupe_notes;
-                if (saved.dedupe_reorder !== undefined && $('midi-dedupe-reorder')) $('midi-dedupe-reorder').checked = saved.dedupe_reorder;
-                if (Array.isArray(saved.sustain_track_indices)) {
-                    _sustainTrackIndices = saved.sustain_track_indices.slice();
-                }
-                if (saved.snap_enabled !== undefined && $('midi-snap-enabled')) $('midi-snap-enabled').checked = saved.snap_enabled;
-                if (saved.snap_beat !== undefined && $('midi-snap-beat')) $('midi-snap-beat').value = saved.snap_beat;
-                updateSustainTracksUI();
-                updateSnapGridInfo();
             }
+            if (saved.tempo_changes !== undefined && $('midi-tempo-changes')) $('midi-tempo-changes').checked = saved.tempo_changes;
+            if (saved.octave_mode !== undefined && $('midi-octave-mode')) $('midi-octave-mode').value = saved.octave_mode;
+            if (saved.force_fold_enabled !== undefined && $('midi-force-fold')) $('midi-force-fold').checked = saved.force_fold_enabled;
+            if (saved.smart_substitute_enabled !== undefined && $('midi-smart-substitute')) $('midi-smart-substitute').checked = saved.smart_substitute_enabled;
+            if (saved.read_velocity !== undefined && $('midi-read-velocity')) $('midi-read-velocity').checked = saved.read_velocity;
+            if (saved.precision !== undefined && $('midi-precision')) $('midi-precision').value = saved.precision;
+            if (saved.keep_note_length !== undefined && $('midi-keep-note-length')) $('midi-keep-note-length').value = saved.keep_note_length;
+            if (saved.dedupe_notes !== undefined && $('midi-dedupe-notes')) $('midi-dedupe-notes').checked = saved.dedupe_notes;
+            if (saved.dedupe_reorder !== undefined && $('midi-dedupe-reorder')) $('midi-dedupe-reorder').checked = saved.dedupe_reorder;
+            if (saved.auto_split_segments !== undefined && $('midi-auto-split-segments')) $('midi-auto-split-segments').checked = !!saved.auto_split_segments;
+            if (saved.snap_enabled !== undefined && $('midi-snap-enabled')) $('midi-snap-enabled').checked = saved.snap_enabled;
+            if (saved.snap_beat !== undefined && $('midi-snap-beat')) $('midi-snap-beat').value = saved.snap_beat;
+            if (Array.isArray(prefs.sustain_track_indices)) {
+                _sustainTrackIndices = prefs.sustain_track_indices.slice();
+            }
+            updateSustainTracksUI();
+            updateSnapGridInfo();
         } catch(e) {}
     }
 
@@ -17732,6 +18776,20 @@ function buildTimbreFittingRows(info) {
             state._channelTracks = savedChannelTracks;
             // 保存 layer → channel 映射（用于 NBS 播放时查找音符所属 MIDI channel）
             state.layerChannelMap = data.song.layer_channel_map || {};
+            // 自动分割片段: 按 MIDI 通道生成片段轨道 (片段模式二次编辑用)
+            if (settings.auto_split_segments) {
+                segmentBuildChannelSplit(state.song);
+            } else {
+                state.segments = [];
+                state.segmentLanes = [];
+                state._segmentIdSeq = 0;
+                state._segmentsEdited = false;
+                segmentEnsure();
+            }
+            if (state.pianoRoll) {
+                state.pianoRoll.setSegmentLanes(state.segmentLanes);
+                state.pianoRoll.setSegments(state.segments);
+            }
             // 保存导入文件名（去掉扩展名）
             state.importedFileName = file.name.replace(/\.[^.]+$/, '');
             var t = parseFloat(data.song.tempo);
@@ -17754,6 +18812,8 @@ function buildTimbreFittingRows(info) {
             updateSongInfo();
             checkOctaveRange(state.notes);
             updateTrackPanelUI();
+            // 轨道数已更新, 重新计算片段轨道分组横线
+            syncNbsLayerGroups();
             updateProgressUI();
             handleStop();
             markDirty();
@@ -17909,6 +18969,14 @@ function buildTimbreFittingRows(info) {
         itemBatch.innerHTML = '<i class="fa-solid fa-box-archive"></i><span>' + t('批量导出…') + '</span>';
         itemBatch.addEventListener('click', function() { hideFileMenu(); showBatchExportDialog(); });
         menu.appendChild(itemBatch);
+
+        // 片段编辑 / NBS 编辑 切换 (手机端没有状态栏滑块, 从这里进入)
+        var itemSegMode = document.createElement('div');
+        itemSegMode.className = 'file-menu-item';
+        itemSegMode.innerHTML = '<i class="fa-solid fa-film"></i><span>'
+            + (state.segmentsEditMode ? t('退出片段编辑') : t('片段编辑')) + '</span>';
+        itemSegMode.addEventListener('click', function() { hideFileMenu(); toggleSegmentsEditMode(); });
+        menu.appendChild(itemSegMode);
 
         // 导出 NBS
         var item2 = document.createElement('div');
@@ -18555,9 +19623,25 @@ function buildTimbreFittingRows(info) {
         var dialogOpts = {};
         if (usedNos.length) dialogOpts.customInstruments = usedNos;
         if (state.lyrics && state.lyrics.length) dialogOpts.hasLyrics = true;
-        if (state.segments && state.segments.length > 1) dialogOpts.segmentCount = state.segments.length;
+        if (state.segments && state.segments.length
+                && (state.segments.length > 1
+                    || (state.segmentLanes && state.segmentLanes.length > 1))) {
+            dialogOpts.segmentCount = state.segments.length;
+        }
+        // 铜号角 (16~19) 与自定义音色 (>=20) 只有 V6 能完整保存 → 弹窗内锁定版本
+        var hasCopper = false;
+        for (var pi = 0; pi < state.notes.length; pi++) {
+            var insNo = state.notes[pi].instrument;
+            if (insNo >= 16 && insNo <= 19) { hasCopper = true; break; }
+        }
+        if (hasCopper || usedNos.length) dialogOpts.lockV6 = true;
         showExportDialog(defaultName, defaultAuthor, defaultDesc, dialogOpts).then(function(input) {
             if (!input) return; // 用户取消
+            // 应用本次选择导出的 NBS 版本 (设置项已移入弹窗)
+            if (input.nbsVersion) {
+                window.NBS_EXPORT_VERSION = input.nbsVersion;
+                try { localStorage.setItem('nbs_export_version', String(input.nbsVersion)); } catch (e) {}
+            }
             // 勾选「歌词导出」/「保留片段」时也走 zip 打包 (歌曲 + lyrics.json / segments.json [+ 音色音频])
             if (input.packageZip || input.lyricsZip || input.segmentsZip) {
                 _performZipExport(input, usedNos);
@@ -18633,6 +19717,45 @@ function buildTimbreFittingRows(info) {
         return n || 'Untitled';
     }
 
+    // 基于标签页快照生成 segments.json (v2: 轨道 + 全局轨道映射)
+    function buildSegmentsJsonFromSnapshot(snap) {
+        var segs = (snap.segments || []).slice().sort(function(a, b) {
+            if (a.start !== b.start) return a.start - b.start;
+            return (a.lane || 0) - (b.lane || 0);
+        });
+        var lanesSrc = snap.segmentLanes || [];
+        var lanes = [];
+        var base = 0;
+        for (var li = 0; li < lanesSrc.length; li++) {
+            var ln = lanesSrc[li] || {};
+            var used = {};
+            for (var si = 0; si < segs.length; si++) {
+                if ((segs[si].lane || 0) !== li) continue;
+                var sn = segs[si].notes || [];
+                for (var ni = 0; ni < sn.length; ni++) used[sn[ni].layer || 0] = true;
+            }
+            var rels = Object.keys(used).map(Number).sort(function(a, b) { return a - b; });
+            var layers = [];
+            for (var r = 0; r < rels.length; r++) layers.push(base + r);
+            lanes.push({
+                muted: !!ln.muted, solo: !!ln.solo,
+                volume: isFinite(ln.volume) ? ln.volume : 100,
+                height: isFinite(ln.height) ? ln.height : SEG_DEFAULT_LANE_H,
+                layers: layers
+            });
+            base += rels.length;
+        }
+        return {
+            type: 'noteblock-web-segments',
+            formatVersion: 2,
+            lanes: lanes,
+            segments: segs.map(function(s) {
+                return { lane: s.lane || 0, start: s.start, end: s.end, name: s.name };
+            }),
+            totalLength: segs.reduce(function(a, s) { return a + Math.max(1, s.end - s.start); }, 0)
+        };
+    }
+
     function showBatchExportDialog() {
         tabStash();
         var tabs = state.tabs || [];
@@ -18702,9 +19825,14 @@ function buildTimbreFittingRows(info) {
                             type: 'noteblock-web-lyrics', formatVersion: 2,
                             laneCount: 3, tempo: snap.tempo || 20, lyrics: snap.lyrics
                         }, null, 2) : null,
-                        segments: (snap.segments || []).length > 1 ? JSON.stringify({
-                            type: 'noteblock-web-segments', formatVersion: 1, segments: snap.segments
-                        }, null, 2) : null
+                        segments: (function() {
+                            var sgs = snap.segments || [];
+                            var lns = snap.segmentLanes || [];
+                            if (sgs.length > 1 || lns.length > 1) {
+                                return JSON.stringify(buildSegmentsJsonFromSnapshot(snap), null, 2);
+                            }
+                            return null;
+                        })()
                     };
                 }));
             })(tabs[i], i);
@@ -18736,7 +19864,30 @@ function buildTimbreFittingRows(info) {
                 if (it.lyrics) zip.file(it.title + '.lyrics.json', it.lyrics);
                 if (it.segments) zip.file(it.title + '.segments.json', it.segments);
             }
-            zip.generateAsync({ type: 'blob', mimeType: 'application/zip' }).then(function(blob) {
+            // 批量清单: 记录每个 NBS 的 SHA-256, 供完整性校验
+            var hashPs = [];
+            for (var h = 0; h < items.length; h++) {
+                (function(itm) {
+                    var hp = (window.CustomInstruments && typeof CustomInstruments.hashBlob === 'function')
+                        ? CustomInstruments.hashBlob(itm.nbs).catch(function() { return ''; })
+                        : Promise.resolve('');
+                    hashPs.push(hp.then(function(hv) { itm.hash = hv || ''; }));
+                })(items[h]);
+            }
+            Promise.all(hashPs).then(function() {
+                var manifest = {
+                    type: 'noteblock-web-batch',
+                    formatVersion: 1,
+                    files: items.map(function(itm) {
+                        return {
+                            name: itm.title + '.nbs',
+                            hash: itm.hash ? ('sha256:' + itm.hash) : ''
+                        };
+                    })
+                };
+                zip.file('manifest.json', JSON.stringify(manifest, null, 2));
+                return zip.generateAsync({ type: 'blob', mimeType: 'application/zip' });
+            }).then(function(blob) {
                 dlBlob(blob, 'MiauNoteBlock_batch.zip');
                 showAppAlert('已打包导出 ' + items.length + ' 个文件', { title: '批量导出', icon: 'fa-solid fa-circle-check' });
             }).catch(function(err) {
@@ -19026,7 +20177,9 @@ function buildTimbreFittingRows(info) {
                 var hasLyrics = !!(input.lyricsZip && state.lyrics && state.lyrics.length);
                 if (hasLyrics) zip.file('lyrics.json', JSON.stringify(buildLyricsJson(), null, 2));
                 // 片段分割信息: 勾选「保留片段」时写入 segments.json
-                var hasSegments = !!(input.segmentsZip && state.segments && state.segments.length > 1);
+                var hasSegments = !!(input.segmentsZip && state.segments && state.segments.length
+                    && (state.segments.length > 1
+                        || (state.segmentLanes && state.segmentLanes.length > 1)));
                 if (hasSegments) zip.file('segments.json', JSON.stringify(buildSegmentsJson(), null, 2));
                 var metaInstruments = [];
                 var tasks = [];
@@ -19053,11 +20206,21 @@ function buildTimbreFittingRows(info) {
                     })(item, no);
                 }
                 Promise.all(tasks).then(function() {
-                    var meta = { type: 'noteblock-web-song-pack', formatVersion: 1, song: 'song.nbs', instruments: metaInstruments };
-                    if (hasLyrics) meta.lyrics = 'lyrics.json';
-                    if (hasSegments) meta.segments = 'segments.json';
-                    zip.file('metadata.json', JSON.stringify(meta, null, 2));
-                    return zip.generateAsync({ type: 'blob', mimeType: 'application/zip' });
+                    // 计算 NBS 文件哈希, 供导入时校验分组数据是否与歌曲匹配
+                    var hashP = (window.CustomInstruments && typeof CustomInstruments.hashBlob === 'function')
+                        ? CustomInstruments.hashBlob(nbsBlob).catch(function() { return ''; })
+                        : Promise.resolve('');
+                    return hashP.then(function(nbsHash) {
+                        var meta = {
+                            type: 'noteblock-web-song-pack', formatVersion: 2,
+                            song: 'song.nbs', instruments: metaInstruments
+                        };
+                        if (nbsHash) meta.nbsHash = 'sha256:' + nbsHash;
+                        if (hasLyrics) meta.lyrics = 'lyrics.json';
+                        if (hasSegments) meta.segments = 'segments.json';
+                        zip.file('metadata.json', JSON.stringify(meta, null, 2));
+                        return zip.generateAsync({ type: 'blob', mimeType: 'application/zip' });
+                    });
                 }).then(function(blob) {
                     hideTaskProgress();
                     dlBlob(blob, input.name + '.zip');
@@ -19288,35 +20451,53 @@ function buildTimbreFittingRows(info) {
                 if (!nbsFile) throw new Error('压缩包缺少 ' + nbsName);
                 return ciImportPackInstruments(ctx.meta, ctx.zipFile).then(function(mapped) {
                     return nbsFile.async('arraybuffer').then(function(ab) {
-                        var song = NBSClient._parseNBS(ab);
-                        var remap = {};
-                        for (var m = 0; m < mapped.length; m++) {
-                            remap[20 + mapped[m].slot] = mapped[m].libInstrument;
-                        }
-                        var changed = false;
-                        song.notes = (song.notes || []).map(function(n) {
-                            if (n.instrument >= 20 && remap[n.instrument] !== undefined) {
-                                changed = true;
-                                var c = Object.assign({}, n);
-                                c.instrument = remap[n.instrument];
-                                return c;
+                        // NBS 哈希校验: 仅当包内提供了 nbsHash 时校验; 旧包无哈希则静默兼容
+                        var expected = (ctx.meta && ctx.meta.nbsHash)
+                            ? String(ctx.meta.nbsHash).replace(/^sha256:/i, '').toLowerCase() : '';
+                        var hashP = (expected && window.CustomInstruments
+                                && typeof CustomInstruments.hashBlob === 'function')
+                            ? CustomInstruments.hashBlob(new Blob([ab])).then(function(h) {
+                                return String(h || '').toLowerCase() === expected;
+                            }).catch(function() { return true; })
+                            : Promise.resolve(true);
+                        return hashP.then(function(hashOk) {
+                            if (!hashOk) {
+                                showAppAlert('压缩包内的 NBS 文件与片段分组数据校验不一致，'
+                                    + 'NBS 可能被修改或损坏，导入后片段分组/轨道可能出现错乱。\n'
+                                    + '将按现有数据继续导入。',
+                                    { title: 'NBS 校验警告', icon: 'fa-solid fa-triangle-exclamation' });
                             }
-                            return n;
-                        });
-                        song.customInstruments = [];
-                        applyParsedSong(song, nbsName);
-                        renderCustomInstList();
-                        // 歌词还原: 作品包内含 lyrics.json 时自动载入
-                        // 注意必须在 applyParsedSong 之后 (载入歌曲会清空歌词)
-                        return importLyricsFromZip(ctx.zipFile, ctx.meta).then(function(lyrCount) {
-                            return importSegmentsFromZip(ctx.zipFile, ctx.meta).then(function(segCount) {
-                                var msg = changed
-                                    ? '作品包导入完成，自定义音色已装载并重映射。'
-                                    : '作品包导入完成，歌曲已载入。';
-                                if (lyrCount >= 0) msg += '\n' + i18nText('已还原歌词标注') + ': ' + lyrCount;
-                                else msg += '\n' + i18nText('歌词数据解析失败，已跳过。');
-                                if (segCount > 0) msg += '\n' + i18nText('已还原片段分割') + ': ' + segCount;
-                                showAppAlert(msg, {title: '导入作品包', icon: 'fa-solid fa-circle-check'});
+                            var song = NBSClient._parseNBS(ab);
+                            var remap = {};
+                            for (var m = 0; m < mapped.length; m++) {
+                                remap[20 + mapped[m].slot] = mapped[m].libInstrument;
+                            }
+                            var changed = false;
+                            song.notes = (song.notes || []).map(function(n) {
+                                if (n.instrument >= 20 && remap[n.instrument] !== undefined) {
+                                    changed = true;
+                                    var c = Object.assign({}, n);
+                                    c.instrument = remap[n.instrument];
+                                    return c;
+                                }
+                                return n;
+                            });
+                            song.customInstruments = [];
+                            applyParsedSong(song, nbsName);
+                            renderCustomInstList();
+                            // 歌词还原: 作品包内含 lyrics.json 时自动载入
+                            // 注意必须在 applyParsedSong 之后 (载入歌曲会清空歌词)
+                            return importLyricsFromZip(ctx.zipFile, ctx.meta).then(function(lyrCount) {
+                                return importSegmentsFromZip(ctx.zipFile, ctx.meta).then(function(segCount) {
+                                    var msg = changed
+                                        ? '作品包导入完成，自定义音色已装载并重映射。'
+                                        : '作品包导入完成，歌曲已载入。';
+                                    if (lyrCount >= 0) msg += '\n' + i18nText('已还原歌词标注') + ': ' + lyrCount;
+                                    else msg += '\n' + i18nText('歌词数据解析失败，已跳过。');
+                                    if (segCount > 0) msg += '\n' + i18nText('已还原片段分割') + ': ' + segCount;
+                                    if (!hashOk) msg += '\n' + i18nText('NBS 文件校验不一致，分组数据可能不可靠。');
+                                    showAppAlert(msg, {title: '导入作品包', icon: 'fa-solid fa-circle-check'});
+                                });
                             });
                         });
                     });
@@ -19517,6 +20698,7 @@ function buildTimbreFittingRows(info) {
                 } : null,
                 lyrics: JSON.parse(JSON.stringify(state.lyrics || [])),
                 segments: JSON.parse(JSON.stringify(state.segments || [])),
+                segmentLanes: JSON.parse(JSON.stringify(state.segmentLanes || [])),
                 segmentsEdited: !!state._segmentsEdited,
                 currentFileId: state.currentFileId || null,
                 savedAt: Date.now()
@@ -19617,9 +20799,21 @@ function buildTimbreFittingRows(info) {
             resetStreamingLyrics();
             lyricRebuildIndex();
             syncLyricsToRoll();
-            // 片段分割信息随自动保存一并恢复
+            // 片段数据随自动保存一并恢复
             state._segmentIdSeq = 0;
             state._segmentsEdited = !!data.segmentsEdited;
+            state.segmentLanes = [];
+            if (Array.isArray(data.segmentLanes)) {
+                for (var _sli = 0; _sli < data.segmentLanes.length; _sli++) {
+                    var _sld = data.segmentLanes[_sli] || {};
+                    state.segmentLanes.push({
+                        id: _sli + 1,
+                        muted: !!_sld.muted, solo: !!_sld.solo,
+                        volume: isFinite(_sld.volume) ? _sld.volume : 100,
+                        height: isFinite(_sld.height) ? _sld.height : SEG_DEFAULT_LANE_H
+                    });
+                }
+            }
             state.segments = [];
             var _savedSegs = Array.isArray(data.segments) ? data.segments : [];
             for (var _sgi = 0; _sgi < _savedSegs.length; _sgi++) {
@@ -19627,9 +20821,35 @@ function buildTimbreFittingRows(info) {
                 if (!_sgd || !isFinite(_sgd.start) || !isFinite(_sgd.end)) continue;
                 var _sgs = Math.max(0, Math.floor(_sgd.start));
                 var _sge = Math.max(_sgs + 1, Math.floor(_sgd.end));
-                state.segments.push({ id: ++state._segmentIdSeq, start: _sgs, end: _sge });
+                var _sn2 = [];
+                if (Array.isArray(_sgd.notes)) {
+                    for (var _sni = 0; _sni < _sgd.notes.length; _sni++) {
+                        var _snd = _sgd.notes[_sni];
+                        if (!_snd) continue;
+                        _sn2.push({
+                            rel: isFinite(_snd.rel) ? _snd.rel : 0,
+                            layer: isFinite(_snd.layer) ? _snd.layer : 0,
+                            instrument: _snd.instrument, key: _snd.key,
+                            velocity: isFinite(_snd.velocity) ? _snd.velocity : 100,
+                            pan: isFinite(_snd.pan) ? _snd.pan : 100,
+                            pitch: _snd.pitch || 0
+                        });
+                    }
+                }
+                state.segments.push({
+                    id: ++state._segmentIdSeq,
+                    lane: isFinite(_sgd.lane) ? _sgd.lane : 0,
+                    start: _sgs, end: _sge,
+                    name: _sgd.name || ('片段 ' + (_sgi + 1)),
+                    notes: _sn2
+                });
             }
             segmentEnsure();
+            var _autoSegHasNotes = false;
+            for (var _achk = 0; _achk < state.segments.length; _achk++) {
+                if (state.segments[_achk].notes && state.segments[_achk].notes.length) { _autoSegHasNotes = true; break; }
+            }
+            if (!_autoSegHasNotes && state.notes && state.notes.length) segmentCaptureFromSong();
             segmentSync();
             updateSongInfo();
             updateInstrumentSelectorUI();

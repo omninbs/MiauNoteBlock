@@ -22,7 +22,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="static/css/style.css?v=20261018f">
+    <link rel="stylesheet" href="static/css/style.css?v=20261018u">
 </head>
 <body>
 
@@ -61,9 +61,6 @@
             <button class="toolbar-btn" id="btn-redo" title="重做 (Ctrl+Y)" disabled>
                 <i class="fa-solid fa-rotate-right icon"></i>
             </button>
-            <button class="toolbar-btn" id="btn-segments" title="片段编辑">
-                <i class="fa-solid fa-film icon"></i>
-            </button>
         </div>
 
         <div class="toolbar-section">
@@ -71,53 +68,6 @@
             <input type="number" id="tempo-value" value="20" min="0" max="512" step="0.01" placeholder="t/s" style="width:60px;padding:2px 6px;font-size:12px;text-align:center;background:transparent;border:1px solid var(--ctrl-stroke-default);border-radius:4px;color:var(--text-primary);font-variant-numeric:tabular-nums;" title="速度 (Tick/秒)">
             <button class="toolbar-btn" id="btn-keyboard-piano" title="使用键盘触发钢琴">
                 <i class="fa-solid fa-keyboard"></i>
-            </button>
-        </div>
-
-        <!-- 片段编辑工具栏 (桌面端: 顶部居中图标按钮) -->
-        <div class="segment-toolbar" id="segment-toolbar" style="display:none;">
-            <button class="toolbar-btn seg-tool-btn" id="seg-tb-split" title="分割 (Ctrl+B)" aria-label="分割">
-                <i class="fa-solid fa-scissors"></i>
-            </button>
-            <button class="toolbar-btn seg-tool-btn" id="seg-tb-trim-left" title="左剪裁 (Q)" aria-label="左剪裁">
-                <i class="fa-solid fa-left-long"></i>
-            </button>
-            <button class="toolbar-btn seg-tool-btn" id="seg-tb-trim-right" title="右剪裁 (E)" aria-label="右剪裁">
-                <i class="fa-solid fa-right-long"></i>
-            </button>
-            <span class="toolbar-divider"></span>
-            <button class="toolbar-btn seg-tool-btn" id="seg-tb-copy" title="复制片段 (Ctrl+C)" aria-label="复制">
-                <i class="fa-regular fa-copy"></i>
-            </button>
-            <button class="toolbar-btn seg-tool-btn" id="seg-tb-paste" title="粘贴片段 (Ctrl+V)" aria-label="粘贴">
-                <i class="fa-regular fa-paste"></i>
-            </button>
-            <button class="toolbar-btn seg-tool-btn" id="seg-tb-delete" title="删除片段 (Delete)" aria-label="删除">
-                <i class="fa-solid fa-trash-can"></i>
-            </button>
-            <span class="toolbar-divider"></span>
-            <button class="toolbar-btn seg-tool-btn seg-zoom-btn" id="seg-zoom-x-out" title="横向缩小 (Ctrl+-)" aria-label="横向缩小">
-                <i class="fa-solid fa-left-right"></i><span class="seg-zoom-sign">−</span>
-            </button>
-            <button class="toolbar-btn seg-tool-btn seg-zoom-btn" id="seg-zoom-x-in" title="横向放大 (Ctrl+=)" aria-label="横向放大">
-                <i class="fa-solid fa-left-right"></i><span class="seg-zoom-sign">+</span>
-            </button>
-            <button class="toolbar-btn seg-tool-btn seg-zoom-btn" id="seg-zoom-y-out" title="纵向缩小 (Alt+-)" aria-label="纵向缩小">
-                <i class="fa-solid fa-up-down"></i><span class="seg-zoom-sign">−</span>
-            </button>
-            <button class="toolbar-btn seg-tool-btn seg-zoom-btn" id="seg-zoom-y-in" title="纵向放大 (Alt+=)" aria-label="纵向放大">
-                <i class="fa-solid fa-up-down"></i><span class="seg-zoom-sign">+</span>
-            </button>
-            <button class="toolbar-btn seg-tool-btn" id="seg-zoom-reset" title="重置缩放 (Ctrl+0)" aria-label="重置缩放">
-                <i class="fa-solid fa-rotate-left"></i>
-            </button>
-            <span class="toolbar-divider"></span>
-            <button class="toolbar-btn seg-tool-btn" id="seg-tb-merge" title="合并全部片段" aria-label="合并全部">
-                <i class="fa-solid fa-object-group"></i>
-            </button>
-            <span class="seg-tool-count" id="seg-tool-count">1</span>
-            <button class="toolbar-btn seg-tool-btn" id="seg-tb-exit" title="退出片段编辑" aria-label="退出">
-                <i class="fa-solid fa-xmark"></i>
             </button>
         </div>
 
@@ -210,6 +160,37 @@
                 <i class="fa-solid fa-chevron-left"></i>
             </button>
             <canvas id="piano-roll" style="display:block;width:100%;height:100%;"></canvas>
+            <!-- 片段编辑: 右侧侧边板 (轨道头: 名称/静音/独奏/音量) -->
+            <div class="segment-side-panel" id="segment-side-panel" style="display:none;"></div>
+            <!-- 片段编辑: 画布内顶部工具栏 (剪裁等) -->
+            <div class="segment-toolbar" id="segment-toolbar" style="display:none;">
+                <button class="toolbar-btn seg-tool-btn" id="seg-tb-split" title="分割 (Ctrl+B)" aria-label="分割">
+                    <i class="fa-solid fa-scissors"></i>
+                </button>
+                <button class="toolbar-btn seg-tool-btn" id="seg-tb-trim-left" title="左剪裁 (Q)" aria-label="左剪裁">
+                    <i class="fa-solid fa-left-long"></i>
+                </button>
+                <button class="toolbar-btn seg-tool-btn" id="seg-tb-trim-right" title="右剪裁 (E)" aria-label="右剪裁">
+                    <i class="fa-solid fa-right-long"></i>
+                </button>
+                <span class="toolbar-divider"></span>
+                <button class="toolbar-btn seg-tool-btn" id="seg-tb-copy" title="复制片段 (Ctrl+C)" aria-label="复制">
+                    <i class="fa-regular fa-copy"></i>
+                </button>
+                <button class="toolbar-btn seg-tool-btn" id="seg-tb-paste" title="粘贴片段 (Ctrl+V)" aria-label="粘贴">
+                    <i class="fa-regular fa-paste"></i>
+                </button>
+                <button class="toolbar-btn seg-tool-btn" id="seg-tb-delete" title="删除片段 (Delete)" aria-label="删除">
+                    <i class="fa-solid fa-trash-can"></i>
+                </button>
+                <span class="toolbar-divider"></span>
+                <button class="toolbar-btn seg-tool-btn" id="seg-tb-merge" title="合并全部片段" aria-label="合并全部">
+                    <i class="fa-solid fa-object-group"></i>
+                </button>
+                <span class="seg-tool-count" id="seg-tool-count">1</span>
+            </div>
+            <!-- 片段编辑: 右键菜单 -->
+            <div class="segment-context-menu" id="segment-context-menu" style="display:none;"></div>
             <!-- 工具条 -->
             <div class="tool-bar" id="tool-bar">
                 <button class="tool-btn active" data-tool="default" title="默认工具 (D)"><i class="fa-solid fa-arrow-pointer"></i></button>
@@ -222,6 +203,12 @@
 
         <!-- 状态栏 -->
         <div class="status-bar" id="status-bar" style="display:flex;align-items:center;height:28px;padding:0 8px;background:rgba(0,0,0,0.3);border-top:1px solid var(--ctrl-stroke-default);flex-shrink:0;gap:10px;font-size:12px;color:var(--text-secondary);">
+            <!-- 编辑模式切换滑块: 左 NBS 编辑 / 右 片段编辑 -->
+            <div class="edit-mode-switch" id="edit-mode-switch" role="switch" aria-checked="false" title="切换编辑模式">
+                <span class="ems-opt ems-opt-nbs active" data-mode="nbs">NBS</span>
+                <span class="ems-opt ems-opt-seg" data-mode="segment">片段</span>
+                <span class="ems-knob"></span>
+            </div>
             <div class="status-controls" style="display:flex;align-items:center;gap:8px;">
                 <button class="toolbar-btn play-btn" id="btn-play" title="播放/暂停 (Space)" style="min-width:28px;min-height:24px;font-size:11px;border-radius:4px;">
                     <i class="fa-solid fa-play"></i>
@@ -644,6 +631,10 @@
                                 <input type="checkbox" id="settings-streaming-lyrics"> 流式歌词
                             </label>
                         </div>
+                    </div>
+                    <!-- ===== 时间栏与片段 ===== -->
+                    <div class="settings-group">
+                        <div class="settings-group-title">时间栏与片段</div>
                         <div class="settings-row settings-inline-row">
                             <label class="settings-label" for="settings-timeline-height">时间栏视图高度</label>
                             <select id="settings-timeline-height" class="settings-control">
@@ -651,6 +642,44 @@
                                 <option value="medium">中</option>
                                 <option value="large">大</option>
                             </select>
+                        </div>
+                        <div class="settings-row settings-inline-row">
+                            <label class="settings-label" for="settings-timeline-pos-nbs">时间栏位置（NBS）</label>
+                            <select id="settings-timeline-pos-nbs" class="settings-control">
+                                <option value="top" selected>顶部</option>
+                                <option value="bottom">底部</option>
+                            </select>
+                        </div>
+                        <div class="settings-row settings-inline-row">
+                            <label class="settings-label" for="settings-timeline-pos-seg">时间栏位置（片段）</label>
+                            <select id="settings-timeline-pos-seg" class="settings-control">
+                                <option value="top">顶部</option>
+                                <option value="bottom" selected>底部</option>
+                            </select>
+                        </div>
+                        <div class="settings-row settings-inline-row">
+                            <label class="settings-label" for="settings-timeline-map-mode">时间栏地图显示</label>
+                            <select id="settings-timeline-map-mode" class="settings-control">
+                                <option value="track" selected>根据轨道位置</option>
+                                <option value="pitch">根据音调大小</option>
+                            </select>
+                        </div>
+                        <div class="settings-row settings-inline-row">
+                            <label class="settings-label" for="settings-segment-preview-mode">片段音符预览</label>
+                            <select id="settings-segment-preview-mode" class="settings-control">
+                                <option value="track" selected>根据轨道位置</option>
+                                <option value="pitch">根据音调大小</option>
+                            </select>
+                        </div>
+                        <div class="settings-row">
+                            <label class="settings-label">
+                                <input type="checkbox" id="settings-seg-lane-dividers" checked> 片段轨道分割线（NBS）
+                            </label>
+                        </div>
+                        <div class="settings-row">
+                            <label class="settings-label">
+                                <input type="checkbox" id="settings-seg-boundary-lines"> 片段分割线（NBS）
+                            </label>
                         </div>
                     </div>
                     <!-- ===== 性能 ===== -->
@@ -670,20 +699,11 @@
                             </label>
                         </div>
                     </div>
-                    <!-- ===== 文件 ===== -->
+                    <!-- ===== 界面 ===== -->
                     <div class="settings-group">
-                        <div class="settings-group-title">文件</div>
-                        <div class="settings-row" style="display:flex;align-items:center;gap:8px;">
-                            <label class="settings-label" style="margin:0;">NBS 导出版本:</label>
-                            <select id="settings-nbs-version" style="padding:3px 6px;font-size:12px;border:1px solid var(--ctrl-stroke-default);border-radius:4px;background:var(--ctrl-fill-default);color:var(--text-primary);">
-                                <option value="4">V4</option>
-                                <option value="5" selected>V5</option>
-                                <option value="6">V6</option>
-                            </select>
-                            <span style="font-size:11px;color:var(--text-tertiary);">含铜号角乐器时自动 V6</span>
-                        </div>
-                        <div class="settings-row" style="display:flex;align-items:center;gap:8px;">
-                            <label class="settings-label" style="margin:0;" for="settings-language">语言:</label>
+                        <div class="settings-group-title">界面</div>
+                        <div class="settings-row settings-inline-row">
+                            <label class="settings-label" for="settings-language">语言</label>
                             <select id="settings-language" class="settings-control" aria-label="语言">
                                 <option value="zh-CN">🇨🇳 简体中文</option>
                                 <option value="en-US">🇺🇸 English (United States)</option>
@@ -697,74 +717,106 @@
                                 <option value="id-ID">🇮🇩 Bahasa Indonesia</option>
                             </select>
                         </div>
-                        <button class="popup-btn" id="settings-about-btn" style="margin-top:8px;width:100%;">关于 MiauNoteBlock</button>
+                        <div class="settings-row">
+                            <button class="popup-btn" id="settings-about-btn" style="width:100%;">关于 MiauNoteBlock</button>
+                        </div>
                     </div>
                 </div>
                 <div class="settings-tab-panel" id="settings-tab-personal">
-                    <div class="settings-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                        <label class="settings-label" style="margin:0;">背景图片:</label>
-                        <input type="file" id="settings-bg-image" accept="image/*" class="settings-file-input">
-                        <span id="settings-bg-filename" class="settings-file-name"></span>
-                        <button id="settings-bg-clear" style="padding:3px 8px;font-size:11px;border:1px solid var(--ctrl-stroke-default);border-radius:4px;background:var(--ctrl-fill-default);color:var(--text-primary);cursor:pointer;">清除</button>
+                    <!-- ===== 背景 ===== -->
+                    <div class="settings-group">
+                        <div class="settings-group-title">背景</div>
+                        <div class="settings-row settings-inline-row">
+                            <label class="settings-label">背景图片</label>
+                            <div class="settings-control settings-control-wide">
+                                <input type="file" id="settings-bg-image" accept="image/*" class="settings-file-input">
+                                <span id="settings-bg-filename" class="settings-file-name"></span>
+                                <button id="settings-bg-clear" class="settings-mini-btn">清除</button>
+                            </div>
+                        </div>
+                        <div class="settings-row settings-inline-row">
+                            <label class="settings-label">背景透明度</label>
+                            <div class="settings-control settings-control-wide">
+                                <input type="range" id="settings-bg-opacity" min="0" max="100" step="5" value="0">
+                                <span id="settings-bg-opacity-value" class="settings-value">0%</span>
+                            </div>
+                        </div>
+                        <div class="settings-row settings-inline-row">
+                            <label class="settings-label">背景模式</label>
+                            <select id="settings-bg-mode" class="settings-control">
+                                <option value="tile">平铺</option>
+                                <option value="stretch">拉伸</option>
+                                <option value="fit">缩放适配</option>
+                            </select>
+                        </div>
                     </div>
-                    <div class="settings-row" style="display:flex;align-items:center;gap:8px;">
-                        <label class="settings-label" style="margin:0;">背景透明度:</label>
-                        <input type="range" id="settings-bg-opacity" min="0" max="100" step="5" value="0" style="flex:1;">
-                        <span id="settings-bg-opacity-value" style="font-size:11px;min-width:32px;text-align:right;">0%</span>
+                    <!-- ===== 面板与材质 ===== -->
+                    <div class="settings-group">
+                        <div class="settings-group-title">面板与材质</div>
+                        <div class="settings-row settings-inline-row">
+                            <label class="settings-label">表面材质</label>
+                            <select id="settings-bg-material" class="settings-control">
+                                <option value="plain">普通半透明</option>
+                                <option value="frosted" selected>毛玻璃</option>
+                                <option value="acrylic">亚克力</option>
+                            </select>
+                        </div>
+                        <div class="settings-row settings-inline-row">
+                            <label class="settings-label">面板透明度</label>
+                            <div class="settings-control settings-control-wide">
+                                <input type="range" id="settings-panel-opacity" min="0" max="100" step="5" value="50">
+                                <span id="settings-panel-opacity-value" class="settings-value">50%</span>
+                            </div>
+                        </div>
+                        <div class="settings-row settings-inline-row">
+                            <label class="settings-label">音轨栏透明度</label>
+                            <div class="settings-control settings-control-wide">
+                                <input type="range" id="settings-track-panel-opacity" min="0" max="100" step="5" value="60">
+                                <span id="settings-track-panel-opacity-value" class="settings-value">60%</span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="settings-row" style="display:flex;align-items:center;gap:8px;">
-                        <label class="settings-label" style="margin:0;">背景模式:</label>
-                        <select id="settings-bg-mode" style="padding:3px 6px;font-size:12px;border:1px solid var(--ctrl-stroke-default);border-radius:4px;background:var(--ctrl-fill-default);color:var(--text-primary);">
-                            <option value="tile">平铺</option>
-                            <option value="stretch">拉伸</option>
-                            <option value="fit">缩放适配</option>
-                        </select>
+                    <!-- ===== 网格 ===== -->
+                    <div class="settings-group">
+                        <div class="settings-group-title">网格</div>
+                        <div class="settings-row settings-inline-row">
+                            <label class="settings-label">网格材质</label>
+                            <select id="settings-grid-material" class="settings-control">
+                                <option value="plain" selected>普通半透明</option>
+                                <option value="frosted">毛玻璃</option>
+                                <option value="acrylic">亚克力</option>
+                            </select>
+                        </div>
+                        <div class="settings-row settings-inline-row">
+                            <label class="settings-label">网格透明度</label>
+                            <div class="settings-control settings-control-wide">
+                                <input type="range" id="settings-grid-opacity" min="0" max="1" step="0.05" value="0.25">
+                                <span id="settings-grid-opacity-value" class="settings-value">25%</span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="settings-row" style="display:flex;align-items:center;gap:8px;">
-                        <label class="settings-label" style="margin:0;">表面材质:</label>
-                        <select id="settings-bg-material" style="padding:3px 6px;font-size:12px;border:1px solid var(--ctrl-stroke-default);border-radius:4px;background:var(--ctrl-fill-default);color:var(--text-primary);">
-                            <option value="plain">普通半透明</option>
-                            <option value="frosted" selected>毛玻璃</option>
-                            <option value="acrylic">亚克力</option>
-                        </select>
+                    <!-- ===== MIDI 音色库 ===== -->
+                    <div class="settings-group">
+                        <div class="settings-group-title">MIDI 音色库</div>
+                        <div class="settings-row settings-inline-row">
+                            <label class="settings-label">音色库</label>
+                            <div class="settings-control settings-control-wide">
+                                <select id="settings-midi-sf-mode">
+                                    <option value="ask" selected>播放时询问</option>
+                                    <option value="auto">自动后台下载</option>
+                                    <option value="off">不使用 (内置合成器)</option>
+                                </select>
+                                <button id="settings-midi-sf-download" class="settings-mini-btn">立即下载</button>
+                                <button id="settings-midi-sf-clear" class="settings-mini-btn">清除缓存</button>
+                            </div>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-hint">音色库状态: <span id="settings-midi-sf-status">未下载</span></span>
+                        </div>
                     </div>
-                    <div class="settings-row" style="display:flex;align-items:center;gap:8px;">
-                        <label class="settings-label" style="margin:0;">面板透明度:</label>
-                        <input type="range" id="settings-panel-opacity" min="0" max="100" step="5" value="50" style="flex:1;">
-                        <span id="settings-panel-opacity-value" style="font-size:11px;min-width:32px;text-align:right;">50%</span>
+                    <div class="settings-group">
+                        <div class="settings-hint settings-hint-block">背景图片覆盖整个网页; 透明度 100% 完全透明, 0% 不透明; 表面材质控制工具栏, 网格材质单独控制音符网格区域; 面板透明度控制工具栏透明程度, 音轨栏透明度单独控制左侧音轨信息栏</div>
                     </div>
-                    <div class="settings-row" style="display:flex;align-items:center;gap:8px;">
-                        <label class="settings-label" style="margin:0;">音轨栏透明度:</label>
-                        <input type="range" id="settings-track-panel-opacity" min="0" max="100" step="5" value="60" style="flex:1;">
-                        <span id="settings-track-panel-opacity-value" style="font-size:11px;min-width:32px;text-align:right;">60%</span>
-                    </div>
-                    <div class="settings-row" style="display:flex;align-items:center;gap:8px;">
-                        <label class="settings-label" style="margin:0;">网格材质:</label>
-                        <select id="settings-grid-material" style="padding:3px 6px;font-size:12px;border:1px solid var(--ctrl-stroke-default);border-radius:4px;background:var(--ctrl-fill-default);color:var(--text-primary);">
-                            <option value="plain" selected>普通半透明</option>
-                            <option value="frosted">毛玻璃</option>
-                            <option value="acrylic">亚克力</option>
-                        </select>
-                    </div>
-                    <div class="settings-row" style="display:flex;align-items:center;gap:8px;">
-                        <label class="settings-label" style="margin:0;">网格透明度:</label>
-                        <input type="range" id="settings-grid-opacity" min="0" max="1" step="0.05" value="0.25" style="flex:1;">
-                        <span id="settings-grid-opacity-value" style="font-size:11px;min-width:32px;text-align:right;">25%</span>
-                    </div>
-                    <div class="settings-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                        <label class="settings-label" style="margin:0;">MIDI 音色库:</label>
-                        <select id="settings-midi-sf-mode" style="padding:3px 6px;font-size:12px;border:1px solid var(--ctrl-stroke-default);border-radius:4px;background:var(--ctrl-fill-default);color:var(--text-primary);">
-                            <option value="ask" selected>播放时询问</option>
-                            <option value="auto">自动后台下载</option>
-                            <option value="off">不使用 (内置合成器)</option>
-                        </select>
-                        <button id="settings-midi-sf-download" style="padding:3px 8px;font-size:11px;border:1px solid var(--ctrl-stroke-default);border-radius:4px;background:var(--ctrl-fill-default);color:var(--text-primary);cursor:pointer;">立即下载</button>
-                        <button id="settings-midi-sf-clear" style="padding:3px 8px;font-size:11px;border:1px solid var(--ctrl-stroke-default);border-radius:4px;background:var(--ctrl-fill-default);color:var(--text-primary);cursor:pointer;">清除缓存</button>
-                    </div>
-                    <div class="settings-row" style="font-size:11px;color:var(--text-tertiary);">
-                        音色库状态: <span id="settings-midi-sf-status">未下载</span>
-                    </div>
-                    <div class="settings-hint" style="font-size:11px;color:var(--text-tertiary);padding:4px 0;">提示: 背景图片覆盖整个网页; 透明度 100% 完全透明, 0% 不透明; 表面材质控制工具栏, 网格材质单独控制音符网格区域; 面板透明度控制工具栏透明程度, 音轨栏透明度单独控制左侧音轨信息栏</div>
                 </div>
             </div>
         </div>
@@ -1087,6 +1139,7 @@
                 <!-- 基本设置面板 -->
                 <div class="midi-tab-panel active" id="midi-tab-basic">
                     <div class="midi-settings">
+                        <div class="settings-group-title">轨道处理</div>
                         <div class="midi-settings-row">
                             <label style="margin-right:16px;"><input type="checkbox" id="midi-remove-silent" checked> 移除无音符轨道</label>
                             <label><input type="checkbox" id="midi-name-layers" checked> 自动命名轨道</label>
@@ -1099,10 +1152,11 @@
                         <div class="midi-settings-row">
                             <label><input type="checkbox" id="midi-tempo-changes"> 导入速度变化事件</label>
                         </div>
+                        <div class="settings-group-title">音域处理</div>
                         <div class="midi-settings-row">
                             <label style="white-space:nowrap;">
                                 音域处理:
-                                <select id="midi-octave-mode" style="padding:2px 4px;font-size:12px;border:1px solid var(--ctrl-stroke-default);border-radius:4px;background:var(--ctrl-fill-default);color:var(--text-primary);margin-left:4px;">
+                                <select id="midi-octave-mode" style="margin-left:4px;">
                                     <option value="0">不启用</option>
                                     <option value="1" selected>单独音符归一法</option>
                                     <option value="2">整体八度偏移法</option>
@@ -1125,6 +1179,7 @@
                             <i class="fa-solid fa-circle-info" style="color:var(--accent-orange,#ff8c42);font-size:12px;margin-right:4px;"></i>
                             <span id="midi-octave-mode-hint-text" style="font-size:11px;color:var(--accent-orange,#ff8c42);">MC 音域 F#3~F#5 (MIDI 54~78)</span>
                         </div>
+                        <div class="settings-group-title">节奏与精度</div>
                         <div class="midi-settings-row">
                             <label style="margin-right:12px;"><input type="checkbox" id="midi-read-velocity" checked> 读取音符力度</label>
                             <label style="white-space:nowrap;margin-right:8px;">
@@ -1132,7 +1187,7 @@
                             </label>
                             <label id="midi-snap-beat-label" style="white-space:nowrap;">
                                 拍子:
-                                <select id="midi-snap-beat" style="padding:2px 4px;font-size:12px;border:1px solid var(--ctrl-stroke-default);border-radius:4px;background:var(--ctrl-fill-default);color:var(--text-primary);margin-left:4px;">
+                                <select id="midi-snap-beat" style="margin-left:4px;">
                                     <option value="2">1/2</option>
                                     <option value="4" selected>1/4</option>
                                     <option value="8">1/8</option>
@@ -1145,7 +1200,7 @@
                         <div class="midi-settings-row">
                             <label style="white-space:nowrap;">
                                 歌曲精度:
-                                <select id="midi-precision" style="padding:2px 4px;font-size:12px;border:1px solid var(--ctrl-stroke-default);border-radius:4px;background:var(--ctrl-fill-default);color:var(--text-primary);margin-left:4px;">
+                                <select id="midi-precision" style="margin-left:4px;">
                                     <option value="0">1x</option>
                                     <option value="1" selected>2x</option>
                                     <option value="3">4x</option>
@@ -1153,10 +1208,11 @@
                                 </select>
                             </label>
                         </div>
+                        <div class="settings-group-title">延音与清理</div>
                         <div class="midi-settings-row">
                             <label style="white-space:nowrap;">
                                 延音处理:
-                                <select id="midi-keep-note-length" style="padding:2px 4px;font-size:12px;border:1px solid var(--ctrl-stroke-default);border-radius:4px;background:var(--ctrl-fill-default);color:var(--text-primary);margin-left:4px;">
+                                <select id="midi-keep-note-length" style="margin-left:4px;">
                                     <option value="none">不保留</option>
                                     <option value="all">全部保留</option>
                                     <option value="sustain">按轨道选择</option>
@@ -1177,10 +1233,15 @@
                                 <i class="fa-solid fa-circle-question" style="cursor:help;color:var(--text-tertiary);font-size:12px;margin-left:2px;" title="删除重复音符后，将下方相邻轨道中孤立的连续音符向上移动填补空洞"></i>
                             </label>
                         </div>
-                        <div class="midi-settings-row" style="margin-top:4px;">
-                            <label style="font-size:12px;color:var(--text-tertiary);">
-                                <input type="checkbox" id="midi-remember"> 记住以上设置
+                        <div class="settings-group-title">工程结构</div>
+                        <div class="midi-settings-row">
+                            <label style="white-space:nowrap;">
+                                <input type="checkbox" id="midi-auto-split-segments" checked> 自动分割片段
+                                <i class="fa-solid fa-circle-question" style="cursor:help;color:var(--text-tertiary);font-size:12px;margin-left:2px;" title="按 MIDI 通道把导入结果拆成多条片段轨道（每个通道一条，打击乐合并为一条），便于在片段模式中二次编辑；关闭则所有音符进入单一片段轨"></i>
                             </label>
+                        </div>
+                        <div class="midi-settings-row" style="padding-left:20px;">
+                            <span style="font-size:11px;color:var(--text-tertiary);">导入配置会自动保存，下次打开沿用</span>
                         </div>
                     </div>
                 </div>
@@ -1553,25 +1614,25 @@
     }
 </script>
 <!-- nbs_client.js 必须在 api_client.js 之前加载 (api_client.js 引用 NBSClient 全局对象) -->
-<script src="static/js/nbs_client.js?v=20261017d"></script>
+<script src="static/js/nbs_client.js?v=20261018u"></script>
 <script src="static/js/compress_est.js?v=20260926b"></script>
 <script src="static/js/api_client.js?v=20260905a"></script>
 <script src="static/js/custom_dropdown.js?v=20261017d"></script>
-<script src="static/js/i18n.js?v=20261018f"></script>
+<script src="static/js/i18n.js?v=20261018u"></script>
 <script src="static/js/audio_engine.js?v=20260919c"></script>
 <script src="static/js/custom_instruments.js?v=20260905a"></script>
 <script src="static/js/audio_fix_utils.js?v=20260905a"></script>
 <script src="static/js/sf3_player.js?v=20260808a"></script>
 <script src="static/js/spessa_player.js?v=20260918a"></script>
 <script src="static/js/soundfont_loader.js?v=20260808b"></script>
-<script src="static/js/piano_roll.js?v=20261018f"></script>
+<script src="static/js/piano_roll.js?v=20261018u"></script>
 <!-- 本地化第三方库: ZIP 打包 (jszip) / MP3 编码 (lamejs) -->
 <script src="static/vendor/jszip.min.js?v=20260905a"></script>
 <script src="static/vendor/lame.min.js?v=20260905a"></script>
 <!-- 离线渲染引擎: audio_render.js 必须在 main.js 之前加载 -->
 <script src="static/js/render_jsmix.js?v=20260906e"></script>
 <script src="static/js/audio_render.js?v=20260919c"></script>
-<script src="static/js/main.js?v=20261018f"></script>
+<script src="static/js/main.js?v=20261018u"></script>
 
 <script>
 // 桌面应用（含 MSIX 安装版）内：外部链接交给系统默认浏览器打开。

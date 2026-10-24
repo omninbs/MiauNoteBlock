@@ -900,35 +900,50 @@ input[type="number"]:focus::-webkit-outer-spin-button {
     }
 }
 
-/* ===== 片段编辑工具栏 (桌面端: 顶部工具栏内居中) ===== */
+/* ===== 片段编辑模式: 隐藏 NBS 专属的画布内控件 ===== */
+/* 用 ID 提高优先级, 覆盖下方 #track-panel-toggle 的 display:flex !important */
+body.segment-edit-mode #track-panel-toggle,
+body.segment-edit-mode .tool-bar {
+    display: none !important;
+}
+
+/* ===== 片段编辑工具栏 (画布内顶部居中) ===== */
 .segment-toolbar {
     position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
+    left: 8px;              /* 靠左显示 (时间栏下方) */
+    top: 64px;              /* JS 按时间栏布局动态调整 */
     display: flex;
     align-items: center;
     gap: 2px;
-    padding: 2px 6px;
-    border-radius: 999px;
-    background: rgba(90, 200, 255, 0.10);
-    border: 1px solid rgba(90, 200, 255, 0.35);
-    z-index: 6;
+    padding: 0;
+    /* 无容器: 工具栏直接"长"在时间栏与绘画区之间的空间里, 去掉边框/底色/阴影 */
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    z-index: 30;
 }
 .segment-toolbar .seg-tool-btn {
-    width: 26px;
-    min-width: 26px;
-    height: 26px;
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
     padding: 0;
-    color: #bfe6ff;
+    border-radius: 6px;
+    color: #98a2ac;
 }
 .segment-toolbar .seg-tool-btn:hover {
-    background: rgba(90, 200, 255, 0.22);
-    color: #ffffff;
+    background: rgba(255, 255, 255, 0.10);
+    color: #e4e8ec;
+}
+.segment-toolbar .toolbar-divider {
+    width: 1px;
+    height: 16px;
+    margin: 0 4px;
+    background: rgba(255, 255, 255, 0.14);
 }
 .segment-toolbar .seg-tool-count {
     font-size: 11px;
-    color: #5ac8ff;
+    color: #98a2ac;
     padding: 0 4px;
     font-variant-numeric: tabular-nums;
 }
@@ -954,31 +969,187 @@ input[type="number"]:focus::-webkit-outer-spin-button {
     .segment-edit-bar { display: none !important; }
 }
 
+/* ===== 编辑模式切换滑块 (状态栏左下角) ===== */
+.edit-mode-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    height: 20px;
+    padding: 1px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid var(--ctrl-stroke-default);
+    cursor: pointer;
+    user-select: none;
+    flex-shrink: 0;
+}
+.edit-mode-switch .ems-opt {
+    position: relative;
+    z-index: 2;
+    width: 40px;
+    text-align: center;
+    font-size: 10px;
+    line-height: 16px;
+    color: var(--text-tertiary);
+    transition: color 0.18s ease;
+}
+.edit-mode-switch .ems-opt.active { color: #eaf7ff; }
+.edit-mode-switch .ems-knob {
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    width: 40px;
+    height: 16px;
+    border-radius: 8px;
+    background: rgba(76, 194, 255, 0.32);
+    border: 1px solid rgba(76, 194, 255, 0.58);
+    transition: transform 0.2s ease;
+    z-index: 1;
+}
+.edit-mode-switch[data-mode="segment"] .ems-knob { transform: translateX(40px); }
+@media (max-width: 768px) {
+    .edit-mode-switch { display: none; }
+}
+
+/* ===== 片段编辑: 右侧侧边板 (轨道头) ===== */
+.segment-side-panel {
+    position: absolute;
+    left: 0;
+    width: 120px;
+    z-index: 20;
+    /* 实底而非毛玻璃: 大画布上的 backdrop-filter 在窗口切换/缩放时会触发整层重建, 造成卡顿 */
+    background: rgba(16, 19, 23, 0.97);
+    border-right: 1px solid rgba(255, 255, 255, 0.10);
+    overflow: hidden;
+    font-size: 11px;
+    user-select: none;
+}
+.seg-lane-row {
+    position: absolute;
+    left: 0;
+    right: 0;
+    padding: 4px 6px;
+    box-sizing: border-box;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    overflow: hidden;
+}
+.seg-lane-row .seg-lane-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+.seg-lane-row .seg-lane-name {
+    font-weight: 600;
+    color: #e4e8ec;
+    /* 自动分割片段后轨道名可能是音色名, 超长时省略 */
+    max-width: 62px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.seg-lane-btn {
+    width: 18px;
+    height: 16px;
+    padding: 0;
+    font-size: 9px;
+    line-height: 16px;
+    text-align: center;
+    border-radius: 3px;
+    border: 1px solid var(--ctrl-stroke-default);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-tertiary);
+    cursor: pointer;
+}
+.seg-lane-btn.active[data-act="mute"] { background: rgba(255, 96, 96, 0.32); color: #ffd9d9; border-color: rgba(255, 96, 96, 0.6); }
+.seg-lane-btn.active[data-act="solo"] { background: rgba(255, 206, 84, 0.32); color: #fff3cf; border-color: rgba(255, 206, 84, 0.6); }
+.seg-lane-vol {
+    width: 100%;
+    height: 12px;
+    margin: 3px 0 0;
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    cursor: pointer;
+}
+.seg-lane-vol::-webkit-slider-runnable-track {
+    height: 3px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.18);
+}
+.seg-lane-vol::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 9px;
+    height: 9px;
+    margin-top: -3px;
+    border-radius: 50%;
+    background: #4a90d9;
+}
+.seg-lane-vol::-moz-range-track { height: 3px; border-radius: 2px; background: rgba(255,255,255,0.18); }
+.seg-lane-vol::-moz-range-thumb { width: 9px; height: 9px; border: none; border-radius: 50%; background: #4a90d9; }
+.seg-lane-resize {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -3px;
+    height: 7px;
+    cursor: ns-resize;
+}
+
+/* ===== 片段编辑: 右键菜单 ===== */
+.segment-context-menu {
+    position: fixed;
+    min-width: 148px;
+    padding: 4px;
+    border-radius: 8px;
+    background: rgba(24, 30, 38, 0.96);
+    border: 1px solid var(--ctrl-stroke-default);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(12px);
+    z-index: 100050;
+    font-size: 12px;
+    color: var(--text-primary);
+}
+.segment-context-menu .seg-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 9px;
+    border-radius: 5px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.segment-context-menu .seg-menu-item:hover { background: rgba(74, 144, 217, 0.16); }
+.segment-context-menu .seg-menu-item.disabled { opacity: 0.38; pointer-events: none; }
+.segment-context-menu .seg-menu-sep { height: 1px; margin: 3px 4px; background: rgba(255, 255, 255, 0.1); }
+
 /* ===== 片段编辑模式 (剪映风格) ===== */
 .segment-edit-bar {
-    border-color: rgba(90, 200, 255, 0.5);
+    border-color: rgba(255, 255, 255, 0.14);
 }
 .segment-edit-bar > i {
-    color: #5ac8ff;
+    color: #98a2ac;
 }
 .segment-edit-bar .lyrics-edit-bar-count {
-    color: #5ac8ff;
-    background: rgba(90, 200, 255, 0.14);
+    color: #e4e8ec;
+    background: rgba(255, 255, 255, 0.10);
 }
 /* 片段编辑的操作按钮在桌面端也保持可见 (覆盖歌词条的桌面端隐藏规则) */
 .segment-edit-bar .lyrics-edit-bar-ops {
     display: flex;
 }
 .segment-edit-bar .lyrics-op-btn {
-    border-color: rgba(90, 200, 255, 0.4);
-    background: rgba(90, 200, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.07);
 }
 .segment-edit-bar .lyrics-op-btn:hover {
-    background: rgba(90, 200, 255, 0.26);
+    background: rgba(255, 255, 255, 0.14);
 }
 #btn-segments.active {
-    background: rgba(90, 200, 255, 0.22);
-    color: #5ac8ff;
+    background: rgba(74, 144, 217, 0.20);
+    color: #e4e8ec;
 }
 
 /* 歌词编辑模式提示条 (顶部居中) */
@@ -2017,7 +2188,8 @@ input[type="number"]:focus::-webkit-outer-spin-button {
     -webkit-appearance: none;
     appearance: none;
     height: 4px;
-    background: var(--ctrl-fill-default);
+    /* 不设轨道背景: 只保留滑块本体, 避免在弹窗里出现多余的色块 */
+    background: transparent;
     border-radius: var(--radius-pill);
     outline: none;
     border: none;
@@ -7817,4 +7989,217 @@ textarea:disabled {
     #midi-substitute-popup .settings-body { padding: 8px 10px; }
     .midi-settings { padding: 6px 8px; }
     .settings-row.settings-sub-row { padding-left: 14px; }
+}
+
+/* ==========================================================================
+   弹窗统一排版规范 (Dialog layout system)
+   复用项目既有 token: --space-* / --radius-* / --font-size-* / --text-*
+   层级顺序: 对话框标题 > 分组标题 > 选项行 > 行内控件
+   核心留白规则: 分组之间 > 组内行间 > 行内控件间
+   ========================================================================== */
+.popup-content {
+    --dlg-row-h: 30px;
+    --dlg-control-h: 26px;
+    --dlg-divider: rgba(255, 255, 255, 0.06);
+}
+
+/* 分组标题: 作为「标签」层级, 小而克制, 不与对话框标题争视觉权重 */
+.popup-content .settings-group-title,
+.popup-content .midi-settings > .settings-group-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    margin: var(--space-3) 0 var(--space-1);
+    padding: 0;
+    border-bottom: none;
+}
+.popup-content .settings-group:first-of-type .settings-group-title,
+.popup-content .midi-settings > .settings-group-title:first-child {
+    margin-top: 0;
+}
+
+/* 分组: 靠留白分组, 去掉逐行横线 */
+.popup-content .settings-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--space-1) 0 var(--space-2);
+    border-top: 1px solid var(--dlg-divider);
+}
+.popup-content .settings-group:first-of-type {
+    border-top: none;
+    padding-top: 0;
+}
+
+/* 选项行 */
+.popup-content .settings-row,
+.popup-content .midi-settings-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: var(--dlg-row-h);
+    padding: 1px 0;
+    border-bottom: none;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+/* 标签 */
+.popup-content .settings-label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+/* 行内布局: 标签靠左, 控件靠右 */
+.popup-content .settings-row.settings-inline-row {
+    justify-content: space-between;
+}
+.popup-content .settings-control {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex: 0 0 auto;
+    min-width: 132px;
+}
+.popup-content .settings-control-wide {
+    flex: 1 1 auto;
+    min-width: 180px;
+}
+.popup-content .settings-control select {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.popup-content .settings-control input[type="range"] {
+    flex: 1 1 auto;
+    min-width: 80px;
+}
+
+/* 统一表单控件外观 (限定在弹窗的选项行内, 避免波及 MIDI 数据表格里的控件) */
+.popup-content .settings-row select,
+.popup-content .settings-row input[type="number"],
+.popup-content .settings-row input[type="text"],
+.popup-content .midi-settings-row select,
+.popup-content .midi-settings-row input[type="number"],
+.popup-content .midi-settings-row input[type="text"],
+.popup-content .settings-control select,
+.popup-content .settings-control input[type="number"],
+.popup-content .settings-control input[type="text"] {
+    height: var(--dlg-control-h);
+    padding: 0 var(--space-2);
+    font-size: 12px;
+    line-height: var(--dlg-control-h);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--ctrl-stroke-default);
+    background: var(--ctrl-fill-default);
+    color: var(--text-primary);
+}
+.popup-content .settings-row select:hover,
+.popup-content .settings-row input[type="number"]:hover,
+.popup-content .settings-row input[type="text"]:hover,
+.popup-content .midi-settings-row select:hover,
+.popup-content .settings-control select:hover {
+    border-color: var(--ctrl-stroke-hover);
+}
+.popup-content .settings-row input[type="checkbox"],
+.popup-content .settings-row input[type="radio"],
+.popup-content .midi-settings-row input[type="checkbox"],
+.popup-content .midi-settings-row input[type="radio"] {
+    margin: 0;
+    accent-color: var(--accent);
+}
+
+/* 小号按钮 / 数值 / 提示文字 */
+.popup-content .settings-mini-btn {
+    height: var(--dlg-control-h);
+    padding: 0 var(--space-2);
+    font-size: 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--ctrl-stroke-default);
+    background: var(--ctrl-fill-default);
+    color: var(--text-primary);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.popup-content .settings-mini-btn:hover {
+    background: var(--ctrl-fill-hover);
+    border-color: var(--ctrl-stroke-hover);
+}
+.popup-content .settings-value {
+    min-width: 40px;
+    text-align: right;
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+.popup-content .settings-hint {
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text-tertiary);
+}
+.popup-content .settings-row.settings-inline-row .settings-hint {
+    flex: 1 0 100%;
+}
+.popup-content .settings-hint-block {
+    display: block;
+    padding: var(--space-1) 0;
+}
+
+/* 子选项: 缩进 + 次要文字色, 与父项形成层级 */
+.popup-content .settings-row.settings-sub-row {
+    padding-left: var(--space-4);
+}
+.popup-content .settings-row.settings-sub-row .settings-label {
+    color: var(--text-secondary);
+    font-weight: 400;
+}
+
+/* MIDI 弹窗: 小节留白大于行距; 文件信息弱化 */
+.popup-content .midi-settings {
+    padding: var(--space-2) var(--space-4) var(--space-4);
+    border-top: none;
+}
+.popup-content .midi-settings-row {
+    gap: var(--space-2) var(--space-3);
+}
+.popup-content .midi-file-info {
+    padding: var(--space-2) var(--space-4);
+    font-size: 11px;
+    line-height: 1.6;
+    gap: var(--space-2) var(--space-4);
+}
+
+/* 弹窗底部按钮区: 与内容拉开一档 */
+.popup-content .popup-actions {
+    margin-top: var(--space-4);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--dlg-divider);
+}
+
+/* 移动端: 收紧留白, 但不破坏层级 */
+@media (max-width: 768px) {
+    .popup-content .settings-row,
+    .popup-content .midi-settings-row {
+        min-height: 28px;
+        gap: var(--space-1) var(--space-2);
+        font-size: 12px;
+    }
+    .popup-content .settings-control {
+        min-width: 112px;
+    }
+    .popup-content .settings-control-wide {
+        min-width: 140px;
+    }
+    .popup-content .midi-settings {
+        padding: 4px 8px 10px;
+    }
+    .popup-content .settings-row.settings-sub-row {
+        padding-left: var(--space-3);
+    }
 }

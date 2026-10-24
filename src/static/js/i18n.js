@@ -2125,6 +2125,135 @@
         if (Object.prototype.hasOwnProperty.call(_timelineBarI18n, _nl)) Object.assign(UI_TEXT[_nl], _timelineBarI18n[_nl]);
     }
 
+    // ============ 时间栏位置 / 地图纵轴模式 词条 (9 种非中文语言) ============
+    var _timelinePosI18n = {
+        'en-US': { '时间栏位置（NBS）': 'Timeline position (NBS)', '时间栏位置（片段）': 'Timeline position (Segment)', '时间栏地图显示': 'Timeline map view', '片段音符预览': 'Segment note preview', '顶部': 'Top', '底部': 'Bottom', '根据轨道位置': 'By track position', '根据音调大小': 'By pitch' },
+        'ja-JP': { '时间栏位置（NBS）': 'タイムライン位置（NBS）', '时间栏位置（片段）': 'タイムライン位置（セグメント）', '时间栏地图显示': 'タイムラインマップ表示', '片段音符预览': 'セグメント音符プレビュー', '顶部': '上部', '底部': '下部', '根据轨道位置': 'トラック位置で表示', '根据音调大小': '音の高さで表示' },
+        'ko-KR': { '时间栏位置（NBS）': '타임라인 위치 (NBS)', '时间栏位置（片段）': '타임라인 위치 (세그먼트)', '时间栏地图显示': '타임라인 지도 보기', '片段音符预览': '세그먼트 음표 미리보기', '顶部': '상단', '底部': '하단', '根据轨道位置': '트랙 위치 기준', '根据音调大小': '음 높이 기준' },
+        'pt-BR': { '时间栏位置（NBS）': 'Posição da linha do tempo (NBS)', '时间栏位置（片段）': 'Posição da linha do tempo (Segmento)', '时间栏地图显示': 'Vista do mapa da linha do tempo', '片段音符预览': 'Prévia das notas do segmento', '顶部': 'Superior', '底部': 'Inferior', '根据轨道位置': 'Por posição da trilha', '根据音调大小': 'Pela altura do tom' },
+        'id-ID': { '时间栏位置（NBS）': 'Posisi timeline (NBS)', '时间栏位置（片段）': 'Posisi timeline (Segmen)', '时间栏地图显示': 'Tampilan peta timeline', '片段音符预览': 'Pratinjau nada segmen', '顶部': 'Atas', '底部': 'Bawah', '根据轨道位置': 'Berdasarkan posisi trek', '根据音调大小': 'Berdasarkan nada' },
+        'es-ES': { '时间栏位置（NBS）': 'Posición de la línea de tiempo (NBS)', '时间栏位置（片段）': 'Posición de la línea de tiempo (Segmento)', '时间栏地图显示': 'Vista del mapa de la línea de tiempo', '片段音符预览': 'Vista previa de notas del segmento', '顶部': 'Superior', '底部': 'Inferior', '根据轨道位置': 'Por posición de pista', '根据音调大小': 'Según el tono' },
+        'ru-RU': { '时间栏位置（NBS）': 'Положение панели времени (NBS)', '时间栏位置（片段）': 'Положение панели времени (Сегмент)', '时间栏地图显示': 'Вид карты панели времени', '片段音符预览': 'Просмотр нот сегмента', '顶部': 'Сверху', '底部': 'Снизу', '根据轨道位置': 'По позиции дорожки', '根据音调大小': 'По высоте звука' },
+        'de-DE': { '时间栏位置（NBS）': 'Zeitleistenposition (NBS)', '时间栏位置（片段）': 'Zeitleistenposition (Segment)', '时间栏地图显示': 'Zeitleisten-Kartenansicht', '片段音符预览': 'Segment-Notenvorschau', '顶部': 'Oben', '底部': 'Unten', '根据轨道位置': 'Nach Spurposition', '根据音调大小': 'Nach Tonhöhe' },
+        'fr-FR': { '时间栏位置（NBS）': 'Position de la chronologie (NBS)', '时间栏位置（片段）': 'Position de la chronologie (Segment)', '时间栏地图显示': 'Vue de la carte de la chronologie', '片段音符预览': 'Aperçu des notes du segment', '顶部': 'Haut', '底部': 'Bas', '根据轨道位置': 'Par position de piste', '根据音调大小': 'Par hauteur' }
+    };
+    for (_nl in _timelinePosI18n) {
+        if (Object.prototype.hasOwnProperty.call(_timelinePosI18n, _nl)) Object.assign(UI_TEXT[_nl], _timelinePosI18n[_nl]);
+    }
+
+    // ============ 弹窗排版重排后的分组标题 / 选项文案 (9 种非中文语言) ============
+    var _dialogLayoutI18n = {
+        'en-US': {
+            '时间栏与片段': 'Timeline & Segments', '界面': 'Interface', 'NBS 导出版本': 'NBS export version',
+            '含铜号角乐器时自动选用 V6': 'Automatically uses V6 when copper horn instruments are present',
+            '背景': 'Background', '面板与材质': 'Panels & materials', '网格': 'Grid', 'MIDI 音色库': 'MIDI soundfont',
+            '音色库': 'Soundfont', '轨道处理': 'Track handling', '音域处理': 'Pitch range', '节奏与精度': 'Timing & precision',
+            '延音与清理': 'Sustain & cleanup', '音色库状态': 'Soundfont status',
+            '背景图片': 'Background image', '背景透明度': 'Background opacity', '背景模式': 'Background mode',
+            '表面材质': 'Surface material', '面板透明度': 'Panel opacity', '音轨栏透明度': 'Track panel opacity',
+            '网格材质': 'Grid material', '网格透明度': 'Grid opacity', '清除': 'Clear', '立即下载': 'Download now', '清除缓存': 'Clear cache'
+        },
+        'ja-JP': {
+            '时间栏与片段': 'タイムラインとセグメント', '界面': 'インターフェース', 'NBS 导出版本': 'NBS 書き出しバージョン',
+            '含铜号角乐器时自动选用 V6': '銅管ホーンを含む場合は自動で V6 を使用',
+            '背景': '背景', '面板与材质': 'パネルと素材', '网格': 'グリッド', 'MIDI 音色库': 'MIDI サウンドフォント',
+            '音色库': 'サウンドフォント', '轨道处理': 'トラック処理', '音域处理': '音域処理', '节奏与精度': 'タイミングと精度',
+            '延音与清理': 'サステインと整理', '音色库状态': 'サウンドフォントの状態',
+            '背景图片': '背景画像', '背景透明度': '背景の不透明度', '背景模式': '背景モード',
+            '表面材质': '表面素材', '面板透明度': 'パネルの不透明度', '音轨栏透明度': 'トラック欄の不透明度',
+            '网格材质': 'グリッド素材', '网格透明度': 'グリッドの不透明度', '清除': 'クリア', '立即下载': '今すぐダウンロード', '清除缓存': 'キャッシュを削除'
+        },
+        'ko-KR': {
+            '时间栏与片段': '타임라인 및 세그먼트', '界面': '인터페이스', 'NBS 导出版本': 'NBS 내보내기 버전',
+            '含铜号角乐器时自动选用 V6': '구리 호른 악기가 있으면 자동으로 V6 사용',
+            '背景': '배경', '面板与材质': '패널 및 재질', '网格': '그리드', 'MIDI 音色库': 'MIDI 사운드폰트',
+            '音色库': '사운드폰트', '轨道处理': '트랙 처리', '音域处理': '음역 처리', '节奏与精度': '타이밍 및 정밀도',
+            '延音与清理': '서스테인 및 정리', '音色库状态': '사운드폰트 상태',
+            '背景图片': '배경 이미지', '背景透明度': '배경 불투명도', '背景模式': '배경 모드',
+            '表面材质': '표면 재질', '面板透明度': '패널 불투명도', '音轨栏透明度': '트랙 패널 불투명도',
+            '网格材质': '그리드 재질', '网格透明度': '그리드 불투명도', '清除': '지우기', '立即下载': '지금 다운로드', '清除缓存': '캐시 지우기'
+        },
+        'pt-BR': {
+            '时间栏与片段': 'Linha do tempo e segmentos', '界面': 'Interface', 'NBS 导出版本': 'Versão de exportação NBS',
+            '含铜号角乐器时自动选用 V6': 'Usa V6 automaticamente quando há trompas de cobre',
+            '背景': 'Fundo', '面板与材质': 'Painéis e materiais', '网格': 'Grade', 'MIDI 音色库': 'Soundfont MIDI',
+            '音色库': 'Soundfont', '轨道处理': 'Tratamento de faixas', '音域处理': 'Extensão tonal', '节奏与精度': 'Ritmo e precisão',
+            '延音与清理': 'Sustentação e limpeza', '音色库状态': 'Estado do soundfont',
+            '背景图片': 'Imagem de fundo', '背景透明度': 'Opacidade do fundo', '背景模式': 'Modo do fundo',
+            '表面材质': 'Material da superfície', '面板透明度': 'Opacidade do painel', '音轨栏透明度': 'Opacidade da barra de faixas',
+            '网格材质': 'Material da grade', '网格透明度': 'Opacidade da grade', '清除': 'Limpar', '立即下载': 'Baixar agora', '清除缓存': 'Limpar cache'
+        },
+        'id-ID': {
+            '时间栏与片段': 'Timeline & segmen', '界面': 'Antarmuka', 'NBS 导出版本': 'Versi ekspor NBS',
+            '含铜号角乐器时自动选用 V6': 'Otomatis memakai V6 bila ada instrumen copper horn',
+            '背景': 'Latar', '面板与材质': 'Panel & material', '网格': 'Kisi', 'MIDI 音色库': 'Soundfont MIDI',
+            '音色库': 'Soundfont', '轨道处理': 'Penanganan trek', '音域处理': 'Rentang nada', '节奏与精度': 'Waktu & presisi',
+            '延音与清理': 'Sustain & pembersihan', '音色库状态': 'Status soundfont',
+            '背景图片': 'Gambar latar', '背景透明度': 'Opasitas latar', '背景模式': 'Mode latar',
+            '表面材质': 'Material permukaan', '面板透明度': 'Opasitas panel', '音轨栏透明度': 'Opasitas bilah trek',
+            '网格材质': 'Material kisi', '网格透明度': 'Opasitas kisi', '清除': 'Hapus', '立即下载': 'Unduh sekarang', '清除缓存': 'Hapus cache'
+        },
+        'es-ES': {
+            '时间栏与片段': 'Línea de tiempo y segmentos', '界面': 'Interfaz', 'NBS 导出版本': 'Versión de exportación NBS',
+            '含铜号角乐器时自动选用 V6': 'Usa V6 automáticamente si hay trompas de cobre',
+            '背景': 'Fondo', '面板与材质': 'Paneles y materiales', '网格': 'Cuadrícula', 'MIDI 音色库': 'Soundfont MIDI',
+            '音色库': 'Soundfont', '轨道处理': 'Gestión de pistas', '音域处理': 'Rango tonal', '节奏与精度': 'Ritmo y precisión',
+            '延音与清理': 'Sostenido y limpieza', '音色库状态': 'Estado del soundfont',
+            '背景图片': 'Imagen de fondo', '背景透明度': 'Opacidad del fondo', '背景模式': 'Modo de fondo',
+            '表面材质': 'Material de superficie', '面板透明度': 'Opacidad del panel', '音轨栏透明度': 'Opacidad de la barra de pistas',
+            '网格材质': 'Material de cuadrícula', '网格透明度': 'Opacidad de cuadrícula', '清除': 'Limpiar', '立即下载': 'Descargar ahora', '清除缓存': 'Borrar caché'
+        },
+        'ru-RU': {
+            '时间栏与片段': 'Панель времени и сегменты', '界面': 'Интерфейс', 'NBS 导出版本': 'Версия экспорта NBS',
+            '含铜号角乐器时自动选用 V6': 'Автоматически использует V6 при наличии медных горнов',
+            '背景': 'Фон', '面板与材质': 'Панели и материалы', '网格': 'Сетка', 'MIDI 音色库': 'MIDI-банк',
+            '音色库': 'Банк тембров', '轨道处理': 'Обработка дорожек', '音域处理': 'Диапазон', '节奏与精度': 'Ритм и точность',
+            '延音与清理': 'Сустейн и очистка', '音色库状态': 'Состояние банка',
+            '背景图片': 'Фоновое изображение', '背景透明度': 'Прозрачность фона', '背景模式': 'Режим фона',
+            '表面材质': 'Материал поверхности', '面板透明度': 'Прозрачность панели', '音轨栏透明度': 'Прозрачность панели дорожек',
+            '网格材质': 'Материал сетки', '网格透明度': 'Прозрачность сетки', '清除': 'Очистить', '立即下载': 'Скачать сейчас', '清除缓存': 'Очистить кэш'
+        },
+        'de-DE': {
+            '时间栏与片段': 'Zeitleiste & Segmente', '界面': 'Oberfläche', 'NBS 导出版本': 'NBS-Exportversion',
+            '含铜号角乐器时自动选用 V6': 'Verwendet automatisch V6 bei Kupferhorn-Instrumenten',
+            '背景': 'Hintergrund', '面板与材质': 'Bedienfelder & Materialien', '网格': 'Raster', 'MIDI 音色库': 'MIDI-Soundfont',
+            '音色库': 'Soundfont', '轨道处理': 'Spurverarbeitung', '音域处理': 'Tonumfang', '节奏与精度': 'Timing & Genauigkeit',
+            '延音与清理': 'Sustain & Aufräumen', '音色库状态': 'Soundfont-Status',
+            '背景图片': 'Hintergrundbild', '背景透明度': 'Hintergrunddeckkraft', '背景模式': 'Hintergrundmodus',
+            '表面材质': 'Oberflächenmaterial', '面板透明度': 'Panel-Deckkraft', '音轨栏透明度': 'Deckkraft der Spurtleiste',
+            '网格材质': 'Rastermaterial', '网格透明度': 'Rasterdeckkraft', '清除': 'Entfernen', '立即下载': 'Jetzt herunterladen', '清除缓存': 'Cache leeren'
+        },
+        'fr-FR': {
+            '时间栏与片段': 'Chronologie et segments', '界面': 'Interface', 'NBS 导出版本': "Version d'export NBS",
+            '含铜号角乐器时自动选用 V6': 'Utilise automatiquement V6 en présence de cors en cuivre',
+            '背景': 'Arrière-plan', '面板与材质': 'Panneaux et matériaux', '网格': 'Grille', 'MIDI 音色库': 'Soundfont MIDI',
+            '音色库': 'Soundfont', '轨道处理': 'Gestion des pistes', '音域处理': 'Ambitus', '节奏与精度': 'Rythme et précision',
+            '延音与清理': 'Sustain et nettoyage', '音色库状态': 'État du soundfont',
+            '背景图片': "Image d'arrière-plan", '背景透明度': "Opacité de l'arrière-plan", '背景模式': "Mode d'arrière-plan",
+            '表面材质': 'Matériau de surface', '面板透明度': 'Opacité du panneau', '音轨栏透明度': 'Opacité de la barre de pistes',
+            '网格材质': 'Matériau de grille', '网格透明度': 'Opacité de la grille', '清除': 'Effacer', '立即下载': 'Télécharger', '清除缓存': 'Vider le cache'
+        }
+    };
+    for (_nl in _dialogLayoutI18n) {
+        if (Object.prototype.hasOwnProperty.call(_dialogLayoutI18n, _nl)) Object.assign(UI_TEXT[_nl], _dialogLayoutI18n[_nl]);
+    }
+
+    // ============ 导出 NBS 弹窗: 版本选择与锁定提示 (9 种非中文语言) ============
+    var _exportVersionI18n = {
+        'en-US': { 'NBS 版本': 'NBS version', '作品使用了铜号角或自定义音色，仅 V6 可以完整保存，版本已锁定为 V6。': 'This project uses copper horns or custom instruments. Only V6 can store them completely, so the version is locked to V6.' },
+        'ja-JP': { 'NBS 版本': 'NBS バージョン', '作品使用了铜号角或自定义音色，仅 V6 可以完整保存，版本已锁定为 V6。': '銅管ホーンまたはカスタム音色を使用しているため、完全に保存できるのは V6 のみです。バージョンは V6 に固定されています。' },
+        'ko-KR': { 'NBS 版本': 'NBS 버전', '作品使用了铜号角或自定义音色，仅 V6 可以完整保存，版本已锁定为 V6。': '구리 호른 또는 사용자 지정 악기를 사용하므로 V6에서만 완전히 저장할 수 있습니다. 버전이 V6으로 고정됩니다.' },
+        'pt-BR': { 'NBS 版本': 'Versão do NBS', '作品使用了铜号角或自定义音色，仅 V6 可以完整保存，版本已锁定为 V6。': 'Este projeto usa trompas de cobre ou instrumentos personalizados. Somente o V6 pode armazená-los completamente, então a versão está fixada em V6.' },
+        'id-ID': { 'NBS 版本': 'Versi NBS', '作品使用了铜号角或自定义音色，仅 V6 可以完整保存，版本已锁定为 V6。': 'Proyek ini memakai copper horn atau instrumen khusus. Hanya V6 yang dapat menyimpannya secara lengkap, jadi versi dikunci ke V6.' },
+        'es-ES': { 'NBS 版本': 'Versión de NBS', '作品使用了铜号角或自定义音色，仅 V6 可以完整保存，版本已锁定为 V6。': 'Este proyecto usa trompas de cobre o instrumentos personalizados. Solo V6 puede guardarlos por completo, así que la versión está fijada en V6.' },
+        'ru-RU': { 'NBS 版本': 'Версия NBS', '作品使用了铜号角或自定义音色，仅 V6 可以完整保存，版本已锁定为 V6。': 'В проекте используются медные горны или пользовательские инструменты. Полностью сохранить их может только V6, поэтому версия закреплена на V6.' },
+        'de-DE': { 'NBS 版本': 'NBS-Version', '作品使用了铜号角或自定义音色，仅 V6 可以完整保存，版本已锁定为 V6。': 'Dieses Projekt verwendet Kupferhörner oder eigene Instrumente. Nur V6 kann sie vollständig speichern, daher ist die Version auf V6 festgelegt.' },
+        'fr-FR': { 'NBS 版本': 'Version NBS', '作品使用了铜号角或自定义音色，仅 V6 可以完整保存，版本已锁定为 V6。': 'Ce projet utilise des cors en cuivre ou des instruments personnalisés. Seule la V6 peut les enregistrer complètement, la version est donc verrouillée sur V6.' }
+    };
+    for (_nl in _exportVersionI18n) {
+        if (Object.prototype.hasOwnProperty.call(_exportVersionI18n, _nl)) Object.assign(UI_TEXT[_nl], _exportVersionI18n[_nl]);
+    }
+
     // ============ 片段编辑 (真剪辑型) 词条 (9 种非中文语言) ============
     var _segmentsI18n = {
         'en-US': {
@@ -2380,6 +2509,22 @@
     };
     for (_nl in _segZoomI18n) {
         if (Object.prototype.hasOwnProperty.call(_segZoomI18n, _nl)) Object.assign(UI_TEXT[_nl], _segZoomI18n[_nl]);
+    }
+
+    // ============ 多轨片段编辑补充词条 ============
+    var _segMoreI18n = {
+        'en-US': { '合并片段': 'Merge segments', '导出片段为 NBS': 'Export segment as NBS' },
+        'ja-JP': { '合并片段': 'セグメントを結合', '导出片段为 NBS': 'セグメントを NBS として書き出す' },
+        'ko-KR': { '合并片段': '세그먼트 병합', '导出片段为 NBS': '세그먼트를 NBS로 내보내기' },
+        'pt-BR': { '合并片段': 'Mesclar segmentos', '导出片段为 NBS': 'Exportar segmento como NBS' },
+        'id-ID': { '合并片段': 'Gabungkan segmen', '导出片段为 NBS': 'Ekspor segmen sebagai NBS' },
+        'es-ES': { '合并片段': 'Combinar segmentos', '导出片段为 NBS': 'Exportar segmento como NBS' },
+        'ru-RU': { '合并片段': 'Объединить фрагменты', '导出片段为 NBS': 'Экспортировать фрагмент как NBS' },
+        'de-DE': { '合并片段': 'Segmente zusammenführen', '导出片段为 NBS': 'Segment als NBS exportieren' },
+        'fr-FR': { '合并片段': 'Fusionner les segments', '导出片段为 NBS': 'Exporter le segment en NBS' }
+    };
+    for (_nl in _segMoreI18n) {
+        if (Object.prototype.hasOwnProperty.call(_segMoreI18n, _nl)) Object.assign(UI_TEXT[_nl], _segMoreI18n[_nl]);
     }
 
     // ============ 多文件标签页 / 批量导出 词条 (9 种非中文语言) ============

@@ -257,6 +257,27 @@ var DRUM_NOTE_TABLE = {
     87: ["Open Surdo", 2, 7]
 };
 
+// 打击乐分族: 每类打击乐独占连续 1~N 条 NBS 层, 同 tick 溢出自动顺延到本族的下一层
+// 目标: 复杂的鼓组 MIDI 生成结果结构可读, 而不是乱序堆在一条通道里
+var DRUM_FAMILIES = [
+    { key: 'kick', name: '底鼓' },
+    { key: 'snare', name: '军鼓' },
+    { key: 'hihat', name: '踩镲' },
+    { key: 'tom', name: '嗵鼓' },
+    { key: 'cymbal', name: '镲片' },
+    { key: 'perc', name: '打击乐' }
+];
+function _drumFamilyIndex(midiNote) {
+    switch (midiNote) {
+        case 35: case 36: return 0;                     // Bass Drum
+        case 37: case 38: case 40: return 1;            // Side Stick / Snare
+        case 42: case 44: case 46: return 2;            // Closed / Pedal / Open Hi-hat
+        case 41: case 43: case 45: case 47: case 48: case 50: return 3; // Toms
+        case 49: case 51: case 52: case 53: case 55: case 57: case 59: return 4; // Cymbals
+        default: return 5;                              // 其他打击乐
+    }
+}
+
 var INSTRUMENT_NAMES = [
     "Harp/Piano", "Double Bass", "Bass Drum", "Snare Drum", "Click/Sticks",
     "Guitar", "Flute", "Bell/Glock", "Chime/Box", "Xylophone",
@@ -1904,7 +1925,9 @@ function _convertMidiToNBS(arrayBuffer, settings) {
 
         // 该音符在本 tick 需要的 layer 数 = 1 (自身) + fitSlotCount (拟合 slot)
         var layerUnits = 1 + fitSlotCount;
-        var ctKey = ch + ',' + nbsTick;
+        // 打击乐按族统计层占用 (每族独立, 避免不同鼓类互相挤占)
+        var layerGroupKey = (ch === 9) ? ('9f' + _drumFamilyIndex(e.note)) : String(ch);
+        var ctKey = layerGroupKey + ',' + nbsTick;
         channelUsedTicks[ctKey] = (channelUsedTicks[ctKey] || 0) + layerUnits;
 
         // 如果需要保持音符长度, 后续 tick 也需要 layer (与 Phase 3 一致)
@@ -1920,18 +1943,26 @@ function _convertMidiToNBS(arrayBuffer, settings) {
             for (var preSt = 1; preSt < preNoteLength; preSt++) {
                 var preTargetTick = nbsTick + preSt;
                 if (preTargetTick > maxNbsTick + 100) break;
-                var preKey = ch + ',' + preTargetTick;
+                var preKey = layerGroupKey + ',' + preTargetTick;
                 channelUsedTicks[preKey] = (channelUsedTicks[preKey] || 0) + layerUnits;
             }
         }
     }
 
     var channelLayersNeeded = {};
+    var drumFamilyLayersNeeded = {};   // 打击乐各族在同 tick 的最大并发层数
     for (var ctKey2 in channelUsedTicks) {
         if (channelUsedTicks.hasOwnProperty(ctKey2)) {
             var ctParts = ctKey2.split(',');
-            var ctCh = parseInt(ctParts[0], 10);
+            var ctGroup = ctParts[0];
             var ctCount = channelUsedTicks[ctKey2];
+            if (ctGroup.indexOf('9f') === 0) {
+                var famIdx = parseInt(ctGroup.substring(2), 10);
+                if (!drumFamilyLayersNeeded.hasOwnProperty(famIdx)) drumFamilyLayersNeeded[famIdx] = 0;
+                if (ctCount > drumFamilyLayersNeeded[famIdx]) drumFamilyLayersNeeded[famIdx] = ctCount;
+                continue;
+            }
+            var ctCh = parseInt(ctGroup, 10);
             if (!channelLayersNeeded.hasOwnProperty(ctCh)) {
                 channelLayersNeeded[ctCh] = 0;
             }
@@ -1942,7 +1973,10 @@ function _convertMidiToNBS(arrayBuffer, settings) {
     }
 
     // ---- 构建 channel -> 起始 layer 映射 ----
+    // 打击乐 (通道 9) 特殊: 按族顺序分配连续层段, 每族 1~N 层, 层名可直接看出是哪种鼓
     var channelLayerOffset = {};
+    var drumFamilyOffset = {};         // 族索引 -> 绝对起始 layer
+    var drumLayerFamilyName = {};      // 绝对 layer -> 族名
     var currentLayer = 0;
     if (tempoChanges) {
         currentLayer = 1; // 为速度变化器预留 layer 0
@@ -1952,6 +1986,22 @@ function _convertMidiToNBS(arrayBuffer, settings) {
         if (events[i].channel > maxChannel) maxChannel = events[i].channel;
     }
     for (var ch2 = 0; ch2 <= maxChannel; ch2++) {
+        if (ch2 === 9) {
+            channelLayerOffset[9] = currentLayer;
+            for (var df = 0; df < DRUM_FAMILIES.length; df++) {
+                var dfNeed = drumFamilyLayersNeeded[df] || 0;
+                if (dfNeed <= 0) continue;   // 该族没有音符 → 不占用层
+                drumFamilyOffset[df] = currentLayer;
+                for (var dl = 0; dl < dfNeed; dl++) {
+                    drumLayerFamilyName[currentLayer + dl] = DRUM_FAMILIES[df].name;
+                }
+                currentLayer += dfNeed;
+            }
+            // 兜底: 通道 9 没有任何可映射音符时仍保留 1 层, 避免层号错位
+            if (currentLayer === channelLayerOffset[9]) currentLayer += 1;
+            channelLayersNeeded[9] = currentLayer - channelLayerOffset[9];
+            continue;
+        }
         channelLayerOffset[ch2] = currentLayer;
         currentLayer += (channelLayersNeeded[ch2] || 1);
     }
@@ -2106,9 +2156,13 @@ function _convertMidiToNBS(arrayBuffer, settings) {
             instrument = inst;
         }
 
-        // 计算 layer
-        var baseLayer = channelLayerOffset[ch] || 0;
-        var lKey = ch + ',' + nbsTick;
+        // 计算 layer (打击乐: 每族使用自己的连续层段, 计数器也按族隔离)
+        var drumFam = (ch === 9) ? _drumFamilyIndex(midiNote) : -1;
+        var layerGroupKey2 = (ch === 9) ? ('9f' + drumFam) : String(ch);
+        var baseLayer = (ch === 9)
+            ? ((drumFamilyOffset[drumFam] !== undefined) ? drumFamilyOffset[drumFam] : (channelLayerOffset[9] || 0))
+            : (channelLayerOffset[ch] || 0);
+        var lKey = layerGroupKey2 + ',' + nbsTick;
         var used = layerCounters[lKey] || 0;
         var layer = baseLayer + used;
         layerCounters[lKey] = used + 1;
@@ -2294,7 +2348,7 @@ function _convertMidiToNBS(arrayBuffer, settings) {
             for (var sustainTick = 1; sustainTick < effectiveLength; sustainTick++) {
                 var targetTick = nbsTick + sustainTick;
                 if (targetTick > maxNbsTick + 100) break;
-                var sustainKey = ch + ',' + targetTick;
+                var sustainKey = layerGroupKey2 + ',' + targetTick;
                 var sustainUsed = layerCounters[sustainKey] || 0;
                 var sustainLayer = baseLayer + sustainUsed;
                 layerCounters[sustainKey] = sustainUsed + 1;
@@ -2410,16 +2464,15 @@ function _convertMidiToNBS(arrayBuffer, settings) {
             for (var nb = 0; nb < ncCount; nb++) {
                 if (yy < songLayers.length) {
                     songLayers[yy].stereo = 100;
-                    if (nameAfterPatches) {
-                        if (nc === 9) {
-                            songLayers[yy].name = 'Percussion';
+                    if (nc === 9) {
+                        // 打击乐层直接以鼓族命名, 便于看出结构与二次编辑
+                        songLayers[yy].name = drumLayerFamilyName[yy] || '打击乐';
+                    } else if (nameAfterPatches) {
+                        var prog = channelFirstProgram[nc] || 0;
+                        if (prog < GM_PROGRAM_TABLE.length) {
+                            songLayers[yy].name = GM_PROGRAM_TABLE[prog][0];
                         } else {
-                            var prog = channelFirstProgram[nc] || 0;
-                            if (prog < GM_PROGRAM_TABLE.length) {
-                                songLayers[yy].name = GM_PROGRAM_TABLE[prog][0];
-                            } else {
-                                songLayers[yy].name = 'Channel ' + (nc + 1);
-                            }
+                            songLayers[yy].name = 'Channel ' + (nc + 1);
                         }
                     } else {
                         songLayers[yy].name = 'Channel ' + (nc + 1);

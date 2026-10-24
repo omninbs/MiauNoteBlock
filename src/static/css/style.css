@@ -7949,14 +7949,7 @@ textarea:disabled {
     overflow-y: auto;
     overflow-x: hidden;
 }
-#midi-popup { --dialog-body-h: 440px; }
-#midi-popup .midi-tab-content {
-    flex: 0 1 var(--dialog-body-h);
-    height: var(--dialog-body-h);
-    min-height: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
-}
+/* MIDI 导入弹窗的内容区改为「按内容自适应 + 视口上限」, 见文件末尾的紧凑布局段 */
 
 /* 设置项分组标题 */
 .settings-group { display: flex; flex-direction: column; }
@@ -7978,7 +7971,6 @@ textarea:disabled {
 /* 移动端: 收紧内边距与间距, 把纵向空间还给可操作项 */
 @media (max-width: 768px) {
     #settings-popup { --dialog-body-h: min(440px, calc(100svh - 176px)); }
-    #midi-popup { --dialog-body-h: min(440px, calc(100svh - 206px)); }
     .settings-header { padding: 6px 10px; }
     .settings-body { padding: 6px 8px; gap: 8px; }
     .settings-tabs { padding: 0 6px; }
@@ -8202,4 +8194,135 @@ textarea:disabled {
     .popup-content .settings-row.settings-sub-row {
         padding-left: var(--space-3);
     }
+}
+
+/* ==========================================================================
+   MIDI 导入弹窗 · 紧凑单列布局
+   层级: 弹窗标题 > 标签页 > 分组标题 > 选项行 > 行内控件
+   目标: 桌面端默认窗口一屏显示完整「基本设置」, 手机端允许滚动
+   ========================================================================== */
+#midi-popup .midi-import-dialog {
+    width: min(780px, calc(100vw - 24px));
+    max-width: min(780px, calc(100vw - 24px));
+    max-height: calc(100svh - 28px);
+    /* 只让内容区滚动, 标题/标签/底部按钮固定 */
+    overflow: hidden;
+}
+#midi-popup .midi-tab-content {
+    flex: 1 1 auto;
+    height: auto;
+    max-height: none;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+#midi-popup .settings-header { padding: 8px 12px; }
+#midi-popup .midi-file-info { padding: 6px 14px; gap: 4px 18px; font-size: 11px; }
+#midi-popup .midi-tabs { padding: 0 12px; }
+#midi-popup .popup-actions { margin-top: 6px; padding-top: 8px; }
+
+/* 单栏分组 */
+.midi-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 8px 14px 10px;
+}
+.midi-group { display: flex; flex-direction: column; gap: 1px; }
+.midi-group-title {
+    margin: 0 0 2px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary);
+}
+.midi-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 14px;
+    min-height: 26px;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+}
+.midi-row-sub { padding-left: 18px; }
+.midi-row-warn {
+    color: var(--accent-orange, #ff8c42);
+    font-size: 11.5px;
+    gap: 6px;
+}
+.midi-row-warn i { font-size: 12px; }
+.midi-row-label {
+    color: var(--text-secondary);
+    font-weight: 500;
+    min-width: 64px;
+}
+.midi-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-primary);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.midi-check input { margin: 0; }
+.midi-choice { display: inline-flex; align-items: center; gap: 14px; }
+.midi-choice-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+.midi-inline-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+}
+.midi-field-label { color: var(--text-tertiary); font-size: 12px; }
+.midi-hint-text { font-size: 11px; color: var(--text-tertiary); }
+.midi-help { font-size: 12px; color: var(--text-tertiary); cursor: help; }
+
+/* 行内控件尺寸统一 */
+#midi-popup .midi-control {
+    height: 26px;
+    min-width: 132px;
+    padding: 0 8px;
+    font-size: 12px;
+    color: var(--text-primary);
+    background: var(--ctrl-fill-default, rgba(255, 255, 255, 0.05));
+    border: 1px solid var(--ctrl-stroke-default, rgba(255, 255, 255, 0.12));
+    border-radius: var(--radius-sm, 4px);
+}
+#midi-popup .midi-control-sm { min-width: 78px; }
+#midi-popup .midi-mini-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 24px;
+    padding: 0 10px;
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    background: var(--ctrl-fill-default, rgba(255, 255, 255, 0.05));
+    border: 1px solid var(--ctrl-stroke-default, rgba(255, 255, 255, 0.12));
+    border-radius: var(--radius-sm, 4px);
+    cursor: pointer;
+}
+#midi-popup .midi-mini-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--accent, #4a90d9);
+}
+
+/* 手机端: 允许滚动, 行高改为触控友好 */
+@media (max-width: 768px) {
+    #midi-popup .midi-import-dialog {
+        width: calc(100vw - 16px);
+        max-height: calc(100svh - 16px);
+    }
+    .midi-settings { padding: 6px 10px 8px; gap: 8px; }
+    .midi-row { min-height: 30px; gap: 6px 10px; font-size: 12px; }
+    .midi-row-label { min-width: 56px; }
+    #midi-popup .midi-control { min-width: 110px; }
+    #midi-popup .midi-control-sm { min-width: 72px; }
+    #midi-popup .midi-file-info { padding: 6px 10px; gap: 3px 12px; }
 }

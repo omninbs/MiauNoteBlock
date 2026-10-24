@@ -10,7 +10,7 @@ const OUT = path.join(__dirname, '_out');
 (async () => {
     if (!fs.existsSync(OUT)) fs.mkdirSync(OUT, { recursive: true });
     const browser = await chromium.launch({ executablePath: EDGE, headless: true });
-    for (const vp of [{ w: 1600, h: 900, name: 'desktop' }, { w: 390, h: 844, name: 'mobile' }]) {
+    for (const vp of [{ w: 1600, h: 900, name: 'desktop' }, { w: 1366, h: 768, name: 'laptop' }, { w: 390, h: 844, name: 'mobile' }]) {
         const page = await browser.newPage({ viewport: { width: vp.w, height: vp.h } });
         await page.goto(APP, { waitUntil: 'domcontentloaded' });
         await page.waitForTimeout(900);

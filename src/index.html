@@ -22,7 +22,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="static/css/style.css?v=20261018u">
+    <link rel="stylesheet" href="static/css/style.css?v=20261018v">
 </head>
 <body>
 
@@ -1139,110 +1139,123 @@
                 <!-- 基本设置面板 -->
                 <div class="midi-tab-panel active" id="midi-tab-basic">
                     <div class="midi-settings">
-                        <div class="settings-group-title">轨道处理</div>
-                        <div class="midi-settings-row">
-                            <label style="margin-right:16px;"><input type="checkbox" id="midi-remove-silent" checked> 移除无音符轨道</label>
-                            <label><input type="checkbox" id="midi-name-layers" checked> 自动命名轨道</label>
-                        </div>
-                        <div class="midi-settings-row" style="padding-left:20px;">
-                            <span style="font-size:12px;color:var(--text-tertiary);">命名依据:</span>
-                            <label style="margin-left:8px;"><input type="radio" name="midi-name-mode" value="channels" checked> 通道号</label>
-                            <label style="margin-left:8px;"><input type="radio" name="midi-name-mode" value="patches"> 音色名</label>
-                        </div>
-                        <div class="midi-settings-row">
-                            <label><input type="checkbox" id="midi-tempo-changes"> 导入速度变化事件</label>
-                        </div>
-                        <div class="settings-group-title">音域处理</div>
-                        <div class="midi-settings-row">
-                            <label style="white-space:nowrap;">
-                                音域处理:
-                                <select id="midi-octave-mode" style="margin-left:4px;">
+                        <section class="midi-group">
+                            <h5 class="midi-group-title">轨道处理</h5>
+                            <div class="midi-row">
+                                <label class="midi-check"><input type="checkbox" id="midi-remove-silent" checked><span>移除无音符轨道</span></label>
+                                <label class="midi-check"><input type="checkbox" id="midi-name-layers" checked><span>自动命名轨道</span></label>
+                            </div>
+                            <div class="midi-row midi-row-sub">
+                                <span class="midi-row-label">命名依据</span>
+                                <div class="midi-choice">
+                                    <label class="midi-choice-item"><input type="radio" name="midi-name-mode" value="patches" checked><span>通道名</span></label>
+                                    <label class="midi-choice-item"><input type="radio" name="midi-name-mode" value="channels"><span>通道号</span></label>
+                                </div>
+                            </div>
+                            <div class="midi-row">
+                                <label class="midi-check"><input type="checkbox" id="midi-tempo-changes"><span>导入速度变化事件</span></label>
+                            </div>
+                        </section>
+
+                        <section class="midi-group">
+                            <h5 class="midi-group-title">音域处理</h5>
+                            <div class="midi-row">
+                                <span class="midi-row-label">处理方式</span>
+                                <select id="midi-octave-mode" class="midi-control">
                                     <option value="0">不启用</option>
-                                    <option value="1" selected>单独音符归一法</option>
-                                    <option value="2">整体八度偏移法</option>
+                                    <option value="1">单独音符归一法</option>
+                                    <option value="2" selected>整体八度偏移法</option>
                                     <option value="3">整体音调偏移法</option>
                                 </select>
-                            </label>
-                            <label style="margin-left:8px;white-space:nowrap;display:none;" id="midi-smart-substitute-label">
-                                <input type="checkbox" id="midi-smart-substitute" checked> 启用智能音色替代
-                                <i class="fa-solid fa-circle-question" id="midi-smart-substitute-tip" style="cursor:help;color:var(--text-tertiary);font-size:12px;margin-left:2px;" title="优先使用音色替代解决超限音符，替代无法完全覆盖时才动用整体偏移。仅在模式2/3可用，模式0/1下灰显无效"></i>
-                            </label>
-                            <label style="margin-left:8px;white-space:nowrap;display:none;" id="midi-force-fold-label">
-                                <input type="checkbox" id="midi-force-fold"> 启用溢出强制归位 (Fallback)
-                                <i class="fa-solid fa-circle-question" id="midi-force-fold-tip" style="cursor:help;color:var(--text-tertiary);font-size:12px;margin-left:2px;" title="勾选后音色替代链用尽仍有超限时，强制对 MIDI 数值进行 ±12 取模归位。仅在模式2/3可用"></i>
-                            </label>
-                            <button class="midi-track-btn" id="midi-substitute-settings-btn" style="margin-left:8px;padding:1px 10px;font-size:12px;white-space:nowrap;width:auto;min-width:auto;height:auto;min-height:22px;" title="配置超出音域音符的音色替代方案">
-                                <i class="fa-solid fa-shuffle" style="margin-right:3px;"></i>音色替代
-                            </button>
-                        </div>
-                        <div class="midi-settings-row" id="midi-octave-mode-hint" style="display:none;padding-left:20px;cursor:help;" title="Minecraft 标准音域 MIDI 54~78 (NBS key 33~57, F#3~F#5)">
-                            <i class="fa-solid fa-circle-info" style="color:var(--accent-orange,#ff8c42);font-size:12px;margin-right:4px;"></i>
-                            <span id="midi-octave-mode-hint-text" style="font-size:11px;color:var(--accent-orange,#ff8c42);">MC 音域 F#3~F#5 (MIDI 54~78)</span>
-                        </div>
-                        <div class="settings-group-title">节奏与精度</div>
-                        <div class="midi-settings-row">
-                            <label style="margin-right:12px;"><input type="checkbox" id="midi-read-velocity" checked> 读取音符力度</label>
-                            <label style="white-space:nowrap;margin-right:8px;">
-                                <input type="checkbox" id="midi-snap-enabled"> 音符吸附
-                            </label>
-                            <label id="midi-snap-beat-label" style="white-space:nowrap;">
-                                拍子:
-                                <select id="midi-snap-beat" style="margin-left:4px;">
-                                    <option value="2">1/2</option>
-                                    <option value="4" selected>1/4</option>
-                                    <option value="8">1/8</option>
-                                    <option value="16">1/16</option>
-                                    <option value="32">1/32</option>
-                                </select>
-                            </label>
-                            <span id="midi-snap-grid-info" style="margin-left:8px;font-size:11px;color:var(--text-secondary);"></span>
-                        </div>
-                        <div class="midi-settings-row">
-                            <label style="white-space:nowrap;">
-                                歌曲精度:
-                                <select id="midi-precision" style="margin-left:4px;">
+                                <button class="midi-mini-btn" id="midi-substitute-settings-btn" title="配置超出音域音符的音色替代方案">
+                                    <i class="fa-solid fa-shuffle"></i><span>音色替代</span>
+                                </button>
+                            </div>
+                            <div class="midi-row midi-row-sub" id="midi-smart-substitute-label" style="display:none;">
+                                <label class="midi-check">
+                                    <input type="checkbox" id="midi-smart-substitute" checked>
+                                    <span>启用智能音色替代</span>
+                                    <i class="fa-solid fa-circle-question midi-help" id="midi-smart-substitute-tip" title="优先使用音色替代解决超限音符，替代无法完全覆盖时才动用整体偏移。仅在模式2/3可用"></i>
+                                </label>
+                                <label class="midi-check" id="midi-force-fold-label" style="display:none;">
+                                    <input type="checkbox" id="midi-force-fold">
+                                    <span>溢出强制归位</span>
+                                    <i class="fa-solid fa-circle-question midi-help" id="midi-force-fold-tip" title="音色替代链用尽仍有超限时，强制对 MIDI 数值进行 ±12 取模归位。仅在模式2/3可用"></i>
+                                </label>
+                            </div>
+                            <div class="midi-row midi-row-sub midi-row-warn" id="midi-octave-mode-hint" style="display:none;" title="Minecraft 标准音域 MIDI 54~78 (NBS key 33~57, F#3~F#5)">
+                                <i class="fa-solid fa-circle-info"></i>
+                                <span id="midi-octave-mode-hint-text">MC 音域 F#3~F#5 (MIDI 54~78)</span>
+                            </div>
+                        </section>
+
+                        <section class="midi-group">
+                            <h5 class="midi-group-title">节奏与精度</h5>
+                            <div class="midi-row">
+                                <label class="midi-check"><input type="checkbox" id="midi-read-velocity" checked><span>读取音符力度</span></label>
+                                <label class="midi-check"><input type="checkbox" id="midi-snap-enabled"><span>音符吸附</span></label>
+                                <label class="midi-inline-field" id="midi-snap-beat-label">
+                                    <span class="midi-field-label">拍子</span>
+                                    <select id="midi-snap-beat" class="midi-control midi-control-sm">
+                                        <option value="2">1/2</option>
+                                        <option value="4" selected>1/4</option>
+                                        <option value="8">1/8</option>
+                                        <option value="16">1/16</option>
+                                        <option value="32">1/32</option>
+                                    </select>
+                                </label>
+                                <span id="midi-snap-grid-info" class="midi-hint-text"></span>
+                            </div>
+                            <div class="midi-row">
+                                <span class="midi-row-label">歌曲精度</span>
+                                <select id="midi-precision" class="midi-control midi-control-sm">
                                     <option value="0">1x</option>
                                     <option value="1" selected>2x</option>
                                     <option value="3">4x</option>
                                     <option value="7">8x</option>
                                 </select>
-                            </label>
-                        </div>
-                        <div class="settings-group-title">延音与清理</div>
-                        <div class="midi-settings-row">
-                            <label style="white-space:nowrap;">
-                                延音处理:
-                                <select id="midi-keep-note-length" style="margin-left:4px;">
+                            </div>
+                        </section>
+
+                        <section class="midi-group">
+                            <h5 class="midi-group-title">延音与清理</h5>
+                            <div class="midi-row">
+                                <span class="midi-row-label">延音处理</span>
+                                <select id="midi-keep-note-length" class="midi-control">
                                     <option value="none">不保留</option>
                                     <option value="all">全部保留</option>
                                     <option value="sustain">按轨道选择</option>
                                 </select>
-                            </label>
-                            <button class="midi-track-btn" id="midi-sustain-tracks-btn" style="margin-left:8px;padding:1px 10px;font-size:11px;display:none;height:auto;min-height:22px;width:auto;min-width:64px;white-space:nowrap;">选择轨道</button>
-                            <span id="midi-sustain-tracks-count" style="display:none;font-size:11px;color:var(--text-secondary);margin-left:4px;"></span>
-                        </div>
-                        <div class="midi-settings-row">
-                            <label style="white-space:nowrap;">
-                                <input type="checkbox" id="midi-dedupe-notes"> 消除重复音符
-                                <i class="fa-solid fa-circle-question" style="cursor:help;color:var(--text-tertiary);font-size:12px;margin-left:2px;" title="删除同一时间中音色和音调完全相同的重复音符；勾选「重排序音符」可将删除后孤立的连续音符上移填补空洞"></i>
-                            </label>
-                        </div>
-                        <div class="midi-settings-row" style="margin-top:4px;">
-                            <label style="white-space:nowrap;">
-                                <input type="checkbox" id="midi-dedupe-reorder" checked> 重排序音符
-                                <i class="fa-solid fa-circle-question" style="cursor:help;color:var(--text-tertiary);font-size:12px;margin-left:2px;" title="删除重复音符后，将下方相邻轨道中孤立的连续音符向上移动填补空洞"></i>
-                            </label>
-                        </div>
-                        <div class="settings-group-title">工程结构</div>
-                        <div class="midi-settings-row">
-                            <label style="white-space:nowrap;">
-                                <input type="checkbox" id="midi-auto-split-segments" checked> 自动分割片段
-                                <i class="fa-solid fa-circle-question" style="cursor:help;color:var(--text-tertiary);font-size:12px;margin-left:2px;" title="按 MIDI 通道把导入结果拆成多条片段轨道（每个通道一条，打击乐合并为一条），便于在片段模式中二次编辑；关闭则所有音符进入单一片段轨"></i>
-                            </label>
-                        </div>
-                        <div class="midi-settings-row" style="padding-left:20px;">
-                            <span style="font-size:11px;color:var(--text-tertiary);">导入配置会自动保存，下次打开沿用</span>
-                        </div>
+                                <button class="midi-mini-btn" id="midi-sustain-tracks-btn" style="display:none;">选择轨道</button>
+                                <span id="midi-sustain-tracks-count" class="midi-hint-text" style="display:none;"></span>
+                            </div>
+                            <div class="midi-row midi-row-checks">
+                                <label class="midi-check">
+                                    <input type="checkbox" id="midi-dedupe-notes">
+                                    <span>消除重复音符</span>
+                                    <i class="fa-solid fa-circle-question midi-help" title="删除同一时间中音色和音调完全相同的重复音符"></i>
+                                </label>
+                                <label class="midi-check">
+                                    <input type="checkbox" id="midi-dedupe-reorder" checked>
+                                    <span>重排序音符</span>
+                                    <i class="fa-solid fa-circle-question midi-help" title="删除重复音符后，将下方相邻轨道中孤立的连续音符向上移动填补空洞"></i>
+                                </label>
+                            </div>
+                        </section>
+
+                        <section class="midi-group">
+                            <h5 class="midi-group-title">工程结构</h5>
+                            <div class="midi-row">
+                                <label class="midi-check">
+                                    <input type="checkbox" id="midi-auto-split-segments" checked>
+                                    <span>自动分割片段</span>
+                                    <i class="fa-solid fa-circle-question midi-help" title="按 MIDI 通道把导入结果拆成多条片段轨道（每个通道一条，打击乐合并为一条）；关闭则所有音符进入单一片段轨"></i>
+                                </label>
+                            </div>
+                            <div class="midi-row midi-row-sub">
+                                <span class="midi-hint-text">导入配置按文件内容记忆，刷新页面后恢复默认</span>
+                            </div>
+                        </section>
                     </div>
                 </div>
 
@@ -1614,25 +1627,25 @@
     }
 </script>
 <!-- nbs_client.js 必须在 api_client.js 之前加载 (api_client.js 引用 NBSClient 全局对象) -->
-<script src="static/js/nbs_client.js?v=20261018u"></script>
+<script src="static/js/nbs_client.js?v=20261018v"></script>
 <script src="static/js/compress_est.js?v=20260926b"></script>
 <script src="static/js/api_client.js?v=20260905a"></script>
 <script src="static/js/custom_dropdown.js?v=20261017d"></script>
-<script src="static/js/i18n.js?v=20261018u"></script>
+<script src="static/js/i18n.js?v=20261018v"></script>
 <script src="static/js/audio_engine.js?v=20260919c"></script>
 <script src="static/js/custom_instruments.js?v=20260905a"></script>
 <script src="static/js/audio_fix_utils.js?v=20260905a"></script>
 <script src="static/js/sf3_player.js?v=20260808a"></script>
 <script src="static/js/spessa_player.js?v=20260918a"></script>
 <script src="static/js/soundfont_loader.js?v=20260808b"></script>
-<script src="static/js/piano_roll.js?v=20261018u"></script>
+<script src="static/js/piano_roll.js?v=20261018v"></script>
 <!-- 本地化第三方库: ZIP 打包 (jszip) / MP3 编码 (lamejs) -->
 <script src="static/vendor/jszip.min.js?v=20260905a"></script>
 <script src="static/vendor/lame.min.js?v=20260905a"></script>
 <!-- 离线渲染引擎: audio_render.js 必须在 main.js 之前加载 -->
 <script src="static/js/render_jsmix.js?v=20260906e"></script>
 <script src="static/js/audio_render.js?v=20260919c"></script>
-<script src="static/js/main.js?v=20261018u"></script>
+<script src="static/js/main.js?v=20261018v"></script>
 
 <script>
 // 桌面应用（含 MSIX 安装版）内：外部链接交给系统默认浏览器打开。

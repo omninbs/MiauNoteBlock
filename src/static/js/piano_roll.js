@@ -1965,7 +1965,8 @@
         var top = this._editAreaTop();
         var bottom = this._editAreaBottom();
         ctx.save();
-        ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+        // 比音轨行分隔线更明显的一档, 用于区分「片段轨道」分组
+        ctx.strokeStyle = 'rgba(74, 144, 217, 0.72)';
         ctx.lineWidth = 1;
         for (var i = 1; i < groups.length; i++) {
             var y = this._layerBaseY(groups[i].from);

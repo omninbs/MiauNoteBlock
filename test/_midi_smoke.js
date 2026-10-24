@@ -39,6 +39,14 @@ function log() { console.log.apply(console, arguments); }
                 await page.waitForTimeout(400);
                 continue;
             }
+            const oct = page.locator('#octave-popup');
+            if (await oct.count().catch(() => 0) && await oct.isVisible().catch(() => false)) {
+                const x = page.locator('#octave-close-x');
+                if (await x.count()) await x.click({ force: true }).catch(() => {});
+                else await page.locator('#octave-close-btn').click({ force: true }).catch(() => {});
+                await page.waitForTimeout(300);
+                continue;
+            }
             const ov = page.locator('.app-dialog-overlay').first();
             if (!(await ov.count().catch(() => 0))) return;
             if (!(await ov.isVisible().catch(() => false))) return;

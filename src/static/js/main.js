@@ -1192,15 +1192,16 @@
                 channel: (g.channel === null ? undefined : g.channel),
                 name: ''
             };
-            // 轨道名: 打击乐 / 通道号或音色名 / 其他
+            // 轨道名: 打击乐 / 通道号 + 通道名 / 其他
             if (g.channel === 9) {
                 lane.name = '打击乐';
             } else if (g.channel === null) {
                 lane.name = '其他';
             } else {
-                var firstLayer = isFinite(g.notes[0].layer) ? g.notes[0].layer : 0;
-                var layerInfo = (song.layers && song.layers[firstLayer]) ? song.layers[firstLayer] : null;
-                lane.name = (layerInfo && layerInfo.name) ? layerInfo.name : ('通道 ' + g.channel);
+                var chName = (song.channel_names && song.channel_names[g.channel]) ? song.channel_names[g.channel] : '';
+                lane.name = chName
+                    ? ('通道 ' + (g.channel + 1) + ' · ' + chName)
+                    : ('通道 ' + (g.channel + 1));
             }
             lanes.push(lane);
 
@@ -3684,8 +3685,7 @@
             });
         }
 
-        // 加载记住的 MIDI 设置
-        loadMidiSettings();
+        // MIDI 导入配置按文件哈希保存在内存, 打开文件时再应用 (此处不预加载)
 
         // 音色拟合「推荐选项」档位控件 (档位缩放拟合槽数)
         initFittingLevelControl();
@@ -13163,30 +13163,7 @@
             return;
         }
         if (fileName.endsWith('.mid') || fileName.endsWith('.midi')) {
-            state._midiFile = file;
-            showMidiPopup();
-            $setText('midi-file-name', file.name);
-            $setText('midi-type', '...');
-            $setText('midi-duration', '...');
-            $setText('midi-tracks', '...');
-            $setText('midi-notes', '...');
-            showTaskProgress(file.name);
-            API.getMidiInfo(file, function(loaded, total, speed, percent, eta) {
-                updateTaskProgress(loaded, total, speed, percent, eta);
-            }).then(function(data) {
-                hideTaskProgress();
-                if (data.success && data.info) {
-                    state._midiInfo = data.info;
-                    populateMidiDialog(data.info);
-                } else {
-                    showAppAlert('无法读取 MIDI 信息: 返回数据异常', {title: 'MIDI 信息', icon: 'fa-solid fa-file-audio'});
-                }
-            }).catch(function(err) {
-                hideTaskProgress();
-                var msg = formatError(err, '无法读取 MIDI 信息');
-                $setText('midi-type', '错误: ' + msg);
-                showAppAlert('读取 MIDI 信息失败: ' + msg, {title: 'MIDI 信息', icon: 'fa-solid fa-file-audio'});
-            });
+            handleMidiOpen(e);
             e.target.value = '';
             return;
         }
@@ -14814,6 +14791,7 @@
         var file = e.target.files[0];
         if (!file) return;
         state._midiFile = file;
+        state._midiHash = null;
 
         // 显示弹窗
         showMidiPopup();
@@ -14825,12 +14803,15 @@
         $setText('midi-tracks', '...');
         $setText('midi-notes', '...');
 
-        // 请求 MIDI 信息
+        // 请求 MIDI 信息 + 计算文件内容哈希 (配置按哈希区分)
         showTaskProgress(file.name);
-        API.getMidiInfo(file, function(loaded, total, speed, percent, eta) {
+        var infoPromise = API.getMidiInfo(file, function(loaded, total, speed, percent, eta) {
             updateTaskProgress(loaded, total, speed, percent, eta);
-        }).then(function(data) {
+        });
+        Promise.all([computeMidiFileHash(file), infoPromise]).then(function(res) {
             hideTaskProgress();
+            state._midiHash = res[0];
+            var data = res[1];
             if (data.success && data.info) {
                 state._midiInfo = data.info;
                 populateMidiDialog(data.info);
@@ -14844,6 +14825,16 @@
     }
 
     function populateMidiDialog(info) {
+        // 该 MIDI 文件之前导入过 → 恢复它的完整配置; 没有则回到默认推荐值
+        var fileConfig = getMidiConfigForHash(state._midiHash);
+        if (fileConfig && fileConfig.basic) applyMidiBasicConfig(fileConfig.basic);
+        else resetMidiBasicToDefaults();
+        _midiFittingLevelOverride = (fileConfig && fileConfig.fitting_level) ? fileConfig.fitting_level : null;
+        updateFittingLevelUI();
+        state._midiTimbreFittingSaved = (fileConfig && fileConfig.fitting_saved)
+            ? JSON.parse(JSON.stringify(fileConfig.fitting_saved))
+            : emptyTimbreFittingSaved();
+
         // 更新文件信息
         $setText('midi-type', info.type);
         $setText('midi-duration', info.duration);
@@ -14934,24 +14925,18 @@
             _preader.readAsArrayBuffer(state._midiFile);
         }
 
-        // 新文件时重置延音轨道选择
-        // 1) 已保存过配置 → 沿用用户保存的选择 (空数组也视为有效选择)
-        // 2) 否则 → 依据本文件 GM 音色自动判定延音轨道 (持续型音色默认启用延音)
-        var _midiPrefs = loadMidiPrefs();
-        var _prefsSustain = (_midiPrefs && Array.isArray(_midiPrefs.sustain_track_indices))
-            ? _midiPrefs.sustain_track_indices.slice() : null;
-        if (_prefsSustain) {
-            _sustainTrackIndices = _prefsSustain;
+        // 延音轨道: 该文件保存过 → 沿用; 否则按 GM 持续型音色自动判定
+        if (fileConfig && Array.isArray(fileConfig.sustain_track_indices)) {
+            _sustainTrackIndices = fileConfig.sustain_track_indices.slice();
         } else {
             _sustainTrackIndices = detectSustainTrackIndices(info);
-            // 自动判定到延音轨道, 且"延音处理"当前为不保留时, 默认切换为"按轨道选择"
             if (_sustainTrackIndices.length > 0) {
                 var _knlSel = $('midi-keep-note-length');
                 if (_knlSel && _knlSel.value === 'none') _knlSel.value = 'sustain';
             }
         }
         // 恢复保存的打击乐音色/音高映射
-        applySavedPercussionPrefs(_midiPrefs);
+        applySavedPercussionPrefs(fileConfig);
         updateSustainTracksUI();
         updateSnapGridInfo();
 
@@ -15587,8 +15572,7 @@
                 allBoxes[b].checked = _sustainTrackIndices.indexOf(parseInt(allBoxes[b].value, 10)) !== -1;
             }
             updateSustainTracksUI();
-            // 配置默认保存: 重置后立即写入, 不依赖「确定」
-            saveMidiPrefs(collectMidiSettings());
+            // 重置只影响本次导入; 配置在点「导入」时才写入该文件的记录
         });
         wrapper.querySelector('#sustain-tracks-ok-btn').addEventListener('click', function() {
             var selected = [];
@@ -15596,7 +15580,6 @@
             for (var j = 0; j < boxes.length; j++) selected.push(parseInt(boxes[j].value));
             _sustainTrackIndices = selected;
             updateSustainTracksUI();
-            saveMidiPrefs(collectMidiSettings());
             close();
         });
         wrapper.addEventListener('click', function(e) { if (e.target === wrapper) close(); });
@@ -17709,35 +17692,13 @@
         return '<img class="timbre-slot-icon" src="static/sprites/spr_instrumenticons/inst_' + idx + '.png" alt="">';
     }
 
-    // 从 localStorage 读取/保存音色拟合设置
+    // 音色拟合槽位数据
     // 结构: { programs, drums, programVolumes, drumVolumes }
     //   programs/drums:        { key: [inst1, inst2, inst3] }  (-1 = 无)
     //   programVolumes/drums:  { key: [vol1, vol2, vol3] }     (0-100, 缺省 100)
-    var TIMBRE_FITTING_KEY = 'webnbs_timbre_fitting_v1';
-    function loadSavedTimbreFitting() {
-        try {
-            var raw = localStorage.getItem(TIMBRE_FITTING_KEY);
-            if (raw) {
-                var parsed = JSON.parse(raw);
-                return {
-                    programs: parsed.programs || {},
-                    drums: parsed.drums || {},
-                    programVolumes: parsed.programVolumes || {},
-                    drumVolumes: parsed.drumVolumes || {}
-                };
-            }
-        } catch (e) {}
+    // 音色拟合槽位数据: 只随 MIDI 导入配置保存在内存 (按文件哈希), 不再写 localStorage
+    function emptyTimbreFittingSaved() {
         return { programs: {}, drums: {}, programVolumes: {}, drumVolumes: {} };
-    }
-    function saveTimbreFitting(programs, drums, programVolumes, drumVolumes) {
-        try {
-            localStorage.setItem(TIMBRE_FITTING_KEY, JSON.stringify({
-                programs: programs || {},
-                drums: drums || {},
-                programVolumes: programVolumes || {},
-                drumVolumes: drumVolumes || {}
-            }));
-        } catch (e) {}
     }
     function getSavedFittingSlots(saved, program, drumNote) {
         if (drumNote !== null && drumNote !== undefined && saved.drums[drumNote] !== undefined) {
@@ -17766,8 +17727,11 @@
     var FITTING_LEVEL_KEY = 'webnbs_fitting_level';
     var FITTING_LEVEL_CAP = { few: 1, moderate: 2, many: 3 };
     var _fittingLevel = null;
+    // 当前 MIDI 文件保存的档位 (按文件隔离); null = 用全局默认
+    var _midiFittingLevelOverride = null;
 
     function loadFittingLevel() {
+        if (_midiFittingLevelOverride) return _midiFittingLevelOverride;
         if (_fittingLevel) return _fittingLevel;
         var v = null;
         try { v = localStorage.getItem(FITTING_LEVEL_KEY); } catch (e) {}
@@ -17777,6 +17741,8 @@
 
     function saveFittingLevel(v) {
         _fittingLevel = v;
+        // 用户手动改档位 = 放弃该文件恢复的档位, 以本次选择为准
+        _midiFittingLevelOverride = null;
         try { localStorage.setItem(FITTING_LEVEL_KEY, v); } catch (e) {}
     }
 
@@ -17821,10 +17787,9 @@
             saveFittingLevel(lv);
             updateFittingLevelUI();
             // 按档位重置全部 (旋律) 音色槽: 清除已保存的旋律拟合, 重建拟合表
-            var saved = state._midiTimbreFittingSaved || loadSavedTimbreFitting();
+            var saved = state._midiTimbreFittingSaved || emptyTimbreFittingSaved();
             var drums = saved.drums || {};
             var drumVols = saved.drumVolumes || {};
-            saveTimbreFitting({}, drums, {}, drumVols);
             state._midiTimbreFittingSaved = { programs: {}, drums: drums, programVolumes: {}, drumVolumes: drumVols };
             if (state._midiInfo) {
                 buildTimbreFittingRows(state._midiInfo);
@@ -17834,7 +17799,8 @@
     }
 
 function buildTimbreFittingRows(info) {
-        var savedFitting = loadSavedTimbreFitting();
+        // 优先使用当前文件的配置快照; 没有配置时从空表开始 (按推荐档位生成默认槽)
+        var savedFitting = state._midiTimbreFittingSaved || emptyTimbreFittingSaved();
         state._midiTimbreFittingSaved = savedFitting;
 
         // 收集旋律通道行
@@ -18180,7 +18146,7 @@ function buildTimbreFittingRows(info) {
         saveSlotVolume(d.input, v);
     }
 
-    // 保存单个槽位音量到内存与 localStorage
+    // 保存单个槽位音量到当前文件的内存配置
     function saveSlotVolume(input, value) {
         var row = input.closest ? input.closest('tr') : null;
         if (!row) return;
@@ -18190,7 +18156,7 @@ function buildTimbreFittingRows(info) {
         var idKey = isPercussion ? parseInt(row.getAttribute('data-percussion')) : parseInt(row.getAttribute('data-program'));
         if (!isFinite(idKey)) return;
 
-        var saved = state._midiTimbreFittingSaved || loadSavedTimbreFitting();
+        var saved = state._midiTimbreFittingSaved || emptyTimbreFittingSaved();
         var slotsKey = isPercussion ? 'drums' : 'programs';
         var volKey = isPercussion ? 'drumVolumes' : 'programVolumes';
         if (!saved[volKey]) saved[volKey] = {};
@@ -18211,7 +18177,6 @@ function buildTimbreFittingRows(info) {
         }
 
         state._midiTimbreFittingSaved = saved;
-        saveTimbreFitting(saved.programs, saved.drums, saved.programVolumes, saved.drumVolumes);
     }
 
     // 显示音色槽右键菜单
@@ -18358,10 +18323,10 @@ function buildTimbreFittingRows(info) {
             ? slotInput.parentElement.querySelector('.timbre-slot-vol') : null;
         if (slotVolInput) slotVolInput.disabled = (value < 0);
 
-        // 保存设置到 localStorage
+        // 保存设置到当前文件的内存配置
         var row = slotInput ? slotInput.closest('tr') : null;
         var isPercussion = row ? (row.getAttribute('data-type') === 'percussion') : (percussionNote !== null && percussionNote !== undefined);
-        var saved = state._midiTimbreFittingSaved || loadSavedTimbreFitting();
+        var saved = state._midiTimbreFittingSaved || emptyTimbreFittingSaved();
         var idKey = isPercussion ? parseInt(row ? row.getAttribute('data-percussion') : percussionNote) : parseInt(row ? row.getAttribute('data-program') : channel);
         var slotsKey = isPercussion ? 'drums' : 'programs';
         if (!saved[slotsKey][idKey]) saved[slotsKey][idKey] = [-1, -1, -1];
@@ -18372,7 +18337,6 @@ function buildTimbreFittingRows(info) {
         if (!saved[volKey][idKey]) saved[volKey][idKey] = [100, 100, 100];
         while (saved[volKey][idKey].length < 3) saved[volKey][idKey].push(100);
         state._midiTimbreFittingSaved = saved;
-        saveTimbreFitting(saved.programs, saved.drums, saved.programVolumes, saved.drumVolumes);
 
         // 立即播放单个 NBS 音色音符 (使用该行选择的 MIDI 音调与该槽位音量)
         var pitchSelect = row ? row.querySelector('.timbre-pitch-select') : null;
@@ -18637,16 +18601,44 @@ function buildTimbreFittingRows(info) {
             }
         }
 
-        // 导入配置默认保存 (音色拟合由 saveTimbreFitting 单独持久化)
-        saveMidiPrefs(settings);
+        // 仅在点「导入」时保存: 按文件内容哈希记住本次配置 (含音色拟合), 仅存内存
+        saveMidiConfigForHash(state._midiHash, buildMidiConfigSnapshot(settings));
 
         return settings;
     }
 
-    // 生成可持久化的导入配置快照
-    function buildMidiPrefs(settings) {
+    // 计算 MIDI 文件内容哈希 (按内容区分文件, 仅存内存)
+    function computeMidiFileHash(file) {
+        return new Promise(function(resolve) {
+            try {
+                if (!file) { resolve('empty'); return; }
+                var fallback = 'name:' + file.name + ':' + file.size + ':' + (file.lastModified || 0);
+                if (!window.crypto || !window.crypto.subtle || !file.arrayBuffer) { resolve(fallback); return; }
+                file.arrayBuffer().then(function(ab) {
+                    return window.crypto.subtle.digest('SHA-256', ab);
+                }).then(function(buf) {
+                    var bytes = new Uint8Array(buf);
+                    var hex = '';
+                    for (var i = 0; i < bytes.length; i++) hex += ('0' + bytes[i].toString(16)).slice(-2);
+                    resolve(hex);
+                }).catch(function() { resolve(fallback); });
+            } catch(e) { resolve('fallback:' + (file ? file.name : 'none')); }
+        });
+    }
+
+    function getMidiConfigForHash(hash) {
+        if (!hash) return null;
+        return _midiPrefsByHash[hash] || null;
+    }
+
+    function saveMidiConfigForHash(hash, snapshot) {
+        if (!hash) return;
+        _midiPrefsByHash[hash] = snapshot;
+    }
+
+    // 生成当前导入配置快照 (仅在点「导入」时调用)
+    function buildMidiConfigSnapshot(settings) {
         return {
-            version: 2,
             basic: {
                 remove_silent: settings.remove_silent,
                 name_layers: settings.name_layers,
@@ -18666,31 +18658,67 @@ function buildTimbreFittingRows(info) {
             },
             sustain_track_indices: (settings.sustain_tracks || []).slice(),
             percussion_instruments: settings.percussion_instruments || {},
-            percussion_pitches: settings.percussion_pitches || {}
+            percussion_pitches: settings.percussion_pitches || {},
+            // 音色拟合: 传给转换器的按通道数据 + 弹窗重建用的按音色数据
+            timbre_fitting: settings.timbre_fitting || null,
+            fitting_saved: state._midiTimbreFittingSaved || emptyTimbreFittingSaved(),
+            fitting_level: loadFittingLevel()
         };
     }
 
-    function saveMidiPrefs(settings) {
-        try {
-            _midiPrefsCache = buildMidiPrefs(settings);
-            localStorage.setItem(MIDI_PREFS_KEY, JSON.stringify(_midiPrefsCache));
-        } catch(e) {}
+    // 把保存的基本设置写回弹窗控件
+    function applyMidiBasicConfig(saved) {
+        if (!saved) return;
+        if (saved.remove_silent !== undefined && $('midi-remove-silent')) $('midi-remove-silent').checked = saved.remove_silent;
+        if (saved.name_layers !== undefined && $('midi-name-layers')) $('midi-name-layers').checked = saved.name_layers;
+        if (saved.name_after_patches !== undefined) {
+            var val = saved.name_after_patches ? 'patches' : 'channels';
+            var radios = document.getElementsByName('midi-name-mode');
+            for (var i = 0; i < radios.length; i++) {
+                radios[i].checked = (radios[i].value === val);
+            }
+        }
+        if (saved.tempo_changes !== undefined && $('midi-tempo-changes')) $('midi-tempo-changes').checked = saved.tempo_changes;
+        if (saved.octave_mode !== undefined && $('midi-octave-mode')) $('midi-octave-mode').value = saved.octave_mode;
+        if (saved.force_fold_enabled !== undefined && $('midi-force-fold')) $('midi-force-fold').checked = saved.force_fold_enabled;
+        if (saved.smart_substitute_enabled !== undefined && $('midi-smart-substitute')) $('midi-smart-substitute').checked = saved.smart_substitute_enabled;
+        if (saved.read_velocity !== undefined && $('midi-read-velocity')) $('midi-read-velocity').checked = saved.read_velocity;
+        if (saved.precision !== undefined && $('midi-precision')) $('midi-precision').value = saved.precision;
+        if (saved.keep_note_length !== undefined && $('midi-keep-note-length')) $('midi-keep-note-length').value = saved.keep_note_length;
+        if (saved.dedupe_notes !== undefined && $('midi-dedupe-notes')) $('midi-dedupe-notes').checked = saved.dedupe_notes;
+        if (saved.dedupe_reorder !== undefined && $('midi-dedupe-reorder')) $('midi-dedupe-reorder').checked = saved.dedupe_reorder;
+        if (saved.auto_split_segments !== undefined && $('midi-auto-split-segments')) $('midi-auto-split-segments').checked = !!saved.auto_split_segments;
+        if (saved.snap_enabled !== undefined && $('midi-snap-enabled')) $('midi-snap-enabled').checked = saved.snap_enabled;
+        if (saved.snap_beat !== undefined && $('midi-snap-beat')) $('midi-snap-beat').value = saved.snap_beat;
     }
 
-    function loadMidiPrefs() {
-        if (_midiPrefsCache) return _midiPrefsCache;
-        try {
-            var prefs = JSON.parse(localStorage.getItem(MIDI_PREFS_KEY));
-            if (prefs && typeof prefs === 'object') _midiPrefsCache = prefs;
-        } catch(e) {}
-        return _midiPrefsCache;
+    // 无该文件配置时: 恢复默认推荐值 (与 HTML 默认值保持一致)
+    function resetMidiBasicToDefaults() {
+        var setChk = function(id, v) { var el = $(id); if (el) el.checked = !!v; };
+        var setVal = function(id, v) { var el = $(id); if (el) el.value = v; };
+        setChk('midi-remove-silent', true);
+        setChk('midi-name-layers', true);
+        var radios = document.getElementsByName('midi-name-mode');
+        for (var i = 0; i < radios.length; i++) radios[i].checked = (radios[i].value === 'patches');
+        setChk('midi-tempo-changes', false);
+        setVal('midi-octave-mode', '2');
+        setChk('midi-smart-substitute', true);
+        setChk('midi-force-fold', false);
+        setChk('midi-read-velocity', true);
+        setVal('midi-precision', '1');
+        setVal('midi-keep-note-length', 'none');
+        setChk('midi-dedupe-notes', false);
+        setChk('midi-dedupe-reorder', true);
+        setChk('midi-auto-split-segments', true);
+        setChk('midi-snap-enabled', false);
+        setVal('midi-snap-beat', '4');
     }
 
     // 把保存的打击乐映射写回弹窗表格
-    function applySavedPercussionPrefs(prefs) {
-        if (!prefs) return;
-        var insts = prefs.percussion_instruments || {};
-        var pitches = prefs.percussion_pitches || {};
+    function applySavedPercussionPrefs(config) {
+        if (!config) return;
+        var insts = config.percussion_instruments || {};
+        var pitches = config.percussion_pitches || {};
         var instSelects = document.querySelectorAll('.midi-perc-instrument-select');
         for (var i = 0; i < instSelects.length; i++) {
             var note = parseInt(instSelects[i].getAttribute('data-perc'));
@@ -18701,40 +18729,6 @@ function buildTimbreFittingRows(info) {
             var pn = parseInt(pitchSelects[j].getAttribute('data-note'));
             if (pitches[pn] !== undefined) pitchSelects[j].value = String(pitches[pn]);
         }
-    }
-
-    function loadMidiSettings() {
-        var prefs = loadMidiPrefs();
-        if (!prefs) return;
-        try {
-            var saved = prefs.basic || {};
-            if (saved.remove_silent !== undefined && $('midi-remove-silent')) $('midi-remove-silent').checked = saved.remove_silent;
-            if (saved.name_layers !== undefined && $('midi-name-layers')) $('midi-name-layers').checked = saved.name_layers;
-            if (saved.name_after_patches !== undefined) {
-                var val = saved.name_after_patches ? 'patches' : 'channels';
-                var radios = document.getElementsByName('midi-name-mode');
-                for (var i = 0; i < radios.length; i++) {
-                    radios[i].checked = (radios[i].value === val);
-                }
-            }
-            if (saved.tempo_changes !== undefined && $('midi-tempo-changes')) $('midi-tempo-changes').checked = saved.tempo_changes;
-            if (saved.octave_mode !== undefined && $('midi-octave-mode')) $('midi-octave-mode').value = saved.octave_mode;
-            if (saved.force_fold_enabled !== undefined && $('midi-force-fold')) $('midi-force-fold').checked = saved.force_fold_enabled;
-            if (saved.smart_substitute_enabled !== undefined && $('midi-smart-substitute')) $('midi-smart-substitute').checked = saved.smart_substitute_enabled;
-            if (saved.read_velocity !== undefined && $('midi-read-velocity')) $('midi-read-velocity').checked = saved.read_velocity;
-            if (saved.precision !== undefined && $('midi-precision')) $('midi-precision').value = saved.precision;
-            if (saved.keep_note_length !== undefined && $('midi-keep-note-length')) $('midi-keep-note-length').value = saved.keep_note_length;
-            if (saved.dedupe_notes !== undefined && $('midi-dedupe-notes')) $('midi-dedupe-notes').checked = saved.dedupe_notes;
-            if (saved.dedupe_reorder !== undefined && $('midi-dedupe-reorder')) $('midi-dedupe-reorder').checked = saved.dedupe_reorder;
-            if (saved.auto_split_segments !== undefined && $('midi-auto-split-segments')) $('midi-auto-split-segments').checked = !!saved.auto_split_segments;
-            if (saved.snap_enabled !== undefined && $('midi-snap-enabled')) $('midi-snap-enabled').checked = saved.snap_enabled;
-            if (saved.snap_beat !== undefined && $('midi-snap-beat')) $('midi-snap-beat').value = saved.snap_beat;
-            if (Array.isArray(prefs.sustain_track_indices)) {
-                _sustainTrackIndices = prefs.sustain_track_indices.slice();
-            }
-            updateSustainTracksUI();
-            updateSnapGridInfo();
-        } catch(e) {}
     }
 
     function doImportMidi() {

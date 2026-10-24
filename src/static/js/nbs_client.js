@@ -1627,6 +1627,7 @@ function _convertMidiToNBS(arrayBuffer, settings) {
         if (ticksPerBeat === 0) ticksPerBeat = 480;
 
         var activeNotes = {};       // "channel,note" -> {tick, velocity}
+        var fallbackTrackNames = []; // 回退解析器: trackNum -> 轨道名 (meta 0x03)
 
     for (var trackNum = 0; trackNum < numTracks; trackNum++) {
         var trackHeader = reader.readN(4);
@@ -1644,6 +1645,7 @@ function _convertMidiToNBS(arrayBuffer, settings) {
 
         var currentTick = 0;
         var lastEventType = null;
+        var fallbackTrackName = '';
 
         try {
             while (reader.pos < trackEnd) {
@@ -1667,6 +1669,9 @@ function _convertMidiToNBS(arrayBuffer, settings) {
                             tick: currentTick,
                             tempo_us: tempoMicroseconds
                         });
+                    } else if (metaType === 0x03) {
+                        // Track Name: 用来给对应 MIDI 通道的 NBS 轨道命名
+                        fallbackTrackName = _decodeLatin1(metaData).replace(/\x00+$/, '');
                     }
                 } else if (statusByte === 0xF0 || statusByte === 0xF7) {
                     // SysEx
@@ -1750,6 +1755,7 @@ function _convertMidiToNBS(arrayBuffer, settings) {
         } catch (e) {
             throw new Error('MIDI 文件格式损坏或数据不完整 (轨道 ' + trackNum + ')');
         }
+        fallbackTrackNames[trackNum] = fallbackTrackName;
     }
 
     // ---- 处理未关闭的 Note On ----
@@ -1768,6 +1774,26 @@ function _convertMidiToNBS(arrayBuffer, settings) {
         }
     }
     } // end of else (fallback parser)
+
+    // ---- 通道显示名 (优先 MIDI 轨道名 → GM 音色名 → 通道号) ----
+    var parsedTrackNames = (toneData && toneData.trackNames)
+        ? toneData.trackNames
+        : (typeof fallbackTrackNames !== 'undefined' ? fallbackTrackNames : null);
+    var channelRawName = {};
+    if (parsedTrackNames && parsedTrackNames.length) {
+        for (var eni = 0; eni < events.length; eni++) {
+            var evn = events[eni];
+            if (evn.channel === 9 || channelRawName[evn.channel]) continue;
+            var tn0 = parsedTrackNames[evn.track];
+            if (tn0 && !/^Track \d+$/i.test(tn0)) channelRawName[evn.channel] = String(tn0).trim();
+        }
+    }
+    function _channelDisplayBase(ch) {
+        if (channelRawName[ch]) return channelRawName[ch];
+        var pg = channelFirstProgram[ch];
+        if (pg !== undefined && GM_PROGRAM_TABLE[pg]) return GM_PROGRAM_TABLE[pg][0];
+        return '通道 ' + (ch + 1);
+    }
 
     // ---- 空 song ----
     var songTempo = 20;
@@ -2004,6 +2030,28 @@ function _convertMidiToNBS(arrayBuffer, settings) {
         }
         channelLayerOffset[ch2] = currentLayer;
         currentLayer += (channelLayersNeeded[ch2] || 1);
+    }
+
+    // ---- 最终通道显示名: 同名通道追加通道号, 避免两条轨道重名 ----
+    var chDisplayName = {};
+    var _chNameCount = {};
+    for (var cn = 0; cn <= maxChannel; cn++) {
+        if (cn === 9 || !(channelLayersNeeded[cn] > 0)) continue;
+        var nm0 = _channelDisplayBase(cn);
+        chDisplayName[cn] = nm0;
+        _chNameCount[nm0] = (_chNameCount[nm0] || 0) + 1;
+    }
+    for (var cn2 = 0; cn2 <= maxChannel; cn2++) {
+        if (chDisplayName[cn2] === undefined) continue;
+        if (_chNameCount[chDisplayName[cn2]] > 1) {
+            chDisplayName[cn2] = chDisplayName[cn2] + ' (通道 ' + (cn2 + 1) + ')';
+        }
+    }
+    // 原始通道名 (不含去重后缀), 供片段轨道等上层使用
+    var chBaseNames = {};
+    for (var cn3 = 0; cn3 <= maxChannel; cn3++) {
+        if (cn3 === 9 || !(channelLayersNeeded[cn3] > 0)) continue;
+        chBaseNames[cn3] = _channelDisplayBase(cn3);
     }
 
     // ---- 转换音符 ----
@@ -2468,14 +2516,10 @@ function _convertMidiToNBS(arrayBuffer, settings) {
                         // 打击乐层直接以鼓族命名, 便于看出结构与二次编辑
                         songLayers[yy].name = drumLayerFamilyName[yy] || '打击乐';
                     } else if (nameAfterPatches) {
-                        var prog = channelFirstProgram[nc] || 0;
-                        if (prog < GM_PROGRAM_TABLE.length) {
-                            songLayers[yy].name = GM_PROGRAM_TABLE[prog][0];
-                        } else {
-                            songLayers[yy].name = 'Channel ' + (nc + 1);
-                        }
+                        // 使用 MIDI 通道名 (轨道名/GM 音色名), 没有名字时用通道号
+                        songLayers[yy].name = chDisplayName[nc] || ('通道 ' + (nc + 1));
                     } else {
-                        songLayers[yy].name = 'Channel ' + (nc + 1);
+                        songLayers[yy].name = '通道 ' + (nc + 1);
                     }
                     songLayers[yy].volume = 100;
                 }
@@ -2507,11 +2551,15 @@ function _convertMidiToNBS(arrayBuffer, settings) {
                                     var instName = slotInst < INSTRUMENT_NAMES.length
                                         ? INSTRUMENT_NAMES[slotInst]
                                         : 'Inst ' + slotInst;
-                                    if (slotIdx === 0) {
-                                        songLayers[layerIdxNum].name = instName + '(通道' + tfChNum + ')';
-                                    } else {
-                                        songLayers[layerIdxNum].name = instName + '(通道' + tfChNum + '-' + (slotIdx + 1) + ')';
-                                    }
+                                    // 与「命名依据」保持一致: 通道号模式用「通道 N」, 音色名模式用 MIDI 通道名
+                                    var chLabel = nameAfterPatches
+                                        ? (chDisplayName[tfChNum] || ('通道 ' + (tfChNum + 1)))
+                                        : ('通道 ' + (tfChNum + 1));
+                                    var layerName = (instName && instName !== chLabel)
+                                        ? (chLabel + ' · ' + instName)
+                                        : chLabel;
+                                    if (slotIdx > 0) layerName += ' ' + (slotIdx + 1);
+                                    songLayers[layerIdxNum].name = layerName;
                                     delete layerInstruments[layerIdx];
                                     break;
                                 }
@@ -2547,7 +2595,9 @@ function _convertMidiToNBS(arrayBuffer, settings) {
         layers: songLayers,
         note_count: songNotes.length,
         notes: songNotes,
-        layer_channel_map: layerChannelMap
+        layer_channel_map: layerChannelMap,
+        // 通道显示名 (供片段轨道命名等上层使用)
+        channel_names: chBaseNames
     };
 }
 

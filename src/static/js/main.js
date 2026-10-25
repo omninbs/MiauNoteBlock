@@ -1166,9 +1166,12 @@
                 id: lanes.length + 1, muted: false, solo: false,
                 volume: 100, height: SEG_DEFAULT_LANE_H,
                 channel: (g.channel === null || g.channel === undefined) ? undefined : g.channel,
-                name: g.name || ''
+                name: g.name || '',
+                // isDrum 显式标记: 按 layer 分组时 channel 只是音轨索引, 不能用 === 9 判断打击乐
+                isDrum: !!g.isDrum
             };
-            if (g.isDrum) lane.isDrum = true;
+            // 按音轨 (非 MIDI 通道) 分组时记录归属 layer, 供进入片段模式时精确归位
+            if (g.layerKey !== undefined) lane.layerKey = g.layerKey;
             lanes.push(lane);
 
             var segNotes = [];
@@ -1285,6 +1288,7 @@
             defs.push({
                 name: lname ? ('音轨 ' + (idx + 1) + ' · ' + lname) : ('音轨 ' + (idx + 1)),
                 channel: idx,
+                layerKey: idx,
                 isDrum: false,
                 notes: groups[idx]
             });
@@ -1325,7 +1329,7 @@
             lanes.push({
                 lane: laneIdx,
                 channel: (laneCfg.channel === undefined ? null : laneCfg.channel),
-                isDrum: !!(laneCfg.isDrum || laneCfg.channel === 9),
+                isDrum: !!laneCfg.isDrum,
                 start: seg.start,
                 end: seg.end
             });
@@ -1443,15 +1447,12 @@
         var allNotes = state.pianoRoll.getNotes();
         pushUndo();
         var trimmed = trimSustainNotes(allNotes, allNotes, SEG_SPLIT_SUSTAIN_GAP);
-        if (trimmed.removed > 0) {
-            state.pianoRoll.setNotes(trimmed.notes);
-            state.notes = trimmed.notes;
-            buildNoteIndex(state.notes);
-            updateProgressUI();
-            updateNoteCount();
-            state.pianoRoll.render();
-        }
-        state.song.notes = trimmed.notes;
+        state.pianoRoll.setNotes(trimmed.notes);
+        state.notes = state.pianoRoll.getNotes();
+        buildNoteIndex(state.notes);
+        updateProgressUI();
+        updateNoteCount();
+        state.song.notes = state.notes;
 
         // 2. 直接对 NBS 音符做重复分析
         // 以整曲为单位重建片段轨道, 保证可重复执行 (不在已有碎片上再切一层)
@@ -1460,10 +1461,6 @@
             return;
         }
         var laneCount = (state.segments || []).length;
-        if (laneCount < 1) {
-            showToast(i18nText('当前歌曲没有可分割的轨道'));
-            return;
-        }
         applyNbsRepeatSplit(state.song, gran);
         segmentSync();
         markDirty();
@@ -1474,7 +1471,8 @@
         } else {
             showToast(i18nText('没有找到值得分割的重复结构'));
         }
-        if (!state.segmentsEditMode) enterSegmentsEditMode();
+        // 片段已构建完毕, 跳过重新捕获 (否则会按 tick 把音符重新塞回片段, 丢掉分轨归属)
+        if (!state.segmentsEditMode) enterSegmentsEditMode(true);
     }
 
     function initSegSplitPopup() {
@@ -1664,7 +1662,18 @@
             for (var k = 0; k < segs.length; k++) {
                 if (!(nt.tick >= segs[k].start && nt.tick < segs[k].end)) continue;
                 if (!fallbackSeg) fallbackSeg = segs[k];
-                var laneCh = lanes[segs[k].lane] ? lanes[segs[k].lane].channel : undefined;
+                var laneCfg = lanes[segs[k].lane];
+                // 按音轨分组 (非 MIDI 通道) 的轨道: 直接按 layer 归位,
+                // 否则同 tick 的多轨片段会互相抢占, 导致除第一条轨道外全为空白
+                if (laneCfg && laneCfg.layerKey !== undefined) {
+                    if (laneCfg.layerKey === (isFinite(nt.layer) ? nt.layer : 0)) {
+                        pushSegmentNote(segs[k], nt);
+                        placed = true;
+                        break;
+                    }
+                    continue;
+                }
+                var laneCh = laneCfg ? laneCfg.channel : undefined;
                 if (ntChannel !== undefined && laneCh !== undefined && laneCh === ntChannel) {
                     pushSegmentNote(segs[k], nt);
                     placed = true;
@@ -1771,6 +1780,10 @@
                 for (var rk in map) {
                     if (map.hasOwnProperty(rk)) layerChannelOut[map[rk]] = lane.channel;
                 }
+            }
+            // 按音轨分组生成的轨道: layer 重排后同步 layerKey, 否则再次进入片段模式时无法归位
+            if (lane.layerKey !== undefined && map[lane.layerKey] !== undefined) {
+                lane.layerKey = map[lane.layerKey];
             }
             var audible = !lane.muted && (!anySolo || lane.solo);
             var vol = Math.max(0, Math.min(100, isFinite(lane.volume) ? lane.volume : 100));
@@ -2286,10 +2299,11 @@
         tb.style.top = top + 'px';
     }
 
-    function enterSegmentsEditMode() {
+    // skipCapture=true: 片段已由调用方 (如「片段分割」) 构建好, 不要再从 state.notes 重新捕获
+    function enterSegmentsEditMode(skipCapture) {
         segmentEnsure();
         // 进入片段模式前, 把 NBS 当前音符重新捕获进片段 (NBS 是唯一编辑音符的地方)
-        segmentCaptureFromSong();
+        if (!skipCapture) segmentCaptureFromSong();
         state._segmentsTouched = true;
         if (state.pianoRoll && state.pianoRoll.playheadTick == null) {
             var pt = Math.max(0, Math.floor(state.currentTick || 0));
@@ -2575,8 +2589,6 @@
             layerChannelMap: JSON.parse(JSON.stringify(song.layer_channel_map || {})),
             channelNames: JSON.parse(JSON.stringify(song.channel_names || {})),
             midiMeta: song._midi_meta ? JSON.parse(JSON.stringify(song._midi_meta)) : null,
-            // MIDI 原始事件体积大, 只保存引用 (导入后只读, 不深拷贝)
-            midiSplitContext: state._midiSplitContext || null,
             zoom: state.pianoRoll ? state.pianoRoll.zoom : 1,
             scrollX: state.pianoRoll ? state.pianoRoll.scrollX : 0,
             scrollY: state.pianoRoll ? state.pianoRoll.scrollY : 0
@@ -2600,7 +2612,6 @@
         state.importedFileName = s.importedFileName || '';
         state.currentFileId = s.fileId || null;
         state.layerChannelMap = s.layerChannelMap || {};
-        state._midiSplitContext = s.midiSplitContext || null;
         state.song = Object.assign({}, s.meta || {}, {
             notes: state.notes,
             layers: JSON.parse(JSON.stringify(s.layers || [])),
@@ -13612,8 +13623,6 @@
         var song = data.song;
         state.song = song;
         state.notes = song.notes || [];
-        // 打开 NBS 文件: 与之前的 MIDI 导入上下文无关, 清空避免误用旧事件
-        state._midiSplitContext = null;
         // 保存导入文件名（去掉扩展名）
         state.importedFileName = file.name.replace(/\.[^.]+$/, '');
         // 切换歌曲: 清空上一首的歌词标注 (NBS 不含歌词字段, 歌词为内存数据)
@@ -19911,8 +19920,6 @@ function buildTimbreFittingRows(info) {
         tabOpenInNewTabIfNeeded();
         state.currentFileId = id;
         state.song = song;
-        // 历史文件无 MIDI 原始事件, 「片段分割」不可用
-        state._midiSplitContext = null;
         if (!state.song.layers) state.song.layers = [];
         state.tracks = Array.isArray(data.tracks)
             ? JSON.parse(JSON.stringify(data.tracks))

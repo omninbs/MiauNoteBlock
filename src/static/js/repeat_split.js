@@ -76,8 +76,43 @@
         return out;
     }
 
+    // 收集 NBS 工程里的音符 (NBS tick, 无需换算)
+    // layerChannelMap 决定音符归属哪条轨道; 同层上音高相同且首尾相接的音符
+    // 会在 buildUnits 中合并为延音单元, 因此清除延音前后的数据都能正确处理
+    function collectNbsEvents(notes, channel, layerChannelMap) {
+        var out = [];
+        if (!notes || !notes.length) return out;
+        var chKey = String(channel);
+        for (var i = 0; i < notes.length; i++) {
+            var n = notes[i];
+            if (!isFinite(n.tick)) continue;
+            var layerCh = layerChannelMap ? layerChannelMap[n.layer] : undefined;
+            if (layerCh === undefined || layerCh === null) {
+                // 无 channel 映射的工程: 以音轨 (layer) 本身作为分组键
+                if (String(n.layer) !== chKey) continue;
+            } else if (String(layerCh) !== chKey) {
+                continue;
+            }
+            var t = Math.max(0, Math.floor(n.tick));
+            out.push({
+                tick: t,
+                end: t + 1,
+                note: isFinite(n.key) ? n.key : 0,
+                tag: isFinite(n.instrument) ? String(n.instrument) : ''
+            });
+        }
+        // 时间升序, 同 tick 内音高降序 (与 NBS 和弦排序一致); tag 兜底保证顺序稳定
+        out.sort(function (a, b) {
+            if (a.tick !== b.tick) return a.tick - b.tick;
+            if (a.note !== b.note) return b.note - a.note;
+            return a.tag < b.tag ? -1 : (a.tag > b.tag ? 1 : 0);
+        });
+        return out;
+    }
+
     // 构建分析单元: 序列上相邻且音高相同、且首尾严格相接 (间隔为 0) 的事件合并为一个单元
-    // 返回 units: [{ note, ticks:[], startTick, endTick }]
+    // tag 用于区分乐器 (MIDI 事件无 tag, 行为不变)
+    // 返回 units: [{ note, tag, ticks:[], startTick, endTick }]
     function buildUnits(evs) {
         var units = [];
         if (!evs.length) return units;
@@ -85,13 +120,14 @@
         var cur = null;
         for (var i = 0; i < evs.length; i++) {
             var e = evs[i];
-            if (cur && e.note === cur.note && e.tick === cur.endTick) {
+            if (cur && e.note === cur.note && e.tag === cur.tag && e.tick === cur.endTick) {
                 // 严格首尾相接 (间隔为 0) 且音高相同 -> 并入同一延音单元
                 cur.ticks.push(e.tick);
                 cur.endTick = e.end;
             } else {
                 cur = {
                     note: e.note,
+                    tag: e.tag,
                     ticks: [e.tick],
                     startTick: e.tick,
                     endTick: e.end
@@ -142,7 +178,9 @@
             if (u.startTick >= end) break;
             for (var t = 0; t < u.ticks.length; t++) {
                 var tk = u.ticks[t];
-                if (tk >= start && tk < end) parts.push((tk - start) + ':' + u.note);
+                if (tk >= start && tk < end) {
+                    parts.push((tk - start) + ':' + u.note + (u.tag ? '@' + u.tag : ''));
+                }
             }
         }
         return parts.join(',');
@@ -284,9 +322,8 @@
 
     // ============ 单轨分析 ============
 
-    function analyzeLane(lane, events, excludedSet, meta, granularity) {
-        var evs = collectEvents(events, lane.channel, excludedSet, meta);
-        if (evs.length < 2) return null;
+    function analyzeLane(lane, evs, granularity) {
+        if (!evs || evs.length < 2) return null;
 
         var units = buildUnits(evs);
         if (units.length < 2) return null;
@@ -315,7 +352,7 @@
         //         目标片段长度也随等级变化 (2 / 4 / 8 小节),
         //         并由「平均音符数」惩罚避免碎成无意义片段。
         var gran = GRANULARITY_MIN_BARS.hasOwnProperty(granularity) ? granularity : 'medium';
-        var isDrum = (lane.channel === 9);
+        var isDrum = !!lane.isDrum;
         var minPieceBars = isDrum ? 1 : GRANULARITY_MIN_BARS[gran];
         var allBars = isDrum ? DRUM_CANDIDATE_BARS : CANDIDATE_BARS;
         var candidateBars = [];
@@ -489,7 +526,53 @@
             if (lane.channel === null || lane.channel === undefined) continue;
             var res;
             try {
-                res = analyzeLane(lane, input.events, excludedSet, meta, gran);
+                var evs = collectEvents(input.events, lane.channel, excludedSet, meta);
+                res = analyzeLane({
+                    start: lane.start,
+                    channel: lane.channel,
+                    isDrum: lane.channel === 9
+                }, evs, gran);
+            } catch (err) {
+                res = null;
+            }
+            if (!res || !res.ranges || res.ranges.length < 2) continue;
+            result.rangesByLane[lane.lane] = res.ranges;
+            result.stats[lane.lane] = res.stats;
+        }
+        return result;
+    }
+
+    /**
+     * NBS 工程音符层分割 (功能菜单 → 片段分割)
+     * 与 splitLanes 的区别: 不依赖 MIDI 原始事件, 直接分析当前工程的音符。
+     * 建议先对工程执行「清除延音」, 让展开的延音音符变短, 重复结构更清晰;
+     * 即使未清除也能工作 (连续同音高音符会合并为延音单元)。
+     *
+     * @param {Object} input
+     *   notes: [{ tick, layer, key, instrument }]  NBS 音符
+     *   layerChannelMap: { layerIndex: channel }
+     *   lanes: [{ lane, channel, start, end, isDrum }]
+     *   granularity: 'small' | 'medium' | 'large'
+     */
+    function splitLanesFromNbs(input) {
+        var result = { rangesByLane: {}, stats: {} };
+        if (!input || !input.notes || !input.notes.length) return result;
+
+        var map = input.layerChannelMap || {};
+        var gran = input.granularity || 'medium';
+        var lanes = input.lanes || [];
+
+        for (var li = 0; li < lanes.length; li++) {
+            var lane = lanes[li];
+            if (lane.channel === null || lane.channel === undefined) continue;
+            var res;
+            try {
+                var evs = collectNbsEvents(input.notes, lane.channel, map);
+                res = analyzeLane({
+                    start: lane.start,
+                    channel: lane.channel,
+                    isDrum: !!lane.isDrum
+                }, evs, gran);
             } catch (err) {
                 res = null;
             }
@@ -502,10 +585,12 @@
 
     window.MidiRepeatSplit = {
         splitLanes: splitLanes,
+        splitLanesFromNbs: splitLanesFromNbs,
         // 供测试使用
         _internal: {
             toNbsTick: toNbsTick,
             collectEvents: collectEvents,
+            collectNbsEvents: collectNbsEvents,
             buildUnits: buildUnits,
             buildCutsForPeriod: buildCutsForPeriod,
             nonEmptyRanges: nonEmptyRanges,

@@ -1143,66 +1143,32 @@
         return true;
     }
 
-    // MIDI 导入: 按通道生成片段轨道
-    // - 每个 MIDI 通道一条片段轨 (片段覆盖整曲)
-    // - 通道 9 (打击乐) 合并为一条片段轨
-    // - 无法映射通道的音符归入「其他」轨, 保证不丢音符
-    // 每条 lane 记录 channel, 供再次进入片段模式时按通道还原音符归属
-    function segmentBuildChannelSplit(song) {
-        var notes = (song && song.notes) || [];
-        var channelMap = (song && song.layer_channel_map) || {};
-        var groups = {};      // key -> { channel, notes: [] }
-        var order = [];
-        for (var i = 0; i < notes.length; i++) {
-            var n = notes[i];
-            var ch = channelMap[n.layer];
-            var key = (ch === undefined || ch === null) ? 'x' : String(ch);
-            if (!groups[key]) {
-                groups[key] = { channel: (key === 'x') ? null : ch, notes: [] };
-                order.push(key);
-            }
-            groups[key].notes.push(n);
-        }
-        if (!order.length) return false;
-
-        // 排序: 旋律通道按通道号升序, 打击乐 (9) 放最后, 未映射的更后
-        order.sort(function(a, b) {
-            if (a === 'x') return 1;
-            if (b === 'x') return -1;
-            var ca = groups[a].channel, cb = groups[b].channel;
-            if (ca === 9) return 1;
-            if (cb === 9) return -1;
-            return ca - cb;
-        });
+    // 由「分组定义」生成片段轨道 + 整曲片段
+    // defs: [{ name, channel, isDrum, notes }]
+    function buildSegmentTracks(defs) {
+        if (!defs || !defs.length) return false;
 
         var endTick = 0;
-        for (var e = 0; e < notes.length; e++) {
-            if (isFinite(notes[e].tick) && notes[e].tick > endTick) endTick = notes[e].tick;
+        for (var i = 0; i < defs.length; i++) {
+            var list = defs[i].notes;
+            for (var j = 0; j < list.length; j++) {
+                if (isFinite(list[j].tick) && list[j].tick > endTick) endTick = list[j].tick;
+            }
         }
         endTick = Math.max(64, endTick + 1);
 
         var seq = 0;
         var lanes = [];
         var segments = [];
-        for (var oi = 0; oi < order.length; oi++) {
-            var g = groups[order[oi]];
+        for (var d = 0; d < defs.length; d++) {
+            var g = defs[d];
             var lane = {
                 id: lanes.length + 1, muted: false, solo: false,
                 volume: 100, height: SEG_DEFAULT_LANE_H,
-                channel: (g.channel === null ? undefined : g.channel),
-                name: ''
+                channel: (g.channel === null || g.channel === undefined) ? undefined : g.channel,
+                name: g.name || ''
             };
-            // 轨道名: 打击乐 / 通道号 + 通道名 / 其他
-            if (g.channel === 9) {
-                lane.name = '打击乐';
-            } else if (g.channel === null) {
-                lane.name = '其他';
-            } else {
-                var chName = (song.channel_names && song.channel_names[g.channel]) ? song.channel_names[g.channel] : '';
-                lane.name = chName
-                    ? ('通道 ' + (g.channel + 1) + ' · ' + chName)
-                    : ('通道 ' + (g.channel + 1));
-            }
+            if (g.isDrum) lane.isDrum = true;
             lanes.push(lane);
 
             var segNotes = [];
@@ -1239,6 +1205,104 @@
         return true;
     }
 
+    // MIDI 导入: 按通道生成片段轨道
+    // - 每个 MIDI 通道一条片段轨 (片段覆盖整曲)
+    // - 通道 9 (打击乐) 合并为一条片段轨
+    // - 无法映射通道的音符归入「其他」轨, 保证不丢音符
+    // 每条 lane 记录 channel, 供再次进入片段模式时按通道还原音符归属
+    function segmentBuildChannelSplit(song) {
+        var notes = (song && song.notes) || [];
+        var channelMap = (song && song.layer_channel_map) || {};
+        var groups = {};      // key -> { channel, notes: [] }
+        var order = [];
+        for (var i = 0; i < notes.length; i++) {
+            var n = notes[i];
+            var ch = channelMap[n.layer];
+            var key = (ch === undefined || ch === null) ? 'x' : String(ch);
+            if (!groups[key]) {
+                groups[key] = { channel: (key === 'x') ? null : ch, notes: [] };
+                order.push(key);
+            }
+            groups[key].notes.push(n);
+        }
+        if (!order.length) return false;
+
+        // 排序: 旋律通道按通道号升序, 打击乐 (9) 放最后, 未映射的更后
+        order.sort(function(a, b) {
+            if (a === 'x') return 1;
+            if (b === 'x') return -1;
+            var ca = groups[a].channel, cb = groups[b].channel;
+            if (ca === 9) return 1;
+            if (cb === 9) return -1;
+            return ca - cb;
+        });
+
+        var defs = [];
+        for (var oi = 0; oi < order.length; oi++) {
+            var g = groups[order[oi]];
+            var name;
+            // 轨道名: 打击乐 / 通道号 + 通道名 / 其他
+            if (g.channel === 9) {
+                name = '打击乐';
+            } else if (g.channel === null) {
+                name = '其他';
+            } else {
+                var chName = (song.channel_names && song.channel_names[g.channel]) ? song.channel_names[g.channel] : '';
+                name = chName
+                    ? ('通道 ' + (g.channel + 1) + ' · ' + chName)
+                    : ('通道 ' + (g.channel + 1));
+            }
+            defs.push({
+                name: name,
+                channel: g.channel,
+                isDrum: g.channel === 9,
+                notes: g.notes
+            });
+        }
+        return buildSegmentTracks(defs);
+    }
+
+    // 非 MIDI 导入的 NBS 工程: 按音轨 (layer) 生成片段轨道
+    // 没有 channel 映射时无法按乐器通道分组, 只能以 layer 为单位
+    function segmentBuildLayerSplit(song) {
+        var notes = (song && song.notes) || [];
+        var groups = {};
+        var order = [];
+        for (var i = 0; i < notes.length; i++) {
+            var n = notes[i];
+            var key = isFinite(n.layer) ? n.layer : 0;
+            if (!groups[key]) { groups[key] = []; order.push(key); }
+            groups[key].push(n);
+        }
+        if (!order.length) return false;
+        order.sort(function(a, b) { return a - b; });
+
+        var defs = [];
+        for (var oi = 0; oi < order.length; oi++) {
+            var idx = order[oi];
+            var layerInfo = (song.layers && song.layers[idx]) || null;
+            var lname = (layerInfo && layerInfo.name) ? layerInfo.name : '';
+            defs.push({
+                name: lname ? ('音轨 ' + (idx + 1) + ' · ' + lname) : ('音轨 ' + (idx + 1)),
+                channel: idx,
+                isDrum: false,
+                notes: groups[idx]
+            });
+        }
+        return buildSegmentTracks(defs);
+    }
+
+    // 功能菜单 → 片段分割: 自动选择分组方式
+    // 有 layer→channel 映射 (MIDI 导入) 时按通道分组, 否则按音轨分组
+    function segmentBuildNbsSplit(song) {
+        var map = (song && song.layer_channel_map) || {};
+        var hasChannel = false;
+        for (var k in map) {
+            if (map.hasOwnProperty(k)) { hasChannel = true; break; }
+        }
+        return hasChannel ? segmentBuildChannelSplit(song) : segmentBuildLayerSplit(song);
+    }
+
     // ============ MIDI 后处理: 查找并分割重复片段 (v2) ============
     // 分析在 MIDI 原始事件层完成 (算法见 repeat_split.js):
     //   - 长音符天然只有一个 note-on, 不会出现 NBS sustain 展开的重复音符;
@@ -1246,14 +1310,8 @@
     //   - 切割点不得落在任何音符的持续区间内部 (延音不会被从中间断开);
     //   - 自动模式逐候选周期 (1/2/4/8 小节) 评分, 目标为片段种类最少 + 数量适量.
 
-    // 把 MIDI 分析结果应用到片段轨道; 返回新增的片段数量
-    function applyMidiRepeatSplit(midiEvents, song, trackStates, granularity) {
-        if (!midiEvents || !midiEvents.length) return 0;
-        if (!window.MidiRepeatSplit || !window.MidiRepeatSplit.splitLanes) return 0;
-        var meta = song && song._midi_meta;
-        if (!meta) return 0;   // 老数据/异常: 静默跳过
-
-        // 收集需要分割的片段轨道 (lane -> channel)
+    // 收集需要分割的片段轨道 (lane -> channel)
+    function collectSplitLanes() {
         var lanes = [];
         var seenLane = {};
         var segs = state.segments || [];
@@ -1267,10 +1325,48 @@
             lanes.push({
                 lane: laneIdx,
                 channel: (laneCfg.channel === undefined ? null : laneCfg.channel),
+                isDrum: !!(laneCfg.isDrum || laneCfg.channel === 9),
                 start: seg.start,
                 end: seg.end
             });
         }
+        return lanes;
+    }
+
+    // 把算法给出的区间应用到片段轨道; 返回新增的片段数量
+    function applyRepeatRanges(rangesByLane) {
+        var segs = state.segments || [];
+        var replacedLanes = {};
+        var nextSegs = [];
+        for (var s = 0; s < segs.length; s++) {
+            var cur = segs[s];
+            var ranges = rangesByLane[cur.lane];
+            if (!ranges || ranges.length < 2 || replacedLanes[cur.lane]) {
+                nextSegs.push(cur);
+                continue;
+            }
+            replacedLanes[cur.lane] = true;
+            var pieces = splitSegmentByRanges(cur, ranges);
+            for (var p = 0; p < pieces.length; p++) nextSegs.push(pieces[p]);
+        }
+        if (!nextSegs.length) return 0;
+
+        var seq = 0;
+        for (var k = 0; k < nextSegs.length; k++) nextSegs[k].id = ++seq;
+        state.segments = nextSegs;
+        state._segmentIdSeq = seq;
+        state._segmentsEdited = true;
+        return nextSegs.length - segs.length;
+    }
+
+    // 把 MIDI 分析结果应用到片段轨道; 返回新增的片段数量
+    function applyMidiRepeatSplit(midiEvents, song, trackStates, granularity) {
+        if (!midiEvents || !midiEvents.length) return 0;
+        if (!window.MidiRepeatSplit || !window.MidiRepeatSplit.splitLanes) return 0;
+        var meta = song && song._midi_meta;
+        if (!meta) return 0;   // 老数据/异常: 静默跳过
+
+        var lanes = collectSplitLanes();
         if (!lanes.length) return 0;
 
         // 被排除的 MIDI 轨道
@@ -1288,29 +1384,114 @@
             granularity: granularity || 'medium'
         });
         if (!res || !res.rangesByLane) return 0;
+        return applyRepeatRanges(res.rangesByLane);
+    }
 
-        // 应用: 用算法给出的「非空片段区间」替换对应 lane 的整曲片段
-        var replacedLanes = {};
-        var nextSegs = [];
-        for (var s = 0; s < segs.length; s++) {
-            var cur = segs[s];
-            var ranges = res.rangesByLane[cur.lane];
-            if (!ranges || ranges.length < 2 || replacedLanes[cur.lane]) {
-                nextSegs.push(cur);
-                continue;
-            }
-            replacedLanes[cur.lane] = true;
-            var pieces = splitSegmentByRanges(cur, ranges);
-            for (var p = 0; p < pieces.length; p++) nextSegs.push(pieces[p]);
+    // 把 NBS 音符分析结果应用到片段轨道 (功能菜单 → 片段分割); 返回新增的片段数量
+    function applyNbsRepeatSplit(song, granularity) {
+        if (!window.MidiRepeatSplit || !window.MidiRepeatSplit.splitLanesFromNbs) return 0;
+        var lanes = collectSplitLanes();
+        if (!lanes.length) return 0;
+
+        var res = window.MidiRepeatSplit.splitLanesFromNbs({
+            notes: (song && song.notes) || [],
+            layerChannelMap: (song && song.layer_channel_map) || {},
+            lanes: lanes,
+            granularity: granularity || 'medium'
+        });
+        if (!res || !res.rangesByLane) return 0;
+        return applyRepeatRanges(res.rangesByLane);
+    }
+
+    // ============ 片段分割弹窗 (功能菜单 → 片段分割) ============
+    // 该入口基于当前 NBS 工程分析, 会先对整曲执行一次「清除延音」
+    // (与清除延音功能同一套逻辑), 让延音展开出的连续音符变短, 重复结构更清晰。
+    // 效果不如 MIDI 导入时的后处理分割 (后者直接分析 MIDI 事件, 不受延音展开影响)。
+    var SEG_SPLIT_SUSTAIN_GAP = 2;
+
+    function openSegSplitPopup() {
+        if (!state.song || !state.notes || !state.notes.length) {
+            showToast(i18nText('请先打开或导入歌曲'));
+            return;
         }
-        if (!nextSegs.length) return 0;
+        var popup = $('seg-split-popup');
+        if (!popup) return;
+        // 初始值与「MIDI 导入 → 后处理」中的同名选项保持一致
+        var granEl = $('seg-split-granularity');
+        var srcGran = $('midi-repeat-granularity');
+        if (granEl) granEl.value = (srcGran && srcGran.value) || 'medium';
+        var enEl = $('seg-split-enabled');
+        var srcEn = $('midi-split-repeats');
+        if (enEl) enEl.checked = srcEn ? srcEn.checked : true;
+        popup.style.display = 'flex';
+    }
 
-        var seq = 0;
-        for (var k = 0; k < nextSegs.length; k++) nextSegs[k].id = ++seq;
-        state.segments = nextSegs;
-        state._segmentIdSeq = seq;
-        state._segmentsEdited = true;
-        return nextSegs.length - segs.length;
+    function closeSegSplitPopup() {
+        var popup = $('seg-split-popup');
+        if (popup) popup.style.display = 'none';
+    }
+
+    function runSegSplit() {
+        var enabled = $('seg-split-enabled') ? $('seg-split-enabled').checked : true;
+        var gran = $('seg-split-granularity') ? $('seg-split-granularity').value : 'medium';
+        closeSegSplitPopup();
+        if (!state.song || !state.pianoRoll) return;
+        if (!enabled) return;
+
+        // 1. 先对当前工程清除延音 (与「清除延音」功能同一套逻辑, 作用于全部音符)
+        //    延音在 NBS 里是同一音轨上连续重复的同音高音符, 会让重复片段的签名变长变脏
+        var allNotes = state.pianoRoll.getNotes();
+        pushUndo();
+        var trimmed = trimSustainNotes(allNotes, allNotes, SEG_SPLIT_SUSTAIN_GAP);
+        if (trimmed.removed > 0) {
+            state.pianoRoll.setNotes(trimmed.notes);
+            state.notes = trimmed.notes;
+            buildNoteIndex(state.notes);
+            updateProgressUI();
+            updateNoteCount();
+            state.pianoRoll.render();
+        }
+        state.song.notes = trimmed.notes;
+
+        // 2. 直接对 NBS 音符做重复分析
+        // 以整曲为单位重建片段轨道, 保证可重复执行 (不在已有碎片上再切一层)
+        if (!segmentBuildNbsSplit(state.song)) {
+            showToast(i18nText('当前歌曲没有可分割的轨道'));
+            return;
+        }
+        var laneCount = (state.segments || []).length;
+        if (laneCount < 1) {
+            showToast(i18nText('当前歌曲没有可分割的轨道'));
+            return;
+        }
+        applyNbsRepeatSplit(state.song, gran);
+        segmentSync();
+        markDirty();
+
+        var total = (state.segments || []).length;
+        if (total > laneCount) {
+            showToast(i18nText('已分割为 ') + total + i18nText(' 个片段'));
+        } else {
+            showToast(i18nText('没有找到值得分割的重复结构'));
+        }
+        if (!state.segmentsEditMode) enterSegmentsEditMode();
+    }
+
+    function initSegSplitPopup() {
+        var popup = $('seg-split-popup');
+        if (!popup) return;
+        var closeBtn = $('seg-split-close');
+        var cancelBtn = $('seg-split-cancel');
+        var okBtn = $('seg-split-ok');
+        if (closeBtn) closeBtn.addEventListener('click', closeSegSplitPopup);
+        if (cancelBtn) cancelBtn.addEventListener('click', closeSegSplitPopup);
+        if (okBtn) okBtn.addEventListener('click', runSegSplit);
+        popup.addEventListener('click', function(e) {
+            if (e.target === popup) closeSegSplitPopup();
+        });
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && popup.style.display !== 'none') closeSegSplitPopup();
+        });
     }
 
     // 按「片段区间列表」把一条片段切成多条; 音符 rel 重算为相对各自起点
@@ -2390,6 +2571,12 @@
             segmentsEdited: !!state._segmentsEdited,
             importedFileName: state.importedFileName || '',
             fileId: state.currentFileId || null,
+            // MIDI 相关元信息: 片段分割依赖 layer→channel 映射与 tick 换算参数
+            layerChannelMap: JSON.parse(JSON.stringify(song.layer_channel_map || {})),
+            channelNames: JSON.parse(JSON.stringify(song.channel_names || {})),
+            midiMeta: song._midi_meta ? JSON.parse(JSON.stringify(song._midi_meta)) : null,
+            // MIDI 原始事件体积大, 只保存引用 (导入后只读, 不深拷贝)
+            midiSplitContext: state._midiSplitContext || null,
             zoom: state.pianoRoll ? state.pianoRoll.zoom : 1,
             scrollX: state.pianoRoll ? state.pianoRoll.scrollX : 0,
             scrollY: state.pianoRoll ? state.pianoRoll.scrollY : 0
@@ -2412,9 +2599,14 @@
         state._segmentsEdited = !!s.segmentsEdited;
         state.importedFileName = s.importedFileName || '';
         state.currentFileId = s.fileId || null;
+        state.layerChannelMap = s.layerChannelMap || {};
+        state._midiSplitContext = s.midiSplitContext || null;
         state.song = Object.assign({}, s.meta || {}, {
             notes: state.notes,
-            layers: JSON.parse(JSON.stringify(s.layers || []))
+            layers: JSON.parse(JSON.stringify(s.layers || [])),
+            layer_channel_map: s.layerChannelMap || {},
+            channel_names: s.channelNames || {},
+            _midi_meta: s.midiMeta || null
         });
         if (!state.song.layers || !state.song.layers.length) {
             state.song.layers = createDefaultLayers(8);
@@ -2811,6 +3003,8 @@
         initMobileToolSwitcher();
         // 初始化功能菜单
         createFunctionsMenu();
+        // 初始化片段分割弹窗
+        initSegSplitPopup();
         // 初始化歌词标注 UI
         initLyricsUI();
         // 初始化片段编辑 UI
@@ -11110,6 +11304,8 @@
                         });
                     } else if (action === 'scale-precision') {
                         showScalePrecisionDialog();
+                    } else if (action === 'split-segments') {
+                        openSegSplitPopup();
                     } else if (action === 'remove-empty-tracks') {
                         removeEmptyTracks();
                     } else if (action === 'sustain-fill') {
@@ -12379,32 +12575,27 @@
         });
     }
 
-    // 实际执行清除延音
+    // 清除延音核心逻辑 (供「清除延音」对话框与「功能菜单 → 片段分割」共用)
     // 按音轨分组，把同一音轨内连续重复的音符截短，保证相邻两组之间至少留出 gap 个空 tick
-    function applyClearSustain(gap) {
-        if (!state.pianoRoll) return;
-        var notes = state.pianoRoll.getNotes();
-        var selected = state.pianoRoll.getSelectedNotes();
-        if (!selected || selected.length === 0) return;
-
-        pushUndo();
-
-        // 只处理选中的音符；按音轨分组后按 tick 排序
-        var selectedIds = {};
+    // targetNotes: 参与处理的音符 (通常为选中音符; 整曲处理时传全部音符)
+    // 返回 { notes: 处理后的全部音符, removed: 删除数量 }
+    function trimSustainNotes(allNotes, targetNotes, gap) {
         var byLayer = {};
-        for (var i = 0; i < selected.length; i++) {
-            var n = selected[i];
-            selectedIds[n.id] = true;
+        for (var i = 0; i < targetNotes.length; i++) {
+            var n = targetNotes[i];
             if (!byLayer[n.layer]) byLayer[n.layer] = [];
             byLayer[n.layer].push(n);
         }
         for (var L in byLayer) {
-            byLayer[L].sort(function(a, b) { return a.tick - b.tick; });
+            if (byLayer.hasOwnProperty(L)) {
+                byLayer[L].sort(function(a, b) { return a.tick - b.tick; });
+            }
         }
 
         var removeIds = {};
 
         for (var layerId in byLayer) {
+            if (!byLayer.hasOwnProperty(layerId)) continue;
             var list = byLayer[layerId];
             // 把连续且 key+instrument 相同的音符归为一组
             var runs = [];
@@ -12439,10 +12630,24 @@
             }
         }
 
-        var newNotes = [];
-        for (var j = 0; j < notes.length; j++) {
-            if (!removeIds[notes[j].id]) newNotes.push(notes[j]);
+        var out = [];
+        for (var j = 0; j < allNotes.length; j++) {
+            if (!removeIds[allNotes[j].id]) out.push(allNotes[j]);
         }
+        return { notes: out, removed: Object.keys(removeIds).length };
+    }
+
+    // 实际执行清除延音 (仅处理选中音符)
+    function applyClearSustain(gap) {
+        if (!state.pianoRoll) return;
+        var notes = state.pianoRoll.getNotes();
+        var selected = state.pianoRoll.getSelectedNotes();
+        if (!selected || selected.length === 0) return;
+
+        pushUndo();
+
+        var res = trimSustainNotes(notes, selected, gap);
+        var newNotes = res.notes;
 
         state.pianoRoll.setNotes(newNotes);
         state.notes = newNotes;
@@ -12451,8 +12656,7 @@
         updateNoteCount();
         state.pianoRoll.render();
 
-        var removedCount = Object.keys(removeIds).length;
-        console.log('[Clear Sustain] 留空=' + gap + ', 删除了 ' + removedCount + ' 个音符');
+        console.log('[Clear Sustain] 留空=' + gap + ', 删除了 ' + res.removed + ' 个音符');
     }
 
     // ============ 上下起伏（跨音轨规律分布） ============
@@ -13408,6 +13612,8 @@
         var song = data.song;
         state.song = song;
         state.notes = song.notes || [];
+        // 打开 NBS 文件: 与之前的 MIDI 导入上下文无关, 清空避免误用旧事件
+        state._midiSplitContext = null;
         // 保存导入文件名（去掉扩展名）
         state.importedFileName = file.name.replace(/\.[^.]+$/, '');
         // 切换歌曲: 清空上一首的歌词标注 (NBS 不含歌词字段, 歌词为内存数据)
@@ -19705,6 +19911,8 @@ function buildTimbreFittingRows(info) {
         tabOpenInNewTabIfNeeded();
         state.currentFileId = id;
         state.song = song;
+        // 历史文件无 MIDI 原始事件, 「片段分割」不可用
+        state._midiSplitContext = null;
         if (!state.song.layers) state.song.layers = [];
         state.tracks = Array.isArray(data.tracks)
             ? JSON.parse(JSON.stringify(data.tracks))

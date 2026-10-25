@@ -22,7 +22,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="static/css/style.css?v=20261025l">
+    <link rel="stylesheet" href="static/css/style.css?v=20261025m">
 </head>
 <body>
 
@@ -138,6 +138,10 @@
         <div class="functions-menu-item" data-action="lyrics-edit">
             <i class="fa-solid fa-microphone-lines"></i>
             <span>歌词标注</span>
+        </div>
+        <div class="functions-menu-item" data-action="split-segments" title="按重复旋律把每条片段轨道切成循环块；内容相同的片段会自动同名（A/B/C…）">
+            <i class="fa-solid fa-scissors"></i>
+            <span>片段分割</span>
         </div>
         <div class="functions-menu-item" data-action="remove-empty-tracks">
             <i class="fa-solid fa-trash-can"></i>
@@ -1660,18 +1664,18 @@
     }
 </script>
 <!-- nbs_client.js 必须在 api_client.js 之前加载 (api_client.js 引用 NBSClient 全局对象) -->
-<script src="static/js/nbs_client.js?v=20261025l"></script>
+<script src="static/js/nbs_client.js?v=20261025m"></script>
 <script src="static/js/compress_est.js?v=20260926b"></script>
 <script src="static/js/api_client.js?v=20260905a"></script>
 <script src="static/js/custom_dropdown.js?v=20261017d"></script>
-<script src="static/js/i18n.js?v=20261025l"></script>
+<script src="static/js/i18n.js?v=20261025m"></script>
 <script src="static/js/audio_engine.js?v=20260919c"></script>
 <script src="static/js/custom_instruments.js?v=20260905a"></script>
 <script src="static/js/audio_fix_utils.js?v=20260905a"></script>
 <script src="static/js/sf3_player.js?v=20260808a"></script>
 <script src="static/js/spessa_player.js?v=20260918a"></script>
 <script src="static/js/soundfont_loader.js?v=20260808b"></script>
-<script src="static/js/piano_roll.js?v=20261025l"></script>
+<script src="static/js/piano_roll.js?v=20261025m"></script>
 <!-- 本地化第三方库: ZIP 打包 (jszip) / MP3 编码 (lamejs) -->
 <script src="static/vendor/jszip.min.js?v=20260905a"></script>
 <script src="static/vendor/lame.min.js?v=20260905a"></script>
@@ -1679,8 +1683,8 @@
 <script src="static/js/render_jsmix.js?v=20260906e"></script>
 <script src="static/js/audio_render.js?v=20260919c"></script>
 <!-- MIDI 重复片段分割 (MIDI 事件层分析), 必须在 main.js 之前加载 -->
-<script src="static/js/repeat_split.js?v=20261025l"></script>
-<script src="static/js/main.js?v=20261025l"></script>
+<script src="static/js/repeat_split.js?v=20261025m"></script>
+<script src="static/js/main.js?v=20261025m"></script>
 
 <script>
 // 桌面应用（含 MSIX 安装版）内：外部链接交给系统默认浏览器打开。
@@ -1706,6 +1710,35 @@
     }, true);
 })();
 </script>
+
+<!-- ========== 片段分割弹窗 (功能菜单 → 片段分割) ========== -->
+<div class="seg-split-overlay" id="seg-split-popup" style="display:none;">
+    <div class="seg-split-dialog" role="dialog" aria-modal="true" aria-labelledby="seg-split-title">
+        <div class="seg-split-header">
+            <h3 id="seg-split-title">片段分割</h3>
+            <button class="seg-split-close" id="seg-split-close" title="关闭"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="seg-split-body">
+            <label class="seg-split-check">
+                <input type="checkbox" id="seg-split-enabled" checked>
+                <span>查找并分割重复片段</span>
+            </label>
+            <div class="seg-split-row">
+                <span class="seg-split-label">颗粒度等级</span>
+                <select id="seg-split-granularity" class="seg-split-select">
+                    <option value="small">小 · 最小 1 小节</option>
+                    <option value="medium" selected>中 · 最小 2 小节</option>
+                    <option value="large">大 · 最小 4 小节</option>
+                </select>
+            </div>
+            <p class="seg-split-hint">按小节对齐切分，内容相同的片段会自动同名（A/B/C…）。长音符不会被从中间断开，片段内 ≥2 小节的空白会被裁掉；打击乐固定按 1 小节识别。重新执行会以整曲为单位重建片段布局。</p>
+        </div>
+        <div class="seg-split-footer">
+            <button class="seg-split-btn" id="seg-split-cancel">取消</button>
+            <button class="seg-split-btn primary" id="seg-split-ok">开始分割</button>
+        </div>
+    </div>
+</div>
 
 </body>
 </html>

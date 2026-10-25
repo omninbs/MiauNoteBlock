@@ -1125,6 +1125,37 @@ body.segment-edit-mode .tool-bar {
 .segment-context-menu .seg-menu-item.disabled { opacity: 0.38; pointer-events: none; }
 .segment-context-menu .seg-menu-sep { height: 1px; margin: 3px 4px; background: rgba(255, 255, 255, 0.1); }
 
+/* ===== 片段编辑: 重命名浮层 =====
+   容器提供唯一背景, 输入框只保留描边, 避免"浮层 + 输入框"双层底色叠加 */
+.seg-rename-pop {
+    position: fixed;
+    padding: 8px;
+    border-radius: 8px;
+    background: rgba(24, 30, 38, 0.96);
+    border: 1px solid var(--ctrl-stroke-default);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(12px);
+    z-index: 100060;
+}
+.seg-rename-input {
+    display: block;
+    width: 176px;
+    height: 28px;
+    padding: 0 8px;
+    font-family: var(--font-family);
+    font-size: 13px;
+    color: var(--text-primary);
+    background: transparent;
+    border: 1px solid var(--ctrl-stroke-secondary);
+    border-radius: var(--radius-sm);
+    outline: none;
+}
+.seg-rename-input::placeholder { color: var(--text-tertiary); }
+.seg-rename-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+}
+
 /* ===== 片段编辑模式 (剪映风格) ===== */
 .segment-edit-bar {
     border-color: rgba(255, 255, 255, 0.14);

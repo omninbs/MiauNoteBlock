@@ -188,6 +188,20 @@ var GM_FITTING_SLOTS = GM_TIMBRE_MAP.map(function (e) { return [e[3], e[4]]; });
 // 派生: 每个 program 是否为延音类 (true=持续型, 默认启用延音轨道)
 var GM_SUSTAIN_PROGRAMS = GM_TIMBRE_MAP.map(function (e) { return e[5] === 1; });
 
+// 补充: 音色本身不属于持续型, 但实际余音/拖尾很长, 也应按延音处理
+// (电钢琴、颤音琴、管钟、电吉他、合成贝斯、钢鼓等)
+var GM_LONG_TAIL_PROGRAMS = {
+    4: true,    // Electric Piano 1
+    5: true,    // Electric Piano 2
+    11: true,   // Vibraphone
+    15: true,   // Tubular Bells
+    26: true,   // Electric Guitar (jazz)
+    27: true,   // Electric Guitar (clean)
+    38: true,   // Synth Bass 1
+    39: true,   // Synth Bass 2
+    114: true   // Steel Drums
+};
+
 // 鼓组音符映射 (Channel 9) - 完全复刻 midi_handler.py DRUM_NOTE_TABLE
 // midi_drum[midi_note] = [name, nbs_instrument, nbs_key - 33]
 var DRUM_NOTE_TABLE = {
@@ -1084,6 +1098,10 @@ function _buildMidiInfoFromToneJS(toneData) {
     var trackEventCount = {};
     var trackNoteCount = {};
     var trackChannelsSet = {};
+    // 延音识别: 每轨道音符总时长 / 长音符数 (>= 1 拍)
+    var trackDurationSum = {};
+    var trackLongNoteCount = {};
+    var longNoteThreshold = Math.max(1, Math.round(ticksPerBeat));
 
     for (var i = 0; i < events.length; i++) {
         var ev = events[i];
@@ -1106,6 +1124,11 @@ function _buildMidiInfoFromToneJS(toneData) {
 
         trackEventCount[ev.track] = (trackEventCount[ev.track] || 0) + 1;
         trackNoteCount[ev.track] = (trackNoteCount[ev.track] || 0) + 1;
+        var evDur = ev.duration_ticks || 0;
+        trackDurationSum[ev.track] = (trackDurationSum[ev.track] || 0) + evDur;
+        if (evDur >= longNoteThreshold) {
+            trackLongNoteCount[ev.track] = (trackLongNoteCount[ev.track] || 0) + 1;
+        }
         if (!trackChannelsSet[ev.track]) trackChannelsSet[ev.track] = {};
         trackChannelsSet[ev.track][ch] = true;
     }
@@ -1126,7 +1149,9 @@ function _buildMidiInfoFromToneJS(toneData) {
                 name: trackNames[t],
                 note_count: trackNoteCount[t] || 0,
                 event_count: trackEventCount[t] || 0,
-                channels: sortedChannels
+                channels: sortedChannels,
+                avg_duration_ticks: trackNoteCount[t] ? Math.round((trackDurationSum[t] || 0) / trackNoteCount[t]) : 0,
+                long_note_ratio: trackNoteCount[t] ? ((trackLongNoteCount[t] || 0) / trackNoteCount[t]) : 0
             });
         }
     }
@@ -1213,6 +1238,17 @@ function _buildMidiInfoFromToneJS(toneData) {
 }
 
 // 原自包含解析器 (作为 @tonejs/midi 不可用时的回退)
+// 回填音符持续时长, 并累计所属轨道的时长统计 (供延音轨道识别使用)
+function _fillNoteDuration(ev, offTick, durSum, longCount, longThreshold) {
+    if (!ev) return;
+    var dur = offTick - ev.tick;
+    if (!(dur > 0)) dur = 0;
+    ev.duration_ticks = dur;
+    var tr = ev.track;
+    durSum[tr] = (durSum[tr] || 0) + dur;
+    if (dur >= longThreshold) longCount[tr] = (longCount[tr] || 0) + 1;
+}
+
 function _parseMidiInfoFallback(arrayBuffer) {
     var reader = new _MidiReader(arrayBuffer);
 
@@ -1245,6 +1281,11 @@ function _parseMidiInfoFallback(arrayBuffer) {
     var events = [];                // 音符事件列表 (供 _rawEvents 使用, calculateOptimalOffset 依赖)
     var totalNotes = 0;
     var totalEvents = 0;
+    // 延音识别: 每轨道音符总时长 / 长音符数 (>= 1 拍)
+    var trackDurationSum = {};
+    var trackLongNoteCount = {};
+    var longNoteThreshold = Math.max(1, Math.round(ticksPerBeat));
+    var activeNotes = {};           // "channel,note" -> Note On 事件引用 (用于回填持续时长)
 
     for (var trackNum = 0; trackNum < numTracks; trackNum++) {
         var trackHeader = reader.readN(4);
@@ -1321,23 +1362,37 @@ function _parseMidiInfoFallback(arrayBuffer) {
                         if (channel === 9) {
                             percussionNotes[note] = true;
                         }
-                        // 关键: 在 Note On 时直接收集 event (与 tonejs 路径一致)
-                        // 不依赖 Note Off 配对, 避免某些 MIDI 文件缺少 Note Off 时 events 不完整
-                        // calculateOptimalOffset 只用 note 值, 不需要 duration_ticks 准确
-                        events.push({
+                        // 在 Note On 时直接收集 event (与 tonejs 路径一致)
+                        // 不依赖 Note Off 配对, 避免某些 MIDI 文件缺少 Note Off 时 events 不完整;
+                        // 若能配对到 Note Off, 再回填 duration_ticks (供延音识别使用)
+                        var onEvent = {
                             tick: currentTick,
                             channel: channel,
                             note: note,
                             velocity: velocity,
                             duration_ticks: 0,
                             track: trackNum
-                        });
+                        };
+                        events.push(onEvent);
+                        activeNotes[channel + ',' + note] = onEvent;
+                    } else {
+                        // velocity=0 视为 Note Off: 回填音符持续时长
+                        var offKey = channel + ',' + note;
+                        if (activeNotes[offKey]) {
+                            _fillNoteDuration(activeNotes[offKey], currentTick, trackDurationSum, trackLongNoteCount, longNoteThreshold);
+                            delete activeNotes[offKey];
+                        }
                     }
-                    // velocity=0 视为 Note Off, 但音符已在 Note On 时收集, 此处无需处理
                 } else if (eventType === 0x8) {
-                    // Note Off - 音符已在 Note On 时收集, 此处只跳过数据
-                    reader.readN(2);
+                    // Note Off: 回填音符持续时长 (音符已在 Note On 时收集)
+                    var offNote = reader.readByte();
+                    reader.readByte();
                     trackEventCount++;
+                    var offKey8 = channel + ',' + offNote;
+                    if (activeNotes[offKey8]) {
+                        _fillNoteDuration(activeNotes[offKey8], currentTick, trackDurationSum, trackLongNoteCount, longNoteThreshold);
+                        delete activeNotes[offKey8];
+                    }
                 } else if (eventType === 0xC) {
                     // Program Change
                     var program = reader.readByte();
@@ -1380,7 +1435,9 @@ function _parseMidiInfoFallback(arrayBuffer) {
                 name: trackName,
                 note_count: trackNoteCount,
                 event_count: trackEventCount,
-                channels: sortedChannels
+                channels: sortedChannels,
+                avg_duration_ticks: trackNoteCount ? Math.round((trackDurationSum[trackNum] || 0) / trackNoteCount) : 0,
+                long_note_ratio: trackNoteCount ? ((trackLongNoteCount[trackNum] || 0) / trackNoteCount) : 0
             });
         }
     }
@@ -1515,7 +1572,6 @@ function _convertMidiToNBS(arrayBuffer, settings) {
     var removeSilent = settings.remove_silent !== false;
     var nameLayers = settings.name_layers !== false;
     var nameAfterPatches = settings.name_after_patches !== false;
-    var tempoChanges = settings.tempo_changes === true;
     var keepOctave = settings.keep_octave !== false;
     var readVelocity = settings.read_velocity !== false;
     var precision = settings.precision !== undefined ? settings.precision : 1;
@@ -2004,9 +2060,6 @@ function _convertMidiToNBS(arrayBuffer, settings) {
     var drumFamilyOffset = {};         // 族索引 -> 绝对起始 layer
     var drumLayerFamilyName = {};      // 绝对 layer -> 族名
     var currentLayer = 0;
-    if (tempoChanges) {
-        currentLayer = 1; // 为速度变化器预留 layer 0
-    }
     var maxChannel = 0;
     for (var i = 0; i < events.length; i++) {
         if (events[i].channel > maxChannel) maxChannel = events[i].channel;
@@ -2014,6 +2067,7 @@ function _convertMidiToNBS(arrayBuffer, settings) {
     for (var ch2 = 0; ch2 <= maxChannel; ch2++) {
         if (ch2 === 9) {
             channelLayerOffset[9] = currentLayer;
+            var drumLayersUsed = 0;
             for (var df = 0; df < DRUM_FAMILIES.length; df++) {
                 var dfNeed = drumFamilyLayersNeeded[df] || 0;
                 if (dfNeed <= 0) continue;   // 该族没有音符 → 不占用层
@@ -2022,14 +2076,22 @@ function _convertMidiToNBS(arrayBuffer, settings) {
                     drumLayerFamilyName[currentLayer + dl] = DRUM_FAMILIES[df].name;
                 }
                 currentLayer += dfNeed;
+                drumLayersUsed += dfNeed;
             }
-            // 兜底: 通道 9 没有任何可映射音符时仍保留 1 层, 避免层号错位
-            if (currentLayer === channelLayerOffset[9]) currentLayer += 1;
-            channelLayersNeeded[9] = currentLayer - channelLayerOffset[9];
+            if (drumLayersUsed <= 0) {
+                // 打击乐没有任何可映射音符 → 不占用层 (避免空层导致层号错位)
+                delete channelLayerOffset[9];
+                channelLayersNeeded[9] = 0;
+            } else {
+                channelLayersNeeded[9] = drumLayersUsed;
+            }
             continue;
         }
+        // 无音符通道不分配层: 保证层号连续, 命名循环与实际层号一致
+        var needLayers = channelLayersNeeded[ch2] || 0;
+        if (needLayers <= 0) continue;
         channelLayerOffset[ch2] = currentLayer;
-        currentLayer += (channelLayersNeeded[ch2] || 1);
+        currentLayer += needLayers;
     }
 
     // ---- 最终通道显示名: 同名通道追加通道号, 避免两条轨道重名 ----
@@ -2057,6 +2119,29 @@ function _convertMidiToNBS(arrayBuffer, settings) {
     // ---- 转换音符 ----
     var songNotes = [];
     var layerCounters = {}; // "ch,nbsTick" -> used count
+
+    // ---- 和弦音符排序 (保证同一时刻的音符顺序确定, 避免导入结果抖动) ----
+    // 同一时刻、同一通道内同时发声的音符 (和弦) 按音高从高到低排列:
+    // NBS layer 索引越小越靠上, 因此高音获得更靠上的轨道, 低音在下方。
+    // 物理音高 = NBS key + 21 + 音色偏移; 同通道内音色与偏移一致,
+    // 因此按 MIDI 音高比较与按物理音高比较等价。
+    // 打击乐通道保持文件原始相对顺序 (鼓族分层逻辑不受影响)。
+    (function sortChordNotes() {
+        function evNbsTick(ev) {
+            var raw = (ev.tick - silentOffset) / deltaPerTick;
+            if (nbsTicksPerGrid > 1) {
+                return Math.floor(Math.round(raw / nbsTicksPerGrid) * nbsTicksPerGrid);
+            }
+            return Math.floor(raw);
+        }
+        events.sort(function(a, b) {
+            var ta = evNbsTick(a), tb = evNbsTick(b);
+            if (ta !== tb) return ta - tb;
+            if (a.channel !== b.channel) return a.channel - b.channel;
+            if (a.channel === 9) return 0;   // 打击乐: 保持原始相对顺序
+            return (b.note || 0) - (a.note || 0);
+        });
+    })();
 
     for (var i = 0; i < events.length; i++) {
         var e = events[i];
@@ -2414,41 +2499,6 @@ function _convertMidiToNBS(arrayBuffer, settings) {
         }
     }
 
-    // ---- 添加速度变化器 ----
-    if (tempoChanges && tempoChangesList.length > 0) {
-        for (var ti = 0; ti < tempoChangesList.length; ti++) {
-            var tc = tempoChangesList[ti];
-            var pos = Math.floor((tc.tick - silentOffset) / deltaPerTick);
-            if (pos < 0) pos = 0;
-            var nbsTempoRaw = 60000000.0 / tc.tempo_us; // BPM
-            var nbsTps = nbsTempoRaw / 15.0 * (precVal + 1);
-
-            // 查找是否已有该位置的音符
-            var existing = null;
-            for (var ni = 0; ni < songNotes.length; ni++) {
-                if (songNotes[ni].tick === pos && songNotes[ni].layer === 0) {
-                    existing = songNotes[ni];
-                    break;
-                }
-            }
-            if (existing) {
-                existing.key = 39;
-                existing.velocity = Math.floor(nbsTps);
-            } else {
-                songNotes.push({
-                    id: 'note_' + pos + '_0',
-                    tick: pos,
-                    layer: 0,
-                    instrument: 0,
-                    key: 39,
-                    velocity: Math.floor(nbsTps),
-                    pan: 50,
-                    pitch: 0
-                });
-            }
-        }
-    }
-
     // ---- 消除重复音符 ----
     // 删除同一 tick 中 音色(instrument) + 音调(key) 完全相同的重复音符
     // 每 tick 每个 (instrument, key) 只保留一个音符 (保留第一个)
@@ -2491,8 +2541,11 @@ function _convertMidiToNBS(arrayBuffer, settings) {
         if (channelLayerOffset.hasOwnProperty(mapCh)) {
             var mapChNum = parseInt(mapCh, 10);
             var offset = channelLayerOffset[mapCh];
-            var count = channelLayersNeeded[mapChNum] || 1;
+            var count = channelLayersNeeded[mapChNum] || 0;
+            if (count <= 0) continue;
             for (var ml = offset; ml < offset + count; ml++) {
+                // 防御: 不写入超出实际存在的层 (songLayers 只到 maxLayer)
+                if (ml > maxLayer) break;
                 layerChannelMap[ml] = mapChNum;
             }
         }
@@ -2501,12 +2554,6 @@ function _convertMidiToNBS(arrayBuffer, settings) {
     // ---- 图层命名 ----
     if (nameLayers) {
         var yy = 0;
-        if (tempoChanges) {
-            if (yy < songLayers.length) {
-                songLayers[yy].name = 'TempoChgr';
-            }
-            yy++;
-        }
         for (var nc = 0; nc <= maxChannel; nc++) {
             var ncCount = channelLayersNeeded[nc] || 0;
             for (var nb = 0; nb < ncCount; nb++) {
@@ -2597,7 +2644,14 @@ function _convertMidiToNBS(arrayBuffer, settings) {
         notes: songNotes,
         layer_channel_map: layerChannelMap,
         // 通道显示名 (供片段轨道命名等上层使用)
-        channel_names: chBaseNames
+        channel_names: chBaseNames,
+        // MIDI -> NBS 坐标换算元信息 (供上层做基于 MIDI 的分析, 如重复片段分割)
+        _midi_meta: {
+            silent_offset: silentOffset,
+            delta_per_tick: deltaPerTick,
+            ticks_per_beat: ticksPerBeat,
+            nbs_ticks_per_grid: nbsTicksPerGrid
+        }
     };
 }
 
@@ -2701,6 +2755,7 @@ var NBSClient = {
     GM_PROGRAM_TABLE: GM_PROGRAM_TABLE,
     GM_FITTING_SLOTS: GM_FITTING_SLOTS,
     GM_SUSTAIN_PROGRAMS: GM_SUSTAIN_PROGRAMS,
+    GM_LONG_TAIL_PROGRAMS: GM_LONG_TAIL_PROGRAMS,
     DRUM_NOTE_TABLE: DRUM_NOTE_TABLE,
     INSTRUMENT_NAMES: INSTRUMENT_NAMES
 };

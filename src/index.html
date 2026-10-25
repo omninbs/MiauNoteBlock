@@ -22,7 +22,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="static/css/style.css?v=20261018v">
+    <link rel="stylesheet" href="static/css/style.css?v=20261025l">
 </head>
 <body>
 
@@ -191,6 +191,11 @@
             </div>
             <!-- 片段编辑: 右键菜单 -->
             <div class="segment-context-menu" id="segment-context-menu" style="display:none;"></div>
+            <!-- 片段重命名浮层 (悬浮输入框) -->
+            <div class="seg-rename-pop" id="seg-rename-pop" style="display:none;">
+                <input type="text" class="seg-rename-input" id="seg-rename-input" maxlength="32"
+                       placeholder="片段名称" autocomplete="off" spellcheck="false">
+            </div>
             <!-- 工具条 -->
             <div class="tool-bar" id="tool-bar">
                 <button class="tool-btn active" data-tool="default" title="默认工具 (D)"><i class="fa-solid fa-arrow-pointer"></i></button>
@@ -667,8 +672,8 @@
                         <div class="settings-row settings-inline-row">
                             <label class="settings-label" for="settings-segment-preview-mode">片段音符预览</label>
                             <select id="settings-segment-preview-mode" class="settings-control">
-                                <option value="track" selected>根据轨道位置</option>
-                                <option value="pitch">根据音调大小</option>
+                                <option value="track">根据轨道位置</option>
+                                <option value="pitch" selected>根据音调大小</option>
                             </select>
                         </div>
                         <div class="settings-row">
@@ -1131,6 +1136,7 @@
                 <button class="midi-tab active" data-tab="midi-basic">基本设置</button>
                 <button class="midi-tab" data-tab="midi-tracks">音轨</button>
                 <button class="midi-tab" data-tab="midi-timbre">音色拟合</button>
+                <button class="midi-tab" data-tab="midi-post">后处理</button>
             </div>
 
             <!-- ======= 标签页内容区域 ======= -->
@@ -1142,7 +1148,6 @@
                         <section class="midi-group">
                             <h5 class="midi-group-title">轨道处理</h5>
                             <div class="midi-row">
-                                <label class="midi-check"><input type="checkbox" id="midi-remove-silent" checked><span>移除无音符轨道</span></label>
                                 <label class="midi-check"><input type="checkbox" id="midi-name-layers" checked><span>自动命名轨道</span></label>
                             </div>
                             <div class="midi-row midi-row-sub">
@@ -1151,9 +1156,6 @@
                                     <label class="midi-choice-item"><input type="radio" name="midi-name-mode" value="patches" checked><span>通道名</span></label>
                                     <label class="midi-choice-item"><input type="radio" name="midi-name-mode" value="channels"><span>通道号</span></label>
                                 </div>
-                            </div>
-                            <div class="midi-row">
-                                <label class="midi-check"><input type="checkbox" id="midi-tempo-changes"><span>导入速度变化事件</span></label>
                             </div>
                         </section>
 
@@ -1218,7 +1220,7 @@
                         </section>
 
                         <section class="midi-group">
-                            <h5 class="midi-group-title">延音与清理</h5>
+                            <h5 class="midi-group-title">延音</h5>
                             <div class="midi-row">
                                 <span class="midi-row-label">延音处理</span>
                                 <select id="midi-keep-note-length" class="midi-control">
@@ -1228,32 +1230,6 @@
                                 </select>
                                 <button class="midi-mini-btn" id="midi-sustain-tracks-btn" style="display:none;">选择轨道</button>
                                 <span id="midi-sustain-tracks-count" class="midi-hint-text" style="display:none;"></span>
-                            </div>
-                            <div class="midi-row midi-row-checks">
-                                <label class="midi-check">
-                                    <input type="checkbox" id="midi-dedupe-notes">
-                                    <span>消除重复音符</span>
-                                    <i class="fa-solid fa-circle-question midi-help" title="删除同一时间中音色和音调完全相同的重复音符"></i>
-                                </label>
-                                <label class="midi-check">
-                                    <input type="checkbox" id="midi-dedupe-reorder" checked>
-                                    <span>重排序音符</span>
-                                    <i class="fa-solid fa-circle-question midi-help" title="删除重复音符后，将下方相邻轨道中孤立的连续音符向上移动填补空洞"></i>
-                                </label>
-                            </div>
-                        </section>
-
-                        <section class="midi-group">
-                            <h5 class="midi-group-title">工程结构</h5>
-                            <div class="midi-row">
-                                <label class="midi-check">
-                                    <input type="checkbox" id="midi-auto-split-segments" checked>
-                                    <span>自动分割片段</span>
-                                    <i class="fa-solid fa-circle-question midi-help" title="按 MIDI 通道把导入结果拆成多条片段轨道（每个通道一条，打击乐合并为一条）；关闭则所有音符进入单一片段轨"></i>
-                                </label>
-                            </div>
-                            <div class="midi-row midi-row-sub">
-                                <span class="midi-hint-text">导入配置按文件内容记忆，刷新页面后恢复默认</span>
                             </div>
                         </section>
                     </div>
@@ -1381,6 +1357,63 @@
                                 <tbody id="midi-timbre-percussion-rows"></tbody>
                             </table>
                         </div>
+                    </div>
+                </div>
+
+                <!-- 后处理面板 -->
+                <div class="midi-tab-panel" id="midi-tab-post">
+                    <div class="midi-settings">
+                        <section class="midi-group">
+                            <h5 class="midi-group-title">片段结构</h5>
+                            <div class="midi-row">
+                                <label class="midi-check">
+                                    <input type="checkbox" id="midi-auto-split-segments" checked>
+                                    <span>自动分割片段</span>
+                                    <i class="fa-solid fa-circle-question midi-help" title="按 MIDI 通道把导入结果拆成多条片段轨道（每个通道一条，打击乐合并为一条）；关闭则所有音符进入单一片段轨"></i>
+                                </label>
+                            </div>
+                            <div class="midi-row midi-row-sub">
+                                <label class="midi-check">
+                                    <input type="checkbox" id="midi-split-repeats" checked>
+                                    <span>查找并分割重复片段</span>
+                                    <i class="fa-solid fa-circle-question midi-help" title="在 MIDI 事件层分析旋律重复，并把每条片段轨道按小节切成多个循环块；内容相同的片段会得到相同名称（A/B/C…）。长音符不会被从中间断开"></i>
+                                </label>
+                            </div>
+                            <div class="midi-row midi-row-sub">
+                                <span class="midi-row-label">颗粒度等级</span>
+                                <select id="midi-repeat-granularity" class="midi-control">
+                                    <option value="small">小 · 最小 1 小节</option>
+                                    <option value="medium" selected>中 · 最小 2 小节</option>
+                                    <option value="large">大 · 最小 4 小节</option>
+                                </select>
+                                <i class="fa-solid fa-circle-question midi-help" title="控制允许的最小片段长度：小档更容易出现短片段，大档只保留较长的重复块。打击乐固定按 1 小节识别，不受此限制"></i>
+                            </div>
+                        </section>
+
+                        <section class="midi-group">
+                            <h5 class="midi-group-title">清理</h5>
+                            <div class="midi-row">
+                                <label class="midi-check"><input type="checkbox" id="midi-remove-silent" checked><span>移除无音符轨道</span></label>
+                            </div>
+                            <div class="midi-row midi-row-checks">
+                                <label class="midi-check">
+                                    <input type="checkbox" id="midi-dedupe-notes">
+                                    <span>消除重复音符</span>
+                                    <i class="fa-solid fa-circle-question midi-help" title="删除同一时间中音色和音调完全相同的重复音符"></i>
+                                </label>
+                                <label class="midi-check">
+                                    <input type="checkbox" id="midi-dedupe-reorder" checked>
+                                    <span>重排序音符</span>
+                                    <i class="fa-solid fa-circle-question midi-help" title="删除重复音符后，将下方相邻轨道中孤立的连续音符向上移动填补空洞"></i>
+                                </label>
+                            </div>
+                        </section>
+
+                        <section class="midi-group">
+                            <div class="midi-row">
+                                <span class="midi-hint-text">后处理按小节对齐切割；长音符不会被从中间断开；配置按文件内容记忆，刷新后恢复默认</span>
+                            </div>
+                        </section>
                     </div>
                 </div>
 
@@ -1627,25 +1660,27 @@
     }
 </script>
 <!-- nbs_client.js 必须在 api_client.js 之前加载 (api_client.js 引用 NBSClient 全局对象) -->
-<script src="static/js/nbs_client.js?v=20261018v"></script>
+<script src="static/js/nbs_client.js?v=20261025l"></script>
 <script src="static/js/compress_est.js?v=20260926b"></script>
 <script src="static/js/api_client.js?v=20260905a"></script>
 <script src="static/js/custom_dropdown.js?v=20261017d"></script>
-<script src="static/js/i18n.js?v=20261018v"></script>
+<script src="static/js/i18n.js?v=20261025l"></script>
 <script src="static/js/audio_engine.js?v=20260919c"></script>
 <script src="static/js/custom_instruments.js?v=20260905a"></script>
 <script src="static/js/audio_fix_utils.js?v=20260905a"></script>
 <script src="static/js/sf3_player.js?v=20260808a"></script>
 <script src="static/js/spessa_player.js?v=20260918a"></script>
 <script src="static/js/soundfont_loader.js?v=20260808b"></script>
-<script src="static/js/piano_roll.js?v=20261018v"></script>
+<script src="static/js/piano_roll.js?v=20261025l"></script>
 <!-- 本地化第三方库: ZIP 打包 (jszip) / MP3 编码 (lamejs) -->
 <script src="static/vendor/jszip.min.js?v=20260905a"></script>
 <script src="static/vendor/lame.min.js?v=20260905a"></script>
 <!-- 离线渲染引擎: audio_render.js 必须在 main.js 之前加载 -->
 <script src="static/js/render_jsmix.js?v=20260906e"></script>
 <script src="static/js/audio_render.js?v=20260919c"></script>
-<script src="static/js/main.js?v=20261018v"></script>
+<!-- MIDI 重复片段分割 (MIDI 事件层分析), 必须在 main.js 之前加载 -->
+<script src="static/js/repeat_split.js?v=20261025l"></script>
+<script src="static/js/main.js?v=20261025l"></script>
 
 <script>
 // 桌面应用（含 MSIX 安装版）内：外部链接交给系统默认浏览器打开。

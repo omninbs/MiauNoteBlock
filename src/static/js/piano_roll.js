@@ -107,11 +107,11 @@
         laneEven: '#1b1f24',        // 偶数轨道
         laneOdd: '#171b20',         // 奇数轨道
         divider: 'rgba(255,255,255,0.07)',   // 轨道/分割分隔线
-        block: '#272d34',           // 片段块
-        blockSelected: '#333b44',   // 选中片段块
-        blockBorder: 'rgba(255,255,255,0.12)',
+        block: '#2a3138',           // 片段块 (略提亮, 与底色拉开层次)
+        blockSelected: '#364049',   // 选中片段块
+        blockBorder: 'rgba(140,170,200,0.55)',     // 未选中边框 (冷蓝灰, 明显可辨)
         blockBorderSelected: '#ffffff',
-        chip: 'rgba(0,0,0,0.45)',   // 片段名称底色
+        chip: 'rgba(0,0,0,0.55)',   // 片段名称底色
         text: '#e4e8ec',            // 主要文字
         textDim: '#98a2ac',         // 次要文字
         textFaint: '#6d7680',       // 提示文字
@@ -328,9 +328,10 @@
         // 音符缩略图纵轴映射: 'pitch' 按音高 / 'track' 按轨道位置
         this.timelineMapMode = 'track';
         // 从设置直接恢复, 避免设置界面初始化顺序导致预览模式退回默认值
-        this.segmentPreviewMode = 'track';
+        // 默认按音调显示 (更能反映旋律走向); 用户显式选择"根据轨道位置"才用 track
+        this.segmentPreviewMode = 'pitch';
         try {
-            if (localStorage.getItem('segment_preview_mode') === 'pitch') this.segmentPreviewMode = 'pitch';
+            if (localStorage.getItem('segment_preview_mode') === 'track') this.segmentPreviewMode = 'track';
         } catch (e) {}
         // NBS 模式下的片段可视化: 轨道分组横线 (默认开) / 片段边界竖线 (默认关)
         this.showSegmentLaneDividers = true;
@@ -1702,27 +1703,48 @@
         ctx.fill();
         // 缩略图
         this._segDrawThumb(ctx, seg, x0, x1, top, hh, staleThumb);
-        // 边框: 选中为白色高亮, 未选中为中性细边
+        // 边框: 选中为白色高亮, 未选中为冷蓝灰细边 (明显可辨)
         ctx.strokeStyle = selected ? SEG_THEME.blockBorderSelected : SEG_THEME.blockBorder;
-        ctx.lineWidth = selected ? 2 : 1;
+        ctx.lineWidth = selected ? 2 : 1.25;
         this._segRoundRect(ctx, x0 + 0.5, top + 0.5, Math.max(2, x1 - x0 - 1), hh - 1, 4);
         ctx.stroke();
-        // 名称 + 时长
-        if (hh >= 34 && (x1 - x0) > 46) {
-            ctx.save();
-            ctx.beginPath();
-            ctx.rect(x0 + 4, top, Math.max(0, x1 - x0 - 8), hh);
-            ctx.clip();
-            ctx.fillStyle = SEG_THEME.chip;
-            var label = (seg.name || '片段') + '  ' + Math.max(1, seg.end - seg.start) + 't';
-            ctx.font = '11px "Segoe UI", sans-serif';
-            var tw = ctx.measureText(label).width + 10;
-            this._segRoundRect(ctx, x0 + 4, top + 4, tw, 15, 4);
-            ctx.fill();
-            ctx.fillStyle = SEG_THEME.text;
-            ctx.textBaseline = 'middle';
-            ctx.fillText(label, x0 + 9, top + 12);
-            ctx.restore();
+        // 名称 + 时长: 极窄片段不显示; 放不下时截断并加省略号
+        if (hh >= 34) {
+            var blockW = x1 - x0;
+            var padX = 4;
+            var labelMaxW = blockW - padX * 2 - 6;   // 留出左右内边距
+            if (labelMaxW >= 8) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(x0 + 2, top, Math.max(0, blockW - 4), hh);
+                ctx.clip();
+
+                ctx.font = '11px "Segoe UI", sans-serif';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+
+                var fullLabel = (seg.name || '片段') + '  ' + Math.max(1, seg.end - seg.start) + 't';
+                var label = fullLabel;
+                if (ctx.measureText(label).width > labelMaxW) {
+                    // 二分查找最长可容纳前缀, 再补省略号 (避免逐字符反复测量)
+                    var lo = 0, hi = label.length;
+                    while (lo < hi) {
+                        var mid = Math.ceil((lo + hi) / 2);
+                        if (ctx.measureText(label.slice(0, mid) + '…').width <= labelMaxW) lo = mid;
+                        else hi = mid - 1;
+                    }
+                    label = label.slice(0, lo) + '…';
+                }
+
+                // 背景宽度严格贴合文字 (左右各 padX)
+                var tw = ctx.measureText(label).width + padX * 2;
+                ctx.fillStyle = SEG_THEME.chip;
+                this._segRoundRect(ctx, x0 + 2, top + 4, tw, 15, 4);
+                ctx.fill();
+                ctx.fillStyle = SEG_THEME.text;
+                ctx.fillText(label, x0 + 2 + padX, top + 12);
+                ctx.restore();
+            }
         }
         // 选中: 左右端点手柄
         if (selected && (x1 - x0) > 18) {
@@ -1895,7 +1917,9 @@
     // 分割线: 所有模式下常驻显示 (青色虚线, 与播放头红色实线区分)
     // 拖动片段端点/整体时, 使用拖拽预览位置, 使分割线同步跟随
     PianoRoll.prototype._drawSegmentMarkers = function(ctx, w, pw) {
-        // 片段边界竖线默认关闭 (设置项可开)
+        // 片段编辑模式不显示边界虚线 (片段块本身已有清晰边框, 虚线会干扰缩略图)
+        if (this.segmentsEditMode) return;
+        // NBS 模式下的片段边界竖线默认关闭 (设置项可开)
         if (!this.showSegmentBoundaries) return;
         var list = this.segments || [];
         if (!list.length) return;
@@ -6595,42 +6619,65 @@
         ctx.fillRect(0, rulerTop, pw, Math.max(1, rb.height));
 
         // 刻度: 按像素密度自适应稀疏化 (极小时不再逐 tick 绘制, 避免糊成一片)
+        // 三级刻度: 主刻度(带数字) / 中刻度(中等长度线) / 次刻度(短小线)
+        // 类似刻度尺: 主刻度对应"大格", 中刻度对应"中格", 次刻度对应"小格"
         var cellW = cfg.cellW * this._zoomX();
         var tickStart = Math.floor(this.scrollX / cellW);
         var tickEnd = Math.ceil((this.scrollX + w - pw) / cellW);
 
-        // 主刻度步长: 保证相邻标签间距不小于 ~72px, 从 2 的幂序列中选取
-        var STEPS = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096];
-        var majorStep = STEPS[STEPS.length - 1];
-        for (var si = 0; si < STEPS.length; si++) {
-            if (STEPS[si] * cellW >= 72) { majorStep = STEPS[si]; break; }
+        // 主刻度步长: 保证相邻标签间距不小于 ~80px, 优先选取"音乐友好"的值
+        // (NBS 标准 4 tick = 1 拍, 故步长倾向于 4 的倍数: 4/8/16/32...)
+        var MUSICAL_STEPS = [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096];
+        var majorStep = MUSICAL_STEPS[MUSICAL_STEPS.length - 1];
+        for (var si = 0; si < MUSICAL_STEPS.length; si++) {
+            if (MUSICAL_STEPS[si] * cellW >= 80) { majorStep = MUSICAL_STEPS[si]; break; }
         }
-        // 次刻度: 主刻度的 1/4, 且像素间距不小于 8px
-        var minorStep = Math.max(1, majorStep / 4);
-        while (minorStep > 1 && minorStep * cellW < 8) minorStep = Math.max(1, minorStep / 2);
+        // 极大缩放 (每 tick 像素很多) 时允许更小的主刻度
+        if (cellW >= 80) majorStep = 4;
+        if (cellW >= 160) majorStep = 2;
+        if (cellW >= 320) majorStep = 1;
 
-        // 次刻度 (淡色短线, 不显示文字)
-        ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+        // 中刻度: 主刻度的 1/4 (主=16 时中=4, 主=32 时中=8)
+        var midStep = Math.max(1, Math.floor(majorStep / 4));
+        // 次刻度: 中刻度的 1/4, 但像素间距不小于 6px
+        var minorStep = Math.max(1, Math.floor(midStep / 4));
+        while (minorStep > 1 && minorStep * cellW < 6) minorStep = Math.max(1, Math.floor(minorStep / 2));
+
+        // 次刻度 (最短小线, 最淡)
+        ctx.strokeStyle = 'rgba(255,255,255,0.07)';
         ctx.lineWidth = 0.5;
         for (var mt = Math.ceil(tickStart / minorStep) * minorStep; mt <= tickEnd; mt += minorStep) {
-            if (mt % majorStep === 0) continue;
+            if (mt % midStep === 0) continue;
             var mx = this._tickToScreen(mt);
             if (mx < pw || mx > w) continue;
             ctx.beginPath();
-            ctx.moveTo(mx, rulerBottom - 12);
-            ctx.lineTo(mx, rulerBottom - 6);
+            ctx.moveTo(mx, rulerBottom - 6);
+            ctx.lineTo(mx, rulerBottom - 3);
             ctx.stroke();
         }
 
-        // 主刻度 + 标签
+        // 中刻度 (中等长度线, 中等亮度)
+        ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+        ctx.lineWidth = 0.75;
+        for (var mt2 = Math.ceil(tickStart / midStep) * midStep; mt2 <= tickEnd; mt2 += midStep) {
+            if (mt2 % majorStep === 0) continue;
+            var mx2 = this._tickToScreen(mt2);
+            if (mx2 < pw || mx2 > w) continue;
+            ctx.beginPath();
+            ctx.moveTo(mx2, rulerBottom - 9);
+            ctx.lineTo(mx2, rulerBottom - 3);
+            ctx.stroke();
+        }
+
+        // 主刻度 + 标签 (最长线, 最亮)
         for (var tk = Math.floor(tickStart / majorStep) * majorStep; tk <= tickEnd; tk += majorStep) {
             var x = this._tickToScreen(tk);
             if (x < pw || x > w) continue;
-            ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+            ctx.strokeStyle = 'rgba(255,255,255,0.28)';
             ctx.lineWidth = 1.5;
             ctx.beginPath();
             ctx.moveTo(x, rulerTop);
-            ctx.lineTo(x, rulerBottom - 6);
+            ctx.lineTo(x, rulerBottom - 3);
             ctx.stroke();
 
             ctx.fillStyle = this.segmentsEditMode ? SEG_THEME.textDim : '#aaa';

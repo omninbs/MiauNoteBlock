@@ -6,53 +6,54 @@
     N.shared = N.shared || {};
 
     // ---- 跨模块依赖 ----
-    var _appDialogStack = N._appDialogStack;
-    function assistPanelVisible() { return N.assistPanelVisible.apply(this, arguments); }
-    function updateAssistPanelForTool() { return N.updateAssistPanelForTool.apply(this, arguments); }
+    var state = N.state;
     function $() { return N.$.apply(this, arguments); }
-    function openPianoKeyboard() { return N.openPianoKeyboard.apply(this, arguments); }
-    function updatePianoKeyboardHighlight() { return N.updatePianoKeyboardHighlight.apply(this, arguments); }
+    var _appDialogStack = N._appDialogStack;
+    function addNoteToIndex() { return N.addNoteToIndex.apply(this, arguments); }
+    function assistPanelVisible() { return N.assistPanelVisible.apply(this, arguments); }
+    function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
+    function closeAssistPanel() { return N.closeAssistPanel.apply(this, arguments); }
+    function closeFindPanel() { return N.closeFindPanel.apply(this, arguments); }
+    function copyLyricClip() { return N.copyLyricClip.apply(this, arguments); }
+    function deleteLyricClip() { return N.deleteLyricClip.apply(this, arguments); }
+    function findPanelVisible() { return N.findPanelVisible.apply(this, arguments); }
     function findTrackByLayer() { return N.findTrackByLayer.apply(this, arguments); }
+    function getPianoKeyFromKeyboardEvent() { return N.getPianoKeyFromKeyboardEvent.apply(this, arguments); }
+    function getSelectedLyricClip() { return N.getSelectedLyricClip.apply(this, arguments); }
+    function handleArrowKey() { return N.handleArrowKey.apply(this, arguments); }
+    function handleDuplicate() { return N.handleDuplicate.apply(this, arguments); }
+    function handlePaste() { return N.handlePaste.apply(this, arguments); }
+    function handlePlayToggle() { return N.handlePlayToggle.apply(this, arguments); }
+    function handleSave() { return N.handleSave.apply(this, arguments); }
+    function handleStop() { return N.handleStop.apply(this, arguments); }
+    function hideContextMenu() { return N.hideContextMenu.apply(this, arguments); }
+    function isAllowedPianoEditShortcut() { return N.isAllowedPianoEditShortcut.apply(this, arguments); }
+    function isEditableTarget() { return N.isEditableTarget.apply(this, arguments); }
+    function markDirty() { return N.markDirty.apply(this, arguments); }
+    function openFindPanel() { return N.openFindPanel.apply(this, arguments); }
+    function openPianoKeyboard() { return N.openPianoKeyboard.apply(this, arguments); }
+    function pasteLyricClips() { return N.pasteLyricClips.apply(this, arguments); }
+    function performRedo() { return N.performRedo.apply(this, arguments); }
+    function performUndo() { return N.performUndo.apply(this, arguments); }
     function pushUndo() { return N.pushUndo.apply(this, arguments); }
     function removeNoteFromIndex() { return N.removeNoteFromIndex.apply(this, arguments); }
-    function addNoteToIndex() { return N.addNoteToIndex.apply(this, arguments); }
     function schedulePerformanceUIUpdate() { return N.schedulePerformanceUIUpdate.apply(this, arguments); }
-    function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
-    function updateTrackPanelUI() { return N.updateTrackPanelUI.apply(this, arguments); }
-    function updateNoteCount() { return N.updateNoteCount.apply(this, arguments); }
-    function markDirty() { return N.markDirty.apply(this, arguments); }
-    function hideContextMenu() { return N.hideContextMenu.apply(this, arguments); }
-    function isEditableTarget() { return N.isEditableTarget.apply(this, arguments); }
-    function segmentDelete() { return N.segmentDelete.apply(this, arguments); }
-    function segmentTrimLeft() { return N.segmentTrimLeft.apply(this, arguments); }
-    function segmentTrimRight() { return N.segmentTrimRight.apply(this, arguments); }
-    function segmentSplit() { return N.segmentSplit.apply(this, arguments); }
     function segZoomAxis() { return N.segZoomAxis.apply(this, arguments); }
     function segmentCopy() { return N.segmentCopy.apply(this, arguments); }
+    function segmentDelete() { return N.segmentDelete.apply(this, arguments); }
     function segmentPaste() { return N.segmentPaste.apply(this, arguments); }
-    function getPianoKeyFromKeyboardEvent() { return N.getPianoKeyFromKeyboardEvent.apply(this, arguments); }
-    function isAllowedPianoEditShortcut() { return N.isAllowedPianoEditShortcut.apply(this, arguments); }
-    function togglePerformanceRecording() { return N.togglePerformanceRecording.apply(this, arguments); }
-    function handlePlayToggle() { return N.handlePlayToggle.apply(this, arguments); }
-    function handleStop() { return N.handleStop.apply(this, arguments); }
-    function closeAssistPanel() { return N.closeAssistPanel.apply(this, arguments); }
-    function findPanelVisible() { return N.findPanelVisible.apply(this, arguments); }
-    function closeFindPanel() { return N.closeFindPanel.apply(this, arguments); }
-    function getSelectedLyricClip() { return N.getSelectedLyricClip.apply(this, arguments); }
-    function deleteLyricClip() { return N.deleteLyricClip.apply(this, arguments); }
-    function copyLyricClip() { return N.copyLyricClip.apply(this, arguments); }
-    function pasteLyricClips() { return N.pasteLyricClips.apply(this, arguments); }
-    function handlePaste() { return N.handlePaste.apply(this, arguments); }
-    function performUndo() { return N.performUndo.apply(this, arguments); }
-    function performRedo() { return N.performRedo.apply(this, arguments); }
+    function segmentSplit() { return N.segmentSplit.apply(this, arguments); }
+    function segmentTrimLeft() { return N.segmentTrimLeft.apply(this, arguments); }
+    function segmentTrimRight() { return N.segmentTrimRight.apply(this, arguments); }
     function tabSaveAll() { return N.tabSaveAll.apply(this, arguments); }
-    function handleSave() { return N.handleSave.apply(this, arguments); }
-    function handleDuplicate() { return N.handleDuplicate.apply(this, arguments); }
-    function openFindPanel() { return N.openFindPanel.apply(this, arguments); }
     function toggleMuteSelectedTrack() { return N.toggleMuteSelectedTrack.apply(this, arguments); }
+    function togglePerformanceRecording() { return N.togglePerformanceRecording.apply(this, arguments); }
     function toggleSoloSelectedTrack() { return N.toggleSoloSelectedTrack.apply(this, arguments); }
-    function handleArrowKey() { return N.handleArrowKey.apply(this, arguments); }
+    function updateAssistPanelForTool() { return N.updateAssistPanelForTool.apply(this, arguments); }
+    function updateNoteCount() { return N.updateNoteCount.apply(this, arguments); }
+    function updatePianoKeyboardHighlight() { return N.updatePianoKeyboardHighlight.apply(this, arguments); }
     function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
+    function updateTrackPanelUI() { return N.updateTrackPanelUI.apply(this, arguments); }
 
 
     function switchTool(tool) {
@@ -1230,11 +1231,6 @@
     N.handlePianoKeyDown = handlePianoKeyDown;
     N.handlePianoKeyUp = handlePianoKeyUp;
     N.showPerformanceSetupDialog = showPerformanceSetupDialog;
-    N._midiAccess = _midiAccess;
-    N._midiInputHandler = _midiInputHandler;
-    N._midiPerformanceActiveNotes = _midiPerformanceActiveNotes;
-    N._midiPerformanceHeldNotes = _midiPerformanceHeldNotes;
-    N._midiPerformanceSustain = _midiPerformanceSustain;
     N.midiNoteToNbsKey = midiNoteToNbsKey;
     N.midiVelocityToNbsVelocity = midiVelocityToNbsVelocity;
     N.getMidiMessageKey = getMidiMessageKey;
@@ -1266,4 +1262,9 @@
     N.closeTransientFloats = closeTransientFloats;
     N.initModalFloatGuard = initModalFloatGuard;
     N.initKeyboardShortcuts = initKeyboardShortcuts;
+    N._midiAccess = _midiAccess;
+    N._midiInputHandler = _midiInputHandler;
+    N._midiPerformanceActiveNotes = _midiPerformanceActiveNotes;
+    N._midiPerformanceHeldNotes = _midiPerformanceHeldNotes;
+    N._midiPerformanceSustain = _midiPerformanceSustain;
 })(window.WebNBS);

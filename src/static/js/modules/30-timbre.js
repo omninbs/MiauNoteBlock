@@ -7,26 +7,28 @@
 
     // ---- 跨模块依赖 ----
     var state = N.state;
-    var _midiTrackPlayback = N._midiTrackPlayback;
-    var MIDI_NOTE_NAMES = N.MIDI_NOTE_NAMES;
+    function $() { return N.$.apply(this, arguments); }
     var INSTRUMENT_NAMES = N.INSTRUMENT_NAMES;
+    var MIDI_NOTE_NAMES = N.MIDI_NOTE_NAMES;
+    var _midiPrefsByHash = N._midiPrefsByHash;
+    var _midiTrackPlayback = N._midiTrackPlayback;
+    function buildMidiConfigSnapshot() { return N.buildMidiConfigSnapshot.apply(this, arguments); }
+    function escapeHTML() { return N.escapeHTML.apply(this, arguments); }
+    function fillChannelInstrumentNames() { return N.fillChannelInstrumentNames.apply(this, arguments); }
+    function getInstName() { return N.getInstName.apply(this, arguments); }
+    function getTinySynth() { return N.getTinySynth.apply(this, arguments); }
+    function getValidKeyRange() { return N.getValidKeyRange.apply(this, arguments); }
+    function loadSubstituteConfig() { return N.loadSubstituteConfig.apply(this, arguments); }
+    function prepareTinySynthProgram() { return N.prepareTinySynthProgram.apply(this, arguments); }
+    function saveMidiConfigForHash() { return N.saveMidiConfigForHash.apply(this, arguments); }
+    function showMidiNotice() { return N.showMidiNotice.apply(this, arguments); }
+    function stopTinySynthAll() { return N.stopTinySynthAll.apply(this, arguments); }
+    function updateChannelOctaveForMode() { return N.updateChannelOctaveForMode.apply(this, arguments); }
+    function updateChannelRangeAfter() { return N.updateChannelRangeAfter.apply(this, arguments); }
     function updateMidiTrackPlayerButtons() { return N.updateMidiTrackPlayerButtons.apply(this, arguments); }
     function updateMidiTrackProgressUI() { return N.updateMidiTrackProgressUI.apply(this, arguments); }
-    function getTinySynth() { return N.getTinySynth.apply(this, arguments); }
-    function stopTinySynthAll() { return N.stopTinySynthAll.apply(this, arguments); }
-    function getValidKeyRange() { return N.getValidKeyRange.apply(this, arguments); }
-    function $() { return N.$.apply(this, arguments); }
-    function updateChannelRangeAfter() { return N.updateChannelRangeAfter.apply(this, arguments); }
-    function showMidiNotice() { return N.showMidiNotice.apply(this, arguments); }
-    function prepareTinySynthProgram() { return N.prepareTinySynthProgram.apply(this, arguments); }
-    function fillChannelInstrumentNames() { return N.fillChannelInstrumentNames.apply(this, arguments); }
-    function updateTimbreFittingDisabled() { return N.updateTimbreFittingDisabled.apply(this, arguments); }
-    function escapeHTML() { return N.escapeHTML.apply(this, arguments); }
-    function getInstName() { return N.getInstName.apply(this, arguments); }
-    function updateChannelOctaveForMode() { return N.updateChannelOctaveForMode.apply(this, arguments); }
     function updateOctaveModeHint() { return N.updateOctaveModeHint.apply(this, arguments); }
-    function loadSubstituteConfig() { return N.loadSubstituteConfig.apply(this, arguments); }
-    function saveMidiConfigForHash() { return N.saveMidiConfigForHash.apply(this, arguments); }
+    function updateTimbreFittingDisabled() { return N.updateTimbreFittingDisabled.apply(this, arguments); }
 
 
     function stopMidiTrackPlayback(reset) {
@@ -1373,25 +1375,19 @@ function buildTimbreFittingRows(info) {
     N.stopMidiTrackPlayback = stopMidiTrackPlayback;
     N.stopAllPlaybackNotes = stopAllPlaybackNotes;
     N.bindMidiOctaveKeyChange = bindMidiOctaveKeyChange;
-    N._timbrePreviewCtx = _timbrePreviewCtx;
-    N._timbrePreviewNodes = _timbrePreviewNodes;
-    N._activePreviewBtn = _activePreviewBtn;
+    N.getTimbrePreviewCtx = getTimbrePreviewCtx;
     N.stopTimbrePreview = stopTimbrePreview;
     N.previewTimbreNote = previewTimbreNote;
     N.previewMidiNote = previewMidiNote;
     N.previewMidiNoteTinySynth = previewMidiNoteTinySynth;
     N.previewMidiPercussion = previewMidiPercussion;
     N.previewMidiPercussionTinySynth = previewMidiPercussionTinySynth;
-    N._timbreReverbNode = _timbreReverbNode;
     N.getTimbreReverbNode = getTimbreReverbNode;
     N.previewTimbreChordWithReverb = previewTimbreChordWithReverb;
     N.getInstrumentIconHtml = getInstrumentIconHtml;
     N.emptyTimbreFittingSaved = emptyTimbreFittingSaved;
     N.getSavedFittingSlots = getSavedFittingSlots;
     N.getSavedFittingVolumes = getSavedFittingVolumes;
-    N.FITTING_LEVEL_KEY = FITTING_LEVEL_KEY;
-    N.FITTING_LEVEL_CAP = FITTING_LEVEL_CAP;
-    N._fittingLevel = _fittingLevel;
     N.loadFittingLevel = loadFittingLevel;
     N.saveFittingLevel = saveFittingLevel;
     N.computeFittingSlots = computeFittingSlots;
@@ -1399,8 +1395,6 @@ function buildTimbreFittingRows(info) {
     N.initFittingLevelControl = initFittingLevelControl;
     N.buildTimbreFittingRows = buildTimbreFittingRows;
     N.buildTimbreRowsForTbody = buildTimbreRowsForTbody;
-    N._slotVolDrag = _slotVolDrag;
-    N._slotVolDocBound = _slotVolDocBound;
     N.clampSlotVolume = clampSlotVolume;
     N.bindTimbreSlotVolumeInputs = bindTimbreSlotVolumeInputs;
     N.ensureSlotVolumeDocListeners = ensureSlotVolumeDocListeners;
@@ -1417,4 +1411,14 @@ function buildTimbreFittingRows(info) {
     N.collectMidiSettings = collectMidiSettings;
     N.computeMidiFileHash = computeMidiFileHash;
     N.getMidiConfigForHash = getMidiConfigForHash;
+    N._timbrePreviewCtx = _timbrePreviewCtx;
+    N._timbrePreviewNodes = _timbrePreviewNodes;
+    N._timbrePreviewTimeout = _timbrePreviewTimeout;
+    N._activePreviewBtn = _activePreviewBtn;
+    N._timbreReverbNode = _timbreReverbNode;
+    N.FITTING_LEVEL_KEY = FITTING_LEVEL_KEY;
+    N.FITTING_LEVEL_CAP = FITTING_LEVEL_CAP;
+    N._fittingLevel = _fittingLevel;
+    N._slotVolDrag = _slotVolDrag;
+    N._slotVolDocBound = _slotVolDocBound;
 })(window.WebNBS);

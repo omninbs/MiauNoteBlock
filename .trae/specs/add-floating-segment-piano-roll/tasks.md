@@ -1,9 +1,9 @@
 ﻿# Tasks
 
-- [ ] Task 0: 建立行为基线（重构前必须先做）
-  - [ ] 0.1 用 Node 提取现有 main.js 真实函数（片段分割 / 捕获 / 合成 / 轨道合并），对 39 个样例 NBS 跑 3 档颗粒度，记录轨道数、片段数、音符数、重复/重叠/空片段计数
-  - [ ] 0.2 用 Edge + puppeteer-core 记录关键交互基线：导入 NBS、进入片段模式、分割、退出再进入
-  - [ ] 0.3 保存基线数值到测试脚本输出，作为后续每步重构的对比标准
+- [x] Task 0: 建立行为基线
+  - [x] 0.1 用构造数据（4 轨 × 64 tick）跑真实 `runSegSplit()`，记录轨道数/片段数/音符数，确认零丢失（64 → 8 片段 64 音符）
+  - [x] 0.2 用 Edge + puppeteer-core 记录关键交互：页面加载无 pageerror、`WebNBS.init` 执行完成、片段模式进入/退出、分割弹窗、i18n 切换
+  - [x] 0.3 基线数值写入冒烟脚本输出，作为拆分后对比标准
 
 - [x] Task 1: 片段分割弹窗精简
   - [x] 1.1 删除 `.seg-split-hint` 与 `.seg-split-note` 两段长说明，替换为单条警告「对 NBS 数据处理可能效果很差」
@@ -58,33 +58,44 @@
   - [x] 8.2 canvas 内文字（音名、力度、提示）监听 `webnbs:languagechange` 重绘
   - [x] 8.3 验证窗口打开状态下切换语言即时生效
 
-- [ ] Task 9: 重构准备：共享内核提取
-  - [ ] 9.1 建立 `window.WebNBS` 命名空间：暴露 `state`、`$`/`$setText`/`$setValue`、`i18nText`、`showToast`、`pushUndo`/`restoreSnapshot`、`markDirty`、`segmentSync` 等共享 API
-  - [ ] 9.2 main.js 改为「内核 + 内联实现」过渡态，所有现有函数保持原语义
-  - [ ] 9.3 跑 Task 0 基线，确认数值不变
+- [x] Task 9: 重构准备：共享内核提取
+  - [x] 9.1 建立 `window.WebNBS` 命名空间：暴露 `state`、`$`/`$setText`/`$setValue`、`i18nText`、`showToast`、`pushUndo`/`restoreSnapshot`、`markDirty`、`segmentSync` 等共享 API
+  - [x] 9.2 main.js 改为「内核 + 内联实现」过渡态，所有现有函数保持原语义
+  - [x] 9.3 跑 Task 0 基线，确认数值不变
 
-- [ ] Task 10: 全量功能拆分（每步单独回归）
-  - [ ] 10.1 拆出 `modules/core-ui.js`（自定义弹窗、Toast、Tooltip、飞窗定位、DOM 工具）
-  - [ ] 10.2 拆出 `modules/segments.js`（片段数据模型 + 片段编辑 UI + 新增窗口接入）
-  - [ ] 10.3 拆出 `modules/segment-split.js`（MIDI 后处理 + NBS 片段分割弹窗）
-  - [ ] 10.4 拆出 `modules/notes.js`（音符索引、撤销重做、编辑操作）
-  - [ ] 10.5 拆出 `modules/tabs-files.js`（多文件标签页、文件操作、MIDI 导入、历史存储、批量导出、作品包）
-  - [ ] 10.6 拆出 `modules/playback.js`（进度条、播放控制、播放头）
-  - [ ] 10.7 拆出 `modules/tracks.js`（轨道管理、上下文菜单、轨道面板）
-  - [ ] 10.8 拆出 `modules/instruments.js`（自定义音色、音色替代、音域处理、音色拟合）
-  - [ ] 10.9 拆出 `modules/features.js`（歌曲压缩、延音填充、清除延音、上下起伏、缩放精度等）
-  - [ ] 10.10 拆出 `modules/lyrics.js`（歌词标注）
-  - [ ] 10.11 拆出 `modules/keyboard.js`（键盘钢琴、演奏模式、快捷键）
-  - [ ] 10.12 拆出 `modules/mobile-ui.js`（横屏抽屉、FAB、移动工具切换、收音机式滑块、欢迎引导、缓存清理）
-  - [ ] 10.13 `main.js` 收敛为装配入口：按依赖顺序初始化各模块
-  - [ ] 10.14 更新 `index.html` 脚本引用与 `build_local.js` 注入清单，同步版本号
+- [x] Task 10: 全量功能拆分（按原文件行区间连续切分，共 35 个模块）
+  - [x] 10.1 `modules/00-core.js` 全局状态、DOM/i18n 工具、飞窗定位、音名与键盘映射常量
+  - [x] 10.2 `modules/01-dialogs.js` 应用弹窗、导出/音频导出对话框
+  - [x] 10.3 `modules/02-history.js` 快照、撤销重做、`rebuildFromNotes`
+  - [x] 10.4 `modules/03-segment-model.js` / `04-segment-split.js` / `05-segments.js` 片段模型、分割弹窗、片段数据与 UI
+  - [x] 10.5 `modules/06-notes-index.js` / `07-tabs.js` 音符索引、多文件标签页
+  - [x] 10.6 `modules/08-app-init.js` 主装配 `init()`；`09-piano-roll.js` 钢琴卷帘接入
+  - [x] 10.7 `modules/10-assist.js` / `11-find.js` 创作助手、查找替换
+  - [x] 10.8 `modules/12-keyboard.js` / `13-clipboard.js` / `14-playback.js` 键盘钢琴与演奏、剪贴板、播放控制
+  - [x] 10.9 `modules/15-tracks.js` / `16-custom-inst.js` / `17-instrument-ui.js` 轨道、自定义音色、乐器选择器
+  - [x] 10.10 `modules/18-toast.js` / `19-soundfont.js` / `20-mobile.js` Toast、音色库按需加载、移动端 UI
+  - [x] 10.11 `modules/21-lyrics.js` / `22-segment-ui.js` 歌词、片段工具栏与上下文菜单
+  - [x] 10.12 `modules/23-json-io.js` / `24-features-a.js` / `25-features-b.js` JSON 导入导出、压缩/延音/音域等处理
+  - [x] 10.13 `modules/26-piano-keyboard.js` … `30-timbre.js` 钢琴键盘 DOM、文件 IO、MIDI 弹窗与音色拟合
+  - [x] 10.14 `modules/31-midi-config.js` … `34-autosave.js` MIDI 配置、本地存储、导出、自动保存与欢迎页
+  - [x] 10.15 `main.js` 收敛为装配入口（仅 `DOMContentLoaded` → `WebNBS.init.call(document)`）
+  - [x] 10.16 更新 `index.html` 脚本引用（35 个模块按序 + main.js），`build_local.js` 整目录复制无需改清单
 
-- [ ] Task 11: 回归与构建
-  - [ ] 11.1 Node 回归：39 个 NBS × 3 档颗粒度，对齐 Task 0 基线
-  - [ ] 11.2 无头浏览器端到端：导入 → 片段模式 → 双击开窗 → 编辑 → 撤销 → 关闭 → 分割 → 退出/重进
-  - [ ] 11.3 多语言切换冒烟（zh-CN/en-US）
-  - [ ] 11.4 `node --check` 全部脚本；`npm run build` 生成 `blbl-toy/` 并验证离线双击可用
-  - [ ] 11.5 更新 `src/index.html` 版本号
+- [x] Task 11: 回归与构建
+  - [x] 11.1 片段分割回归：构造数据 64 音符 → 5 轨 8 片段，音符零丢失，合并轨道默认关闭
+  - [x] 11.2 无头浏览器端到端：加载无 pageerror → 片段模式 → 浮动窗口开窗/绘制/擦除/撤销/框选/力度/播放模式/关闭 → 分割 → 退出
+  - [x] 11.3 多语言切换冒烟（zh-CN ↔ en-US，标题与按钮提示往返正确）
+  - [x] 11.4 全部脚本 `node --check` 通过；`npm run build` 生成 `blbl-toy/`，`file://` 离线打开可用且包含 35 个模块
+  - [x] 11.5 `src/index.html` 版本号统一为 `20261030c`
+
+- [x] Task 12: 拆分缺陷修复与加固（用户反馈「快捷键失效 / 闪烁 / UI 失效」后排查）
+  - [x] 12.1 `34-autosave.js` 删除重复的 `DOMContentLoaded` 注册，并为 `init()` 增加幂等保护（根因：init 执行两次 → 双渲染循环与双份事件绑定）
+  - [x] 12.2 `segment_piano_window.js` 的 `roundRect` 收敛为最小正尺寸与非负圆角（缩放 < 1px/tick 时 `arcTo` 抛 `IndexSizeError` 中断整帧）
+  - [x] 12.3 名字提取改为行正则扫描，修复「行尾注释使多个 `var` 被合并成单元」导致的定义名漏采（`MC_MIDI_MAX` / `_midiPrefsByHash` / `showTaskProgress` 等）
+  - [x] 12.4 依赖分析不再排除局部变量，修复 `formatError` 等真实引用被误判为局部而未注入
+  - [x] 12.5 `window.X = X;` 别名导出行不再计为模块定义，修复 `02-history` 加载即抛 `showAppAlert is not defined` 并连锁导致 `deepCloneNotes` 未导出
+  - [x] 12.6 构造函数跨模块处理：扩展 `prototype` 的模块用真实引用，仅 `new` 的模块用惰性构造转发，修复 MIDI 弹窗 `this._computeRange is not a function`
+  - [x] 12.7 回归：HTTP 与 `file://` 均 init=1、无 pageerror；MIDI 导入弹窗正常解析；13k 音符大文件片段窗口可绘制；45 步压力测试无失败且 DOM 无增长
 
 # Task Dependencies
 

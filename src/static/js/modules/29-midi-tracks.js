@@ -6,17 +6,19 @@
     N.shared = N.shared || {};
 
     // ---- 跨模块依赖 ----
-    function MiniMidiRoll() { return N.MiniMidiRoll.apply(this, arguments); }
-    function getMidiTrackState() { return N.getMidiTrackState.apply(this, arguments); }
+    var state = N.state;
     function $() { return N.$.apply(this, arguments); }
+    var MiniMidiRoll = N.MiniMidiRoll;
+    var _midiTrackPlayback = N._midiTrackPlayback;
+    function ensureSoundfontOnDemand() { return N.ensureSoundfontOnDemand.apply(this, arguments); }
+    function extractTrackNotes() { return N.extractTrackNotes.apply(this, arguments); }
+    function getEffectiveMidiSource() { return N.getEffectiveMidiSource.apply(this, arguments); }
+    function getMidiTrackState() { return N.getMidiTrackState.apply(this, arguments); }
+    function getTinySynth() { return N.getTinySynth.apply(this, arguments); }
     function initMidiTrackStates() { return N.initMidiTrackStates.apply(this, arguments); }
     function setMidiTrackState() { return N.setMidiTrackState.apply(this, arguments); }
-    function extractTrackNotes() { return N.extractTrackNotes.apply(this, arguments); }
-    function stopMidiTrackPlayback() { return N.stopMidiTrackPlayback.apply(this, arguments); }
-    function getEffectiveMidiSource() { return N.getEffectiveMidiSource.apply(this, arguments); }
-    function ensureSoundfontOnDemand() { return N.ensureSoundfontOnDemand.apply(this, arguments); }
-    function getTinySynth() { return N.getTinySynth.apply(this, arguments); }
     function showMidiNotice() { return N.showMidiNotice.apply(this, arguments); }
+    function stopMidiTrackPlayback() { return N.stopMidiTrackPlayback.apply(this, arguments); }
 
 
     // 将像素 X 坐标转换为时间（用于点击跳转）
@@ -815,7 +817,7 @@
     N.renderAllMidiTrackRows = renderAllMidiTrackRows;
     N.buildMidiTrackRows = buildMidiTrackRows;
     N.bindMidiTrackButtons = bindMidiTrackButtons;
-    N._midiTrackMiniRolls = _midiTrackMiniRolls;
+    N.initMidiTrackMiniRolls = initMidiTrackMiniRolls;
     N.updateMidiTrackMiniRollsPlayhead = updateMidiTrackMiniRollsPlayhead;
     N.updateMidiTrackRollTime = updateMidiTrackRollTime;
     N.updateMidiTrackPlayerButtons = updateMidiTrackPlayerButtons;
@@ -833,4 +835,5 @@
     N.findProgramForChannel = findProgramForChannel;
     N.startMidiTrackFallback = startMidiTrackFallback;
     N.pauseMidiTrackPlayback = pauseMidiTrackPlayback;
+    N._midiTrackMiniRolls = _midiTrackMiniRolls;
 })(window.WebNBS);

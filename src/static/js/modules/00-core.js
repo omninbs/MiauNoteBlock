@@ -381,21 +381,11 @@
     // 全局唯一活动弹窗栈，支持嵌套
 
     // ---- 导出 ----
-    N.state = state;
-    N.$ = $;
-    N.$setText = $setText;
-    N.$setValue = $setValue;
-    N.i18nText = i18nText;
-    N.i18nKey = i18nKey;
-    N.WebNBSPositionFlyout = WebNBSPositionFlyout;
-    N.NBS_MIDI_OFFSET = NBS_MIDI_OFFSET;
-    N.PIANO_NOTE_NAMES = PIANO_NOTE_NAMES;
     N.nbsKeyToMidiNote = nbsKeyToMidiNote;
     N.getNbsKeyPitchLabel = getNbsKeyPitchLabel;
     N.getNbsKeyOctave = getNbsKeyOctave;
     N.getNbsKeyDisplayLabel = getNbsKeyDisplayLabel;
     N.getInstrumentNames = getInstrumentNames;
-    N.KEYBOARD_CODE_LABELS = KEYBOARD_CODE_LABELS;
     N.clampNbsKey = clampNbsKey;
     N.isNumpadCode = isNumpadCode;
     N.getShiftedKeyboardPianoKey = getShiftedKeyboardPianoKey;
@@ -406,4 +396,14 @@
     N.isEditableTarget = isEditableTarget;
     N.isAllowedPianoEditShortcut = isAllowedPianoEditShortcut;
     N.formatError = formatError;
+    N.state = state;
+    N.$ = $;
+    N.$setText = $setText;
+    N.$setValue = $setValue;
+    N.i18nText = i18nText;
+    N.i18nKey = i18nKey;
+    N.NBS_MIDI_OFFSET = NBS_MIDI_OFFSET;
+    N.PIANO_NOTE_NAMES = PIANO_NOTE_NAMES;
+    N.KEYBOARD_CODE_LABELS = KEYBOARD_CODE_LABELS;
+    N.WebNBSPositionFlyout = WebNBSPositionFlyout;
 })(window.WebNBS = window.WebNBS || {});

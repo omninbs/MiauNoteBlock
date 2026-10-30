@@ -8,14 +8,14 @@
     // ---- 跨模块依赖 ----
     var state = N.state;
     function $() { return N.$.apply(this, arguments); }
-    function findPanelVisible() { return N.findPanelVisible.apply(this, arguments); }
-    function closeFindPanel() { return N.closeFindPanel.apply(this, arguments); }
-    function openFindPanel() { return N.openFindPanel.apply(this, arguments); }
-    function showSustainFillAlert() { return N.showSustainFillAlert.apply(this, arguments); }
-    function applySustainFill() { return N.applySustainFill.apply(this, arguments); }
+    function applyArpeggioTracks() { return N.applyArpeggioTracks.apply(this, arguments); }
     function applyClearSustain() { return N.applyClearSustain.apply(this, arguments); }
     function applyPitchShift() { return N.applyPitchShift.apply(this, arguments); }
-    function applyArpeggioTracks() { return N.applyArpeggioTracks.apply(this, arguments); }
+    function applySustainFill() { return N.applySustainFill.apply(this, arguments); }
+    function closeFindPanel() { return N.closeFindPanel.apply(this, arguments); }
+    function findPanelVisible() { return N.findPanelVisible.apply(this, arguments); }
+    function openFindPanel() { return N.openFindPanel.apply(this, arguments); }
+    function showSustainFillAlert() { return N.showSustainFillAlert.apply(this, arguments); }
 
 
     // ============ 创作辅助悬浮窗 ============
@@ -454,8 +454,6 @@
     }
 
     // ---- 导出 ----
-    N.ASSIST_STORAGE_KEY = ASSIST_STORAGE_KEY;
-    N.assistConfig = assistConfig;
     N.defaultAssistConfig = defaultAssistConfig;
     N.loadAssistConfig = loadAssistConfig;
     N.clampNum = clampNum;
@@ -474,4 +472,6 @@
     N.syncAssistPanelUI = syncAssistPanelUI;
     N.initAssistDrag = initAssistDrag;
     N.initCreativeAssist = initCreativeAssist;
+    N.ASSIST_STORAGE_KEY = ASSIST_STORAGE_KEY;
+    N.assistConfig = assistConfig;
 })(window.WebNBS);

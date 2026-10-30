@@ -7,38 +7,40 @@
 
     // ---- 跨模块依赖 ----
     var state = N.state;
-    var SEG_DEFAULT_LANE_H = N.SEG_DEFAULT_LANE_H;
-    var LYRIC_LANE_COUNT = N.LYRIC_LANE_COUNT;
-    var LYRIC_DEFAULT_DURATION = N.LYRIC_DEFAULT_DURATION;
-    function segmentSorted() { return N.segmentSorted.apply(this, arguments); }
-    function segmentEnsure() { return N.segmentEnsure.apply(this, arguments); }
-    function segmentSync() { return N.segmentSync.apply(this, arguments); }
-    function genLyricId() { return N.genLyricId.apply(this, arguments); }
-    function pushUndo() { return N.pushUndo.apply(this, arguments); }
-    function lyricRebuildIndex() { return N.lyricRebuildIndex.apply(this, arguments); }
-    function syncLyricsToRoll() { return N.syncLyricsToRoll.apply(this, arguments); }
-    function markDirty() { return N.markDirty.apply(this, arguments); }
-    function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
-    function i18nText() { return N.i18nText.apply(this, arguments); }
-    function enterLyricsEditMode() { return N.enterLyricsEditMode.apply(this, arguments); }
-    function showAppConfirm() { return N.showAppConfirm.apply(this, arguments); }
     function $() { return N.$.apply(this, arguments); }
-    function showCompressSongDialog() { return N.showCompressSongDialog.apply(this, arguments); }
-    function doCompressSong() { return N.doCompressSong.apply(this, arguments); }
-    function openSegSplitPopup() { return N.openSegSplitPopup.apply(this, arguments); }
-    function removeEmptyTracks() { return N.removeEmptyTracks.apply(this, arguments); }
-    function showSustainFillDialog() { return N.showSustainFillDialog.apply(this, arguments); }
-    function showClearSustainDialog() { return N.showClearSustainDialog.apply(this, arguments); }
-    function showArpeggioTracksDialog() { return N.showArpeggioTracksDialog.apply(this, arguments); }
+    var LYRIC_DEFAULT_DURATION = N.LYRIC_DEFAULT_DURATION;
+    var LYRIC_LANE_COUNT = N.LYRIC_LANE_COUNT;
+    var SEG_DEFAULT_LANE_H = N.SEG_DEFAULT_LANE_H;
     function applyTransposeToOctaveRange() { return N.applyTransposeToOctaveRange.apply(this, arguments); }
-    function showRangeProcessDialog() { return N.showRangeProcessDialog.apply(this, arguments); }
-    function findPanelVisible() { return N.findPanelVisible.apply(this, arguments); }
-    function closeFindPanel() { return N.closeFindPanel.apply(this, arguments); }
-    function openFindPanel() { return N.openFindPanel.apply(this, arguments); }
     function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
+    function closeFindPanel() { return N.closeFindPanel.apply(this, arguments); }
+    function doCompressSong() { return N.doCompressSong.apply(this, arguments); }
+    function enterLyricsEditMode() { return N.enterLyricsEditMode.apply(this, arguments); }
+    function findPanelVisible() { return N.findPanelVisible.apply(this, arguments); }
+    function genLyricId() { return N.genLyricId.apply(this, arguments); }
+    function hideTaskProgress() { return N.hideTaskProgress.apply(this, arguments); }
+    function i18nText() { return N.i18nText.apply(this, arguments); }
+    function lyricRebuildIndex() { return N.lyricRebuildIndex.apply(this, arguments); }
+    function markDirty() { return N.markDirty.apply(this, arguments); }
+    function openFindPanel() { return N.openFindPanel.apply(this, arguments); }
+    function openSegSplitPopup() { return N.openSegSplitPopup.apply(this, arguments); }
+    function pushUndo() { return N.pushUndo.apply(this, arguments); }
+    function removeEmptyTracks() { return N.removeEmptyTracks.apply(this, arguments); }
+    function segmentEnsure() { return N.segmentEnsure.apply(this, arguments); }
+    function segmentSorted() { return N.segmentSorted.apply(this, arguments); }
+    function segmentSync() { return N.segmentSync.apply(this, arguments); }
+    function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
+    function showAppConfirm() { return N.showAppConfirm.apply(this, arguments); }
+    function showArpeggioTracksDialog() { return N.showArpeggioTracksDialog.apply(this, arguments); }
+    function showClearSustainDialog() { return N.showClearSustainDialog.apply(this, arguments); }
+    function showCompressSongDialog() { return N.showCompressSongDialog.apply(this, arguments); }
+    function showRangeProcessDialog() { return N.showRangeProcessDialog.apply(this, arguments); }
     function showSustainFillAlert() { return N.showSustainFillAlert.apply(this, arguments); }
-    function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
+    function showSustainFillDialog() { return N.showSustainFillDialog.apply(this, arguments); }
+    function showTaskProgress() { return N.showTaskProgress.apply(this, arguments); }
+    function syncLyricsToRoll() { return N.syncLyricsToRoll.apply(this, arguments); }
     function updateNoteCount() { return N.updateNoteCount.apply(this, arguments); }
+    function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
 
 
     // 导出片段分组信息 (segments.json): 记录每条轨道与每个片段的 lane / 时间范围 / 名称
@@ -727,8 +729,9 @@
     N.applyScalePrecision = applyScalePrecision;
     N.showSnapDialog = showSnapDialog;
     N.applySnap = applySnap;
+    N.compressResolveTicksPerBeat = compressResolveTicksPerBeat;
     N.COMPRESS_DEDUPE_Q = COMPRESS_DEDUPE_Q;
     N.COMPRESS_LEVELS = COMPRESS_LEVELS;
     N.COMPRESS_WARN_BELOW_IDX = COMPRESS_WARN_BELOW_IDX;
-    N.compressResolveTicksPerBeat = compressResolveTicksPerBeat;
+    N.LEGACY_COMPRESS_Q = LEGACY_COMPRESS_Q;
 })(window.WebNBS);

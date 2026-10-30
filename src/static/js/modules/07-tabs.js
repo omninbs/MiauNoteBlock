@@ -6,34 +6,36 @@
     N.shared = N.shared || {};
 
     // ---- 跨模块依赖 ----
-    function lyricRebuildIndex() { return N.lyricRebuildIndex.apply(this, arguments); }
+    var state = N.state;
+    function $() { return N.$.apply(this, arguments); }
+    function $setText() { return N.$setText.apply(this, arguments); }
+    function $setValue() { return N.$setValue.apply(this, arguments); }
+    function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
+    function clearAutoSaveLocal() { return N.clearAutoSaveLocal.apply(this, arguments); }
+    function deepCloneNotes() { return N.deepCloneNotes.apply(this, arguments); }
     function exitLyricsEditMode() { return N.exitLyricsEditMode.apply(this, arguments); }
-    function syncLyricsToRoll() { return N.syncLyricsToRoll.apply(this, arguments); }
     function exitSegmentsEditMode() { return N.exitSegmentsEditMode.apply(this, arguments); }
+    function getHistoryFiles() { return N.getHistoryFiles.apply(this, arguments); }
+    function handleStop() { return N.handleStop.apply(this, arguments); }
+    function i18nText() { return N.i18nText.apply(this, arguments); }
+    function lyricRebuildIndex() { return N.lyricRebuildIndex.apply(this, arguments); }
+    function markDirty() { return N.markDirty.apply(this, arguments); }
+    function projectDbDelete() { return N.projectDbDelete.apply(this, arguments); }
+    function projectDbPut() { return N.projectDbPut.apply(this, arguments); }
+    function safeSetItem() { return N.safeSetItem.apply(this, arguments); }
+    function saveFileToLocalStorage() { return N.saveFileToLocalStorage.apply(this, arguments); }
     function segmentEnsure() { return N.segmentEnsure.apply(this, arguments); }
     function segmentSync() { return N.segmentSync.apply(this, arguments); }
-    function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
-    function updateUndoRedoButtons() { return N.updateUndoRedoButtons.apply(this, arguments); }
-    function $setValue() { return N.$setValue.apply(this, arguments); }
-    function $setText() { return N.$setText.apply(this, arguments); }
-    function updateSongInfo() { return N.updateSongInfo.apply(this, arguments); }
-    function updateTrackPanelUI() { return N.updateTrackPanelUI.apply(this, arguments); }
+    function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
+    function showAppConfirm() { return N.showAppConfirm.apply(this, arguments); }
+    function syncLyricsToRoll() { return N.syncLyricsToRoll.apply(this, arguments); }
     function updateInstrumentSelectorUI() { return N.updateInstrumentSelectorUI.apply(this, arguments); }
     function updateNoteCount() { return N.updateNoteCount.apply(this, arguments); }
-    function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
-    function handleStop() { return N.handleStop.apply(this, arguments); }
     function updatePianoKeyboardHighlight() { return N.updatePianoKeyboardHighlight.apply(this, arguments); }
-    function markDirty() { return N.markDirty.apply(this, arguments); }
-    function showAppConfirm() { return N.showAppConfirm.apply(this, arguments); }
-    function deepCloneNotes() { return N.deepCloneNotes.apply(this, arguments); }
-    function $() { return N.$.apply(this, arguments); }
-    function clearAutoSaveLocal() { return N.clearAutoSaveLocal.apply(this, arguments); }
-    function getHistoryFiles() { return N.getHistoryFiles.apply(this, arguments); }
-    function projectDbDelete() { return N.projectDbDelete.apply(this, arguments); }
-    function safeSetItem() { return N.safeSetItem.apply(this, arguments); }
-    function projectDbPut() { return N.projectDbPut.apply(this, arguments); }
-    function saveFileToLocalStorage() { return N.saveFileToLocalStorage.apply(this, arguments); }
-    function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
+    function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
+    function updateSongInfo() { return N.updateSongInfo.apply(this, arguments); }
+    function updateTrackPanelUI() { return N.updateTrackPanelUI.apply(this, arguments); }
+    function updateUndoRedoButtons() { return N.updateUndoRedoButtons.apply(this, arguments); }
 
 
     function createDefaultLayers(count) {

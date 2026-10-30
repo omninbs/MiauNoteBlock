@@ -7,20 +7,20 @@
 
     // ---- 跨模块依赖 ----
     var state = N.state;
+    function $() { return N.$.apply(this, arguments); }
+    function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
     function findTrackByLayer() { return N.findTrackByLayer.apply(this, arguments); }
-    function lockToMutedSolo() { return N.lockToMutedSolo.apply(this, arguments); }
+    function getInstrumentNames() { return N.getInstrumentNames.apply(this, arguments); }
     function getLayerLock() { return N.getLayerLock.apply(this, arguments); }
     function getSoloLayerMap() { return N.getSoloLayerMap.apply(this, arguments); }
-    function pushUndo() { return N.pushUndo.apply(this, arguments); }
-    function markDirty() { return N.markDirty.apply(this, arguments); }
-    function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
-    function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
-    function $() { return N.$.apply(this, arguments); }
-    function i18nText() { return N.i18nText.apply(this, arguments); }
     function handlePasteOrSystemClipboard() { return N.handlePasteOrSystemClipboard.apply(this, arguments); }
-    function updateNoteCount() { return N.updateNoteCount.apply(this, arguments); }
-    function getInstrumentNames() { return N.getInstrumentNames.apply(this, arguments); }
+    function i18nText() { return N.i18nText.apply(this, arguments); }
+    function lockToMutedSolo() { return N.lockToMutedSolo.apply(this, arguments); }
+    function markDirty() { return N.markDirty.apply(this, arguments); }
+    function pushUndo() { return N.pushUndo.apply(this, arguments); }
+    function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
     function showAppPrompt() { return N.showAppPrompt.apply(this, arguments); }
+    function updateNoteCount() { return N.updateNoteCount.apply(this, arguments); }
 
 
     // 同步 pianoRoll.trackInfo 与 state.tracks

@@ -7,19 +7,19 @@
 
     // ---- 跨模块依赖 ----
     var state = N.state;
+    function $() { return N.$.apply(this, arguments); }
+    function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
+    function lyricRebuildIndex() { return N.lyricRebuildIndex.apply(this, arguments); }
+    function markDirty() { return N.markDirty.apply(this, arguments); }
+    function segmentSync() { return N.segmentSync.apply(this, arguments); }
     function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
     function showAppConfirm() { return N.showAppConfirm.apply(this, arguments); }
     function showAppPrompt() { return N.showAppPrompt.apply(this, arguments); }
     function showExportDialog() { return N.showExportDialog.apply(this, arguments); }
-    function updateTrackPanelUI() { return N.updateTrackPanelUI.apply(this, arguments); }
-    function lyricRebuildIndex() { return N.lyricRebuildIndex.apply(this, arguments); }
     function syncLyricsToRoll() { return N.syncLyricsToRoll.apply(this, arguments); }
-    function segmentSync() { return N.segmentSync.apply(this, arguments); }
-    function markDirty() { return N.markDirty.apply(this, arguments); }
-    function $() { return N.$.apply(this, arguments); }
-    function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
     function updateNoteCount() { return N.updateNoteCount.apply(this, arguments); }
     function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
+    function updateTrackPanelUI() { return N.updateTrackPanelUI.apply(this, arguments); }
 
 
     // 暴露到全局

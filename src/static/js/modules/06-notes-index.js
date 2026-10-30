@@ -8,9 +8,9 @@
     // ---- 跨模块依赖 ----
     var state = N.state;
     function $setText() { return N.$setText.apply(this, arguments); }
-    function updateTrackPanelUI() { return N.updateTrackPanelUI.apply(this, arguments); }
-    function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
     function markDirty() { return N.markDirty.apply(this, arguments); }
+    function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
+    function updateTrackPanelUI() { return N.updateTrackPanelUI.apply(this, arguments); }
 
 
     // ============ 音符索引 ============
@@ -72,6 +72,6 @@
     N.buildNoteIndex = buildNoteIndex;
     N.addNoteToIndex = addNoteToIndex;
     N.removeNoteFromIndex = removeNoteFromIndex;
-    N._perfUIUpdatePending = _perfUIUpdatePending;
     N.schedulePerformanceUIUpdate = schedulePerformanceUIUpdate;
+    N._perfUIUpdatePending = _perfUIUpdatePending;
 })(window.WebNBS);

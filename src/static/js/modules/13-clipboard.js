@@ -7,18 +7,19 @@
 
     // ---- 跨模块依赖 ----
     var state = N.state;
-    function pushUndo() { return N.pushUndo.apply(this, arguments); }
     function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
-    function updateNoteCount() { return N.updateNoteCount.apply(this, arguments); }
-    function markDirty() { return N.markDirty.apply(this, arguments); }
-    function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
-    function formatError() { return N.formatError.apply(this, arguments); }
-    function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
     function findTrackByLayer() { return N.findTrackByLayer.apply(this, arguments); }
+    function formatError() { return N.formatError.apply(this, arguments); }
+    function markDirty() { return N.markDirty.apply(this, arguments); }
+    function mutedSoloToLock() { return N.mutedSoloToLock.apply(this, arguments); }
+    function pushUndo() { return N.pushUndo.apply(this, arguments); }
     function setLayerLock() { return N.setLayerLock.apply(this, arguments); }
+    function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
     function stopUnaudibleTrackAudio() { return N.stopUnaudibleTrackAudio.apply(this, arguments); }
-    function syncSoloLayersToSong() { return N.syncSoloLayersToSong.apply(this, arguments); }
     function syncPianoRollTrackInfo() { return N.syncPianoRollTrackInfo.apply(this, arguments); }
+    function syncSoloLayersToSong() { return N.syncSoloLayersToSong.apply(this, arguments); }
+    function updateNoteCount() { return N.updateNoteCount.apply(this, arguments); }
+    function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
     function updateTrackPanelUI() { return N.updateTrackPanelUI.apply(this, arguments); }
 
 

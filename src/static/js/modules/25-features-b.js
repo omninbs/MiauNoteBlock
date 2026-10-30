@@ -7,31 +7,31 @@
 
     // ---- 跨模块依赖 ----
     var state = N.state;
-    var _appDialogStack = N._appDialogStack;
-    function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
-    function pushUndo() { return N.pushUndo.apply(this, arguments); }
-    function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
-    function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
-    function updateNoteCount() { return N.updateNoteCount.apply(this, arguments); }
     function $() { return N.$.apply(this, arguments); }
-    function updateTrackPanelUI() { return N.updateTrackPanelUI.apply(this, arguments); }
-    function _appDialogOverlay() { return N._appDialogOverlay.apply(this, arguments); }
-    function i18nText() { return N.i18nText.apply(this, arguments); }
     function _appDialogBox() { return N._appDialogBox.apply(this, arguments); }
-    function escapeHTML() { return N.escapeHTML.apply(this, arguments); }
-    function openSubstituteSettings() { return N.openSubstituteSettings.apply(this, arguments); }
-    function saveSubstituteConfig() { return N.saveSubstituteConfig.apply(this, arguments); }
-    function _closeAppDialog() { return N._closeAppDialog.apply(this, arguments); }
     function _appDialogBtn() { return N._appDialogBtn.apply(this, arguments); }
-    function markDirty() { return N.markDirty.apply(this, arguments); }
-    function loadSubstituteConfig() { return N.loadSubstituteConfig.apply(this, arguments); }
+    function _appDialogOverlay() { return N._appDialogOverlay.apply(this, arguments); }
+    var _appDialogStack = N._appDialogStack;
+    function _closeAppDialog() { return N._closeAppDialog.apply(this, arguments); }
     function applySubstituteToNote() { return N.applySubstituteToNote.apply(this, arguments); }
-    function nbsKeyToMidiNote() { return N.nbsKeyToMidiNote.apply(this, arguments); }
-    function getNbsKeyOctave() { return N.getNbsKeyOctave.apply(this, arguments); }
-    function getNbsKeyDisplayLabel() { return N.getNbsKeyDisplayLabel.apply(this, arguments); }
+    function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
+    function escapeHTML() { return N.escapeHTML.apply(this, arguments); }
     function getKeyboardLabelForNbsKey() { return N.getKeyboardLabelForNbsKey.apply(this, arguments); }
-    function updatePianoKeyboardHighlight() { return N.updatePianoKeyboardHighlight.apply(this, arguments); }
+    function getNbsKeyDisplayLabel() { return N.getNbsKeyDisplayLabel.apply(this, arguments); }
+    function getNbsKeyOctave() { return N.getNbsKeyOctave.apply(this, arguments); }
+    function i18nText() { return N.i18nText.apply(this, arguments); }
+    function loadSubstituteConfig() { return N.loadSubstituteConfig.apply(this, arguments); }
+    function markDirty() { return N.markDirty.apply(this, arguments); }
+    function nbsKeyToMidiNote() { return N.nbsKeyToMidiNote.apply(this, arguments); }
+    function openSubstituteSettings() { return N.openSubstituteSettings.apply(this, arguments); }
+    function pushUndo() { return N.pushUndo.apply(this, arguments); }
     function saveNumpadRangeSettings() { return N.saveNumpadRangeSettings.apply(this, arguments); }
+    function saveSubstituteConfig() { return N.saveSubstituteConfig.apply(this, arguments); }
+    function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
+    function updateNoteCount() { return N.updateNoteCount.apply(this, arguments); }
+    function updatePianoKeyboardHighlight() { return N.updatePianoKeyboardHighlight.apply(this, arguments); }
+    function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
+    function updateTrackPanelUI() { return N.updateTrackPanelUI.apply(this, arguments); }
 
     function showSustainFillAlert(message, title) {
         showAppAlert(message, {title: title || '延音填充', icon: 'fa-solid fa-circle-info', okText: '知道了'});

@@ -7,17 +7,17 @@
 
     // ---- 跨模块依赖 ----
     var state = N.state;
-    function getNbsKeyPitchLabel() { return N.getNbsKeyPitchLabel.apply(this, arguments); }
-    function getNbsKeyOctave() { return N.getNbsKeyOctave.apply(this, arguments); }
     function $() { return N.$.apply(this, arguments); }
-    function getInstrumentNames() { return N.getInstrumentNames.apply(this, arguments); }
-    function i18nText() { return N.i18nText.apply(this, arguments); }
-    function clampNum() { return N.clampNum.apply(this, arguments); }
     function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
-    function updateNoteCount() { return N.updateNoteCount.apply(this, arguments); }
-    function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
+    function clampNum() { return N.clampNum.apply(this, arguments); }
+    function getInstrumentNames() { return N.getInstrumentNames.apply(this, arguments); }
+    function getNbsKeyOctave() { return N.getNbsKeyOctave.apply(this, arguments); }
+    function getNbsKeyPitchLabel() { return N.getNbsKeyPitchLabel.apply(this, arguments); }
+    function i18nText() { return N.i18nText.apply(this, arguments); }
     function markDirty() { return N.markDirty.apply(this, arguments); }
     function pushUndo() { return N.pushUndo.apply(this, arguments); }
+    function updateNoteCount() { return N.updateNoteCount.apply(this, arguments); }
+    function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
 
 
     // ============ 音符查找/替换浮层 ============
@@ -697,8 +697,6 @@
     }
 
     // ---- 导出 ----
-    N.findState = findState;
-    N.FIND_MAX_KEYS = FIND_MAX_KEYS;
     N.findKeyLabel = findKeyLabel;
     N.findPanelVisible = findPanelVisible;
     N.findInstLabel = findInstLabel;
@@ -707,7 +705,6 @@
     N.findKeyValues = findKeyValues;
     N.findInstCellHTML = findInstCellHTML;
     N.findKeyCellHTML = findKeyCellHTML;
-    N.pickCfg = pickCfg;
     N.findPickPop = findPickPop;
     N.pickPopEnsure = pickPopEnsure;
     N.closeFindPickPop = closeFindPickPop;
@@ -735,4 +732,8 @@
     N.findReplaceAll = findReplaceAll;
     N.initFindPanel = initFindPanel;
     N.initFindDrag = initFindDrag;
+    N.findState = findState;
+    N.FIND_MAX_KEYS = FIND_MAX_KEYS;
+    N.pickCfg = pickCfg;
+    N.pickAnchor = pickAnchor;
 })(window.WebNBS);

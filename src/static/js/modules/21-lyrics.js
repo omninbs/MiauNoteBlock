@@ -7,21 +7,21 @@
 
     // ---- 跨模块依赖 ----
     var state = N.state;
-    function updateRadioTempoSlider() { return N.updateRadioTempoSlider.apply(this, arguments); }
-    function syncSegmentToolbarTop() { return N.syncSegmentToolbarTop.apply(this, arguments); }
     function $() { return N.$.apply(this, arguments); }
+    function exitSegmentsEditMode() { return N.exitSegmentsEditMode.apply(this, arguments); }
+    function i18nText() { return N.i18nText.apply(this, arguments); }
+    function importLyricsFile() { return N.importLyricsFile.apply(this, arguments); }
     function markDirty() { return N.markDirty.apply(this, arguments); }
     function pushUndo() { return N.pushUndo.apply(this, arguments); }
-    function i18nText() { return N.i18nText.apply(this, arguments); }
-    function exitSegmentsEditMode() { return N.exitSegmentsEditMode.apply(this, arguments); }
-    function importLyricsFile() { return N.importLyricsFile.apply(this, arguments); }
+    function segmentCopy() { return N.segmentCopy.apply(this, arguments); }
+    function segmentDelete() { return N.segmentDelete.apply(this, arguments); }
+    function segmentPaste() { return N.segmentPaste.apply(this, arguments); }
     function segmentSplit() { return N.segmentSplit.apply(this, arguments); }
-    function showSmallTip() { return N.showSmallTip.apply(this, arguments); }
     function segmentTrimLeft() { return N.segmentTrimLeft.apply(this, arguments); }
     function segmentTrimRight() { return N.segmentTrimRight.apply(this, arguments); }
-    function segmentCopy() { return N.segmentCopy.apply(this, arguments); }
-    function segmentPaste() { return N.segmentPaste.apply(this, arguments); }
-    function segmentDelete() { return N.segmentDelete.apply(this, arguments); }
+    function showSmallTip() { return N.showSmallTip.apply(this, arguments); }
+    function syncSegmentToolbarTop() { return N.syncSegmentToolbarTop.apply(this, arguments); }
+    function updateRadioTempoSlider() { return N.updateRadioTempoSlider.apply(this, arguments); }
 
 
     // 窗口 resize 时重定位 (因为容器宽度变化)
@@ -469,9 +469,6 @@
     }
 
     // ---- 导出 ----
-    N.LYRIC_LANE_COUNT = LYRIC_LANE_COUNT;
-    N.LYRIC_DEFAULT_DURATION = LYRIC_DEFAULT_DURATION;
-    N.LYRIC_DEFAULT_TEXT = LYRIC_DEFAULT_TEXT;
     N.normalizeLyricClip = normalizeLyricClip;
     N.lyricRebuildIndex = lyricRebuildIndex;
     N.getLyricsAt = getLyricsAt;
@@ -496,4 +493,7 @@
     N.segActionCopy = segActionCopy;
     N.segActionPaste = segActionPaste;
     N.segActionDelete = segActionDelete;
+    N.LYRIC_LANE_COUNT = LYRIC_LANE_COUNT;
+    N.LYRIC_DEFAULT_DURATION = LYRIC_DEFAULT_DURATION;
+    N.LYRIC_DEFAULT_TEXT = LYRIC_DEFAULT_TEXT;
 })(window.WebNBS);

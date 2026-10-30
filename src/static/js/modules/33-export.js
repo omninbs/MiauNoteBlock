@@ -7,33 +7,36 @@
 
     // ---- 跨模块依赖 ----
     var state = N.state;
-    var SEG_DEFAULT_LANE_H = N.SEG_DEFAULT_LANE_H;
-    var _appDialogStack = N._appDialogStack;
     var INSTRUMENT_NAMES = N.INSTRUMENT_NAMES;
-    function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
-    function showExportDialog() { return N.showExportDialog.apply(this, arguments); }
-    function deepCloneNotes() { return N.deepCloneNotes.apply(this, arguments); }
-    function tabStash() { return N.tabStash.apply(this, arguments); }
-    function _appDialogOverlay() { return N._appDialogOverlay.apply(this, arguments); }
+    var SEG_DEFAULT_LANE_H = N.SEG_DEFAULT_LANE_H;
     function _appDialogBox() { return N._appDialogBox.apply(this, arguments); }
-    function _closeAppDialog() { return N._closeAppDialog.apply(this, arguments); }
     function _appDialogBtn() { return N._appDialogBtn.apply(this, arguments); }
-    function segmentSorted() { return N.segmentSorted.apply(this, arguments); }
-    function findTrackByLayer() { return N.findTrackByLayer.apply(this, arguments); }
-    function updateTaskProgress() { return N.updateTaskProgress.apply(this, arguments); }
-    function clearAutoSaveLocal() { return N.clearAutoSaveLocal.apply(this, arguments); }
-    function formatError() { return N.formatError.apply(this, arguments); }
+    function _appDialogOverlay() { return N._appDialogOverlay.apply(this, arguments); }
+    var _appDialogStack = N._appDialogStack;
+    function _closeAppDialog() { return N._closeAppDialog.apply(this, arguments); }
+    function applyLoadedSongData() { return N.applyLoadedSongData.apply(this, arguments); }
     function buildLyricsJson() { return N.buildLyricsJson.apply(this, arguments); }
     function buildSegmentsJson() { return N.buildSegmentsJson.apply(this, arguments); }
-    function showAppPrompt() { return N.showAppPrompt.apply(this, arguments); }
-    function renderCustomInstList() { return N.renderCustomInstList.apply(this, arguments); }
+    function clearAutoSaveLocal() { return N.clearAutoSaveLocal.apply(this, arguments); }
+    function deepCloneNotes() { return N.deepCloneNotes.apply(this, arguments); }
+    function escapeHtml() { return N.escapeHtml.apply(this, arguments); }
+    function findTrackByLayer() { return N.findTrackByLayer.apply(this, arguments); }
+    function formatError() { return N.formatError.apply(this, arguments); }
+    function getInstName() { return N.getInstName.apply(this, arguments); }
+    function hideTaskProgress() { return N.hideTaskProgress.apply(this, arguments); }
+    function i18nText() { return N.i18nText.apply(this, arguments); }
     function importLyricsFromZip() { return N.importLyricsFromZip.apply(this, arguments); }
     function importSegmentsFromZip() { return N.importSegmentsFromZip.apply(this, arguments); }
-    function getInstName() { return N.getInstName.apply(this, arguments); }
-    function escapeHtml() { return N.escapeHtml.apply(this, arguments); }
-    function applyLoadedSongData() { return N.applyLoadedSongData.apply(this, arguments); }
+    function renderCustomInstList() { return N.renderCustomInstList.apply(this, arguments); }
     function renderTabs() { return N.renderTabs.apply(this, arguments); }
+    function segmentSorted() { return N.segmentSorted.apply(this, arguments); }
+    function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
+    function showAppPrompt() { return N.showAppPrompt.apply(this, arguments); }
+    function showExportDialog() { return N.showExportDialog.apply(this, arguments); }
+    function showTaskProgress() { return N.showTaskProgress.apply(this, arguments); }
+    function tabStash() { return N.tabStash.apply(this, arguments); }
     function updateSongInfo() { return N.updateSongInfo.apply(this, arguments); }
+    function updateTaskProgress() { return N.updateTaskProgress.apply(this, arguments); }
 
 
     function exportNBS() {

@@ -7,28 +7,34 @@
 
     // ---- 跨模块依赖 ----
     var state = N.state;
+    function $() { return N.$.apply(this, arguments); }
     var LYRIC_DEFAULT_DURATION = N.LYRIC_DEFAULT_DURATION;
     var LYRIC_LANE_COUNT = N.LYRIC_LANE_COUNT;
-    function segmentMergeAll() { return N.segmentMergeAll.apply(this, arguments); }
-    function showSmallTip() { return N.showSmallTip.apply(this, arguments); }
-    function i18nText() { return N.i18nText.apply(this, arguments); }
-    function $() { return N.$.apply(this, arguments); }
-    function exitSegmentsEditMode() { return N.exitSegmentsEditMode.apply(this, arguments); }
     function enterSegmentsEditMode() { return N.enterSegmentsEditMode.apply(this, arguments); }
-    function segmentCommitDrag() { return N.segmentCommitDrag.apply(this, arguments); }
-    function seekToTick() { return N.seekToTick.apply(this, arguments); }
-    function renderSegmentSidePanel() { return N.renderSegmentSidePanel.apply(this, arguments); }
-    function markDirty() { return N.markDirty.apply(this, arguments); }
-    function segmentSelectedIds() { return N.segmentSelectedIds.apply(this, arguments); }
-    function segmentById() { return N.segmentById.apply(this, arguments); }
-    function segmentSelected() { return N.segmentSelected.apply(this, arguments); }
-    function segmentMergeSelected() { return N.segmentMergeSelected.apply(this, arguments); }
-    function segmentExportOne() { return N.segmentExportOne.apply(this, arguments); }
-    function segmentCopy() { return N.segmentCopy.apply(this, arguments); }
-    function segmentPaste() { return N.segmentPaste.apply(this, arguments); }
-    function segmentDelete() { return N.segmentDelete.apply(this, arguments); }
-    function segmentSync() { return N.segmentSync.apply(this, arguments); }
+    function exitSegmentsEditMode() { return N.exitSegmentsEditMode.apply(this, arguments); }
     function getLyricsAt() { return N.getLyricsAt.apply(this, arguments); }
+    function i18nText() { return N.i18nText.apply(this, arguments); }
+    function markDirty() { return N.markDirty.apply(this, arguments); }
+    function renderSegmentSidePanel() { return N.renderSegmentSidePanel.apply(this, arguments); }
+    function seekToTick() { return N.seekToTick.apply(this, arguments); }
+    function segActionCopy() { return N.segActionCopy.apply(this, arguments); }
+    function segActionDelete() { return N.segActionDelete.apply(this, arguments); }
+    function segActionPaste() { return N.segActionPaste.apply(this, arguments); }
+    function segActionSplit() { return N.segActionSplit.apply(this, arguments); }
+    function segActionTrimLeft() { return N.segActionTrimLeft.apply(this, arguments); }
+    function segActionTrimRight() { return N.segActionTrimRight.apply(this, arguments); }
+    function segmentById() { return N.segmentById.apply(this, arguments); }
+    function segmentCommitDrag() { return N.segmentCommitDrag.apply(this, arguments); }
+    function segmentCopy() { return N.segmentCopy.apply(this, arguments); }
+    function segmentDelete() { return N.segmentDelete.apply(this, arguments); }
+    function segmentExportOne() { return N.segmentExportOne.apply(this, arguments); }
+    function segmentMergeAll() { return N.segmentMergeAll.apply(this, arguments); }
+    function segmentMergeSelected() { return N.segmentMergeSelected.apply(this, arguments); }
+    function segmentPaste() { return N.segmentPaste.apply(this, arguments); }
+    function segmentSelected() { return N.segmentSelected.apply(this, arguments); }
+    function segmentSelectedIds() { return N.segmentSelectedIds.apply(this, arguments); }
+    function segmentSync() { return N.segmentSync.apply(this, arguments); }
+    function showSmallTip() { return N.showSmallTip.apply(this, arguments); }
 
     function segActionMerge() {
         if (!segmentMergeAll()) showSmallTip(i18nText('当前只有一个片段，无需合并'));
@@ -419,22 +425,22 @@
     N.bindSegButton = bindSegButton;
     N.initSegmentsUI = initSegmentsUI;
     N.segZoomAxis = segZoomAxis;
-    N._segMenuEl = _segMenuEl;
     N.hideSegmentContextMenu = hideSegmentContextMenu;
     N.showSegmentContextMenu = showSegmentContextMenu;
-    N._renameSegId = _renameSegId;
-    N._renameBinderDone = _renameBinderDone;
     N.hideSegmentRename = hideSegmentRename;
     N.commitSegmentRename = commitSegmentRename;
     N.showSegmentRename = showSegmentRename;
-    N._lastLyricOverlayKey = _lastLyricOverlayKey;
     N.showLyricsOverlay = showLyricsOverlay;
     N.hideLyricsOverlay = hideLyricsOverlay;
     N.resetStreamingLyrics = resetStreamingLyrics;
     N.joinStreamingText = joinStreamingText;
-    N.STREAMING_LYRIC_MAX = STREAMING_LYRIC_MAX;
     N.streamingLyricEndTick = streamingLyricEndTick;
     N.processStreamingLyricsAtTick = processStreamingLyricsAtTick;
     N.processLyricsAtTick = processLyricsAtTick;
     N.buildLyricsJson = buildLyricsJson;
+    N._segMenuEl = _segMenuEl;
+    N._renameSegId = _renameSegId;
+    N._renameBinderDone = _renameBinderDone;
+    N._lastLyricOverlayKey = _lastLyricOverlayKey;
+    N.STREAMING_LYRIC_MAX = STREAMING_LYRIC_MAX;
 })(window.WebNBS);

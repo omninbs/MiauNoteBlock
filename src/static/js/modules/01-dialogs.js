@@ -8,11 +8,12 @@
     // ---- 跨模块依赖 ----
     var state = N.state;
     function closeTransientFloats() { return N.closeTransientFloats.apply(this, arguments); }
-    function stopPlaybackLoop() { return N.stopPlaybackLoop.apply(this, arguments); }
-    function setPlayButtonIcon() { return N.setPlayButtonIcon.apply(this, arguments); }
-    function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
-    function startPlaybackLoop() { return N.startPlaybackLoop.apply(this, arguments); }
+    function i18nText() { return N.i18nText.apply(this, arguments); }
     function renderSongToBlob() { return N.renderSongToBlob.apply(this, arguments); }
+    function setPlayButtonIcon() { return N.setPlayButtonIcon.apply(this, arguments); }
+    function startPlaybackLoop() { return N.startPlaybackLoop.apply(this, arguments); }
+    function stopPlaybackLoop() { return N.stopPlaybackLoop.apply(this, arguments); }
+    function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
 
     var _appDialogStack = [];
 
@@ -624,7 +625,6 @@
     }
 
     // ---- 导出 ----
-    N._appDialogStack = _appDialogStack;
     N._appDialogOverlay = _appDialogOverlay;
     N._appDialogBox = _appDialogBox;
     N._appDialogBtn = _appDialogBtn;
@@ -634,4 +634,5 @@
     N.showAppPrompt = showAppPrompt;
     N.showExportDialog = showExportDialog;
     N.showAudioExportDialog = showAudioExportDialog;
+    N._appDialogStack = _appDialogStack;
 })(window.WebNBS);

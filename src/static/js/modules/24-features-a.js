@@ -7,24 +7,26 @@
 
     // ---- 跨模块依赖 ----
     var state = N.state;
-    var _appDialogStack = N._appDialogStack;
-    var COMPRESS_WARN_BELOW_IDX = N.COMPRESS_WARN_BELOW_IDX;
+    function $() { return N.$.apply(this, arguments); }
     var COMPRESS_DEDUPE_Q = N.COMPRESS_DEDUPE_Q;
+    var COMPRESS_LEVELS = N.COMPRESS_LEVELS;
+    var COMPRESS_WARN_BELOW_IDX = N.COMPRESS_WARN_BELOW_IDX;
+    var LEGACY_COMPRESS_Q = N.LEGACY_COMPRESS_Q;
+    function _appDialogBox() { return N._appDialogBox.apply(this, arguments); }
+    function _appDialogBtn() { return N._appDialogBtn.apply(this, arguments); }
+    function _appDialogOverlay() { return N._appDialogOverlay.apply(this, arguments); }
+    var _appDialogStack = N._appDialogStack;
+    function applySustainFill() { return N.applySustainFill.apply(this, arguments); }
+    function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
+    function compressResolveTicksPerBeat() { return N.compressResolveTicksPerBeat.apply(this, arguments); }
     function findTrackByLayer() { return N.findTrackByLayer.apply(this, arguments); }
     function i18nText() { return N.i18nText.apply(this, arguments); }
-    function _appDialogOverlay() { return N._appDialogOverlay.apply(this, arguments); }
-    function _appDialogBox() { return N._appDialogBox.apply(this, arguments); }
-    function compressResolveTicksPerBeat() { return N.compressResolveTicksPerBeat.apply(this, arguments); }
-    function _appDialogBtn() { return N._appDialogBtn.apply(this, arguments); }
-    function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
     function pushUndo() { return N.pushUndo.apply(this, arguments); }
-    function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
-    function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
-    function updateNoteCount() { return N.updateNoteCount.apply(this, arguments); }
+    function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
     function showAppConfirm() { return N.showAppConfirm.apply(this, arguments); }
     function showSustainFillAlert() { return N.showSustainFillAlert.apply(this, arguments); }
-    function $() { return N.$.apply(this, arguments); }
-    function applySustainFill() { return N.applySustainFill.apply(this, arguments); }
+    function updateNoteCount() { return N.updateNoteCount.apply(this, arguments); }
+    function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
 
     function showCompressSongDialog() {
         return new Promise(function (resolve) {

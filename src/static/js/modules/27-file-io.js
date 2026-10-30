@@ -6,21 +6,28 @@
     N.shared = N.shared || {};
 
     // ---- 跨模块依赖 ----
-    var NOTE_NAMES = N.NOTE_NAMES;
-    function midiNoteToName() { return N.midiNoteToName.apply(this, arguments); }
+    var state = N.state;
     function $() { return N.$.apply(this, arguments); }
-    function stopSustainTrackPreview() { return N.stopSustainTrackPreview.apply(this, arguments); }
-    function stopMidiTrackPlayback() { return N.stopMidiTrackPlayback.apply(this, arguments); }
-    function escapeHtml() { return N.escapeHtml.apply(this, arguments); }
-    function toggleSustainTrackPreview() { return N.toggleSustainTrackPreview.apply(this, arguments); }
-    function parseMidiFileForPlayback() { return N.parseMidiFileForPlayback.apply(this, arguments); }
-    function extractTrackNotes() { return N.extractTrackNotes.apply(this, arguments); }
-    function MiniMidiRoll() { return N.MiniMidiRoll.apply(this, arguments); }
-    function previewSustainTrack() { return N.previewSustainTrack.apply(this, arguments); }
-    function getInstrumentIconHtml() { return N.getInstrumentIconHtml.apply(this, arguments); }
+    function MiniMidiRoll() {
+        var Real = N.MiniMidiRoll;
+        if (typeof Real !== 'function') return {};
+        var obj = Object.create(Real.prototype);
+        var ret = Real.apply(obj, arguments);
+        return (ret && typeof ret === 'object') ? ret : obj;
+    }
+    var NOTE_NAMES = N.NOTE_NAMES;
     function escapeHTML() { return N.escapeHTML.apply(this, arguments); }
+    function escapeHtml() { return N.escapeHtml.apply(this, arguments); }
+    function extractTrackNotes() { return N.extractTrackNotes.apply(this, arguments); }
     function getInstName() { return N.getInstName.apply(this, arguments); }
+    function getInstrumentIconHtml() { return N.getInstrumentIconHtml.apply(this, arguments); }
+    function midiNoteToName() { return N.midiNoteToName.apply(this, arguments); }
+    function parseMidiFileForPlayback() { return N.parseMidiFileForPlayback.apply(this, arguments); }
+    function previewSustainTrack() { return N.previewSustainTrack.apply(this, arguments); }
     function showSubstituteSlotMenu() { return N.showSubstituteSlotMenu.apply(this, arguments); }
+    function stopMidiTrackPlayback() { return N.stopMidiTrackPlayback.apply(this, arguments); }
+    function stopSustainTrackPreview() { return N.stopSustainTrackPreview.apply(this, arguments); }
+    function toggleSustainTrackPreview() { return N.toggleSustainTrackPreview.apply(this, arguments); }
 
     (function() {
         var noteLetters = ['F#','G','G#','A','A#','B','C','C#','D','D#','E','F'];
@@ -363,15 +370,6 @@
     }
 
     // ---- 导出 ----
-    N.MIDI_NOTE_NAMES = MIDI_NOTE_NAMES;
-    N.INSTRUMENT_OFFSET = INSTRUMENT_OFFSET;
-    N.GLOBAL_MIDI_MIN = GLOBAL_MIDI_MIN;
-    N.GLOBAL_MIDI_MAX = GLOBAL_MIDI_MAX;
-    N.GLOBAL_MIDI_SPAN = GLOBAL_MIDI_SPAN;
-    N.NBS_KEY_MAX = NBS_KEY_MAX;
-    N.PROCESSED_MIDI_MAX = PROCESSED_MIDI_MAX;
-    N.MC_KEY_MAX = MC_KEY_MAX;
-    N.MC_MIDI_MIN = MC_MIDI_MIN;
     N.loadSubstituteConfig = loadSubstituteConfig;
     N.saveSubstituteConfig = saveSubstituteConfig;
     N.getInstrumentRangeText = getInstrumentRangeText;
@@ -380,4 +378,17 @@
     N.switchSubstituteTab = switchSubstituteTab;
     N.renderSubstituteTracks = renderSubstituteTracks;
     N.renderSubstituteRows = renderSubstituteRows;
+    N.MIDI_NOTE_NAMES = MIDI_NOTE_NAMES;
+    N.INSTRUMENT_OFFSET = INSTRUMENT_OFFSET;
+    N.GLOBAL_MIDI_MIN = GLOBAL_MIDI_MIN;
+    N.GLOBAL_MIDI_MAX = GLOBAL_MIDI_MAX;
+    N.GLOBAL_MIDI_SPAN = GLOBAL_MIDI_SPAN;
+    N.NBS_KEY_MAX = NBS_KEY_MAX;
+    N.PROCESSED_MIDI_MAX = PROCESSED_MIDI_MAX;
+    N.MC_KEY_MIN = MC_KEY_MIN;
+    N.MC_KEY_MAX = MC_KEY_MAX;
+    N.MC_MIDI_MIN = MC_MIDI_MIN;
+    N.MC_MIDI_MAX = MC_MIDI_MAX;
+    N.MC_MIDI_SPAN = MC_MIDI_SPAN;
+    N.MELODY_INSTRUMENT_IDS = MELODY_INSTRUMENT_IDS;
 })(window.WebNBS);

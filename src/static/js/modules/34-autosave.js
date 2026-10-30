@@ -6,50 +6,54 @@
     N.shared = N.shared || {};
 
     // ---- 跨模块依赖 ----
-    var STORAGE_KEY = N.STORAGE_KEY;
-    var SEG_DEFAULT_LANE_H = N.SEG_DEFAULT_LANE_H;
-    var PROJECT_DB = N.PROJECT_DB;
-    var _appDialogStack = N._appDialogStack;
-    function tabMarkDirty() { return N.tabMarkDirty.apply(this, arguments); }
-    function safeSetItem() { return N.safeSetItem.apply(this, arguments); }
-    function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
-    function createDefaultLayers() { return N.createDefaultLayers.apply(this, arguments); }
-    function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
-    function updateUndoRedoButtons() { return N.updateUndoRedoButtons.apply(this, arguments); }
-    function $setValue() { return N.$setValue.apply(this, arguments); }
+    var state = N.state;
     function $() { return N.$.apply(this, arguments); }
     function $setText() { return N.$setText.apply(this, arguments); }
-    function resetStreamingLyrics() { return N.resetStreamingLyrics.apply(this, arguments); }
-    function lyricRebuildIndex() { return N.lyricRebuildIndex.apply(this, arguments); }
-    function syncLyricsToRoll() { return N.syncLyricsToRoll.apply(this, arguments); }
-    function segmentEnsure() { return N.segmentEnsure.apply(this, arguments); }
-    function segmentCaptureFromSong() { return N.segmentCaptureFromSong.apply(this, arguments); }
-    function segmentSync() { return N.segmentSync.apply(this, arguments); }
-    function updateSongInfo() { return N.updateSongInfo.apply(this, arguments); }
-    function updateInstrumentSelectorUI() { return N.updateInstrumentSelectorUI.apply(this, arguments); }
-    function updateAutoScrollBtnIcon() { return N.updateAutoScrollBtnIcon.apply(this, arguments); }
-    function updateTrackPanelUI() { return N.updateTrackPanelUI.apply(this, arguments); }
-    function updateNoteCount() { return N.updateNoteCount.apply(this, arguments); }
-    function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
-    function handleStop() { return N.handleStop.apply(this, arguments); }
-    function updatePianoKeyboardHighlight() { return N.updatePianoKeyboardHighlight.apply(this, arguments); }
-    function i18nText() { return N.i18nText.apply(this, arguments); }
-    function getHistoryFiles() { return N.getHistoryFiles.apply(this, arguments); }
-    function loadFileFromLocalStorage() { return N.loadFileFromLocalStorage.apply(this, arguments); }
-    function resetToNewFile() { return N.resetToNewFile.apply(this, arguments); }
-    function showAppConfirm() { return N.showAppConfirm.apply(this, arguments); }
-    function _appDialogOverlay() { return N._appDialogOverlay.apply(this, arguments); }
+    function $setValue() { return N.$setValue.apply(this, arguments); }
+    var PROJECT_DB = N.PROJECT_DB;
+    var PROJECT_STORE = N.PROJECT_STORE;
+    var SEG_DEFAULT_LANE_H = N.SEG_DEFAULT_LANE_H;
+    var STORAGE_KEY = N.STORAGE_KEY;
     function _appDialogBox() { return N._appDialogBox.apply(this, arguments); }
-    function _closeAppDialog() { return N._closeAppDialog.apply(this, arguments); }
     function _appDialogBtn() { return N._appDialogBtn.apply(this, arguments); }
-    function projectDbDelete() { return N.projectDbDelete.apply(this, arguments); }
-    function saveFileToLocalStorage() { return N.saveFileToLocalStorage.apply(this, arguments); }
-    function showToast() { return N.showToast.apply(this, arguments); }
-    function pushUndo() { return N.pushUndo.apply(this, arguments); }
-    function performUndo() { return N.performUndo.apply(this, arguments); }
+    function _appDialogOverlay() { return N._appDialogOverlay.apply(this, arguments); }
+    var _appDialogStack = N._appDialogStack;
+    function _closeAppDialog() { return N._closeAppDialog.apply(this, arguments); }
+    function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
+    function createDefaultLayers() { return N.createDefaultLayers.apply(this, arguments); }
+    function estimateStoreBytes() { return N.estimateStoreBytes.apply(this, arguments); }
+    function getHistoryFiles() { return N.getHistoryFiles.apply(this, arguments); }
+    function handleStop() { return N.handleStop.apply(this, arguments); }
+    function i18nText() { return N.i18nText.apply(this, arguments); }
+    function init() { return N.init.apply(this, arguments); }
+    function loadFileFromLocalStorage() { return N.loadFileFromLocalStorage.apply(this, arguments); }
+    function lyricRebuildIndex() { return N.lyricRebuildIndex.apply(this, arguments); }
     function performRedo() { return N.performRedo.apply(this, arguments); }
+    function performUndo() { return N.performUndo.apply(this, arguments); }
+    function projectDbDelete() { return N.projectDbDelete.apply(this, arguments); }
+    function pushUndo() { return N.pushUndo.apply(this, arguments); }
+    function resetStreamingLyrics() { return N.resetStreamingLyrics.apply(this, arguments); }
+    function resetToNewFile() { return N.resetToNewFile.apply(this, arguments); }
+    function safeSetItem() { return N.safeSetItem.apply(this, arguments); }
+    function saveFileToLocalStorage() { return N.saveFileToLocalStorage.apply(this, arguments); }
     function seekToTick() { return N.seekToTick.apply(this, arguments); }
+    function segmentCaptureFromSong() { return N.segmentCaptureFromSong.apply(this, arguments); }
     function segmentCompose() { return N.segmentCompose.apply(this, arguments); }
+    function segmentEnsure() { return N.segmentEnsure.apply(this, arguments); }
+    function segmentSync() { return N.segmentSync.apply(this, arguments); }
+    function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
+    function showAppConfirm() { return N.showAppConfirm.apply(this, arguments); }
+    function showToast() { return N.showToast.apply(this, arguments); }
+    function syncLyricsToRoll() { return N.syncLyricsToRoll.apply(this, arguments); }
+    function tabMarkDirty() { return N.tabMarkDirty.apply(this, arguments); }
+    function updateAutoScrollBtnIcon() { return N.updateAutoScrollBtnIcon.apply(this, arguments); }
+    function updateInstrumentSelectorUI() { return N.updateInstrumentSelectorUI.apply(this, arguments); }
+    function updateNoteCount() { return N.updateNoteCount.apply(this, arguments); }
+    function updatePianoKeyboardHighlight() { return N.updatePianoKeyboardHighlight.apply(this, arguments); }
+    function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
+    function updateSongInfo() { return N.updateSongInfo.apply(this, arguments); }
+    function updateTrackPanelUI() { return N.updateTrackPanelUI.apply(this, arguments); }
+    function updateUndoRedoButtons() { return N.updateUndoRedoButtons.apply(this, arguments); }
 
     var _saveTimer = null;
     var _saveDebounceMs = 800;
@@ -837,12 +841,10 @@
     };
 
     // ============ 启动 ============
-    document.addEventListener('DOMContentLoaded', init);
+    // 启动由装配入口 main.js 统一触发 (window.WebNBS.init),
+    // 此处不得重复注册, 否则 init 会执行两次并产生双份渲染循环与事件绑定
 
     // ---- 导出 ----
-    N._saveTimer = _saveTimer;
-    N._saveDebounceMs = _saveDebounceMs;
-    N._autoSaveQuotaWarned = _autoSaveQuotaWarned;
     N.markDirty = markDirty;
     N.autoSaveLocal = autoSaveLocal;
     N.autoLoadLocal = autoLoadLocal;
@@ -850,16 +852,13 @@
     N.formatRelativeTime = formatRelativeTime;
     N.getRecoverableInfo = getRecoverableInfo;
     N.updateWelcomeResumeHint = updateWelcomeResumeHint;
-    N.WELCOME_RECENT_LIMIT = WELCOME_RECENT_LIMIT;
     N.renderWelcomeRecent = renderWelcomeRecent;
     N.showWelcomeScreen = showWelcomeScreen;
     N.hideWelcomeScreen = hideWelcomeScreen;
     N.welcomeResume = welcomeResume;
     N.welcomeCreateNew = welcomeCreateNew;
     N.initWelcomeScreen = initWelcomeScreen;
-    N.STORAGE_WARN_BYTES = STORAGE_WARN_BYTES;
-    N.STORAGE_SNOOZE_STEP = STORAGE_SNOOZE_STEP;
-    N.bytes = bytes;
+    N.formatStorageSize = formatStorageSize;
     N.measureLocalStorageBytes = measureLocalStorageBytes;
     N.collectStorageBreakdown = collectStorageBreakdown;
     N.getStorageSnoozeBytes = getStorageSnoozeBytes;
@@ -867,7 +866,15 @@
     N.clearObjectStore = clearObjectStore;
     N.showStorageCleanupDialog = showStorageCleanupDialog;
     N.performStorageCleanup = performStorageCleanup;
-    N._lastFlushAt = _lastFlushAt;
     N.flushPendingSave = flushPendingSave;
+    N._saveTimer = _saveTimer;
+    N._saveDebounceMs = _saveDebounceMs;
+    N._autoSaveQuotaWarned = _autoSaveQuotaWarned;
+    N.WELCOME_RECENT_LIMIT = WELCOME_RECENT_LIMIT;
+    N.STORAGE_WARN_BYTES = STORAGE_WARN_BYTES;
+    N.STORAGE_SNOOZE_KEY = STORAGE_SNOOZE_KEY;
+    N.STORAGE_SNOOZE_STEP = STORAGE_SNOOZE_STEP;
+    N.STORAGE_KEEP_RECENT = STORAGE_KEEP_RECENT;
+    N._lastFlushAt = _lastFlushAt;
     N.WebNBS = WebNBS;
 })(window.WebNBS);

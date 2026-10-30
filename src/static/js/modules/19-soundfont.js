@@ -6,16 +6,16 @@
     N.shared = N.shared || {};
 
     // ---- 跨模块依赖 ----
-    var _appDialogStack = N._appDialogStack;
     function $() { return N.$.apply(this, arguments); }
+    function _appDialogBox() { return N._appDialogBox.apply(this, arguments); }
+    function _appDialogBtn() { return N._appDialogBtn.apply(this, arguments); }
+    function _appDialogOverlay() { return N._appDialogOverlay.apply(this, arguments); }
+    var _appDialogStack = N._appDialogStack;
+    function _closeAppDialog() { return N._closeAppDialog.apply(this, arguments); }
+    function dismissToast() { return N.dismissToast.apply(this, arguments); }
     function showAppConfirm() { return N.showAppConfirm.apply(this, arguments); }
     function showToast() { return N.showToast.apply(this, arguments); }
     function updateToast() { return N.updateToast.apply(this, arguments); }
-    function dismissToast() { return N.dismissToast.apply(this, arguments); }
-    function _appDialogOverlay() { return N._appDialogOverlay.apply(this, arguments); }
-    function _appDialogBox() { return N._appDialogBox.apply(this, arguments); }
-    function _closeAppDialog() { return N._closeAppDialog.apply(this, arguments); }
-    function _appDialogBtn() { return N._appDialogBtn.apply(this, arguments); }
 
     //   'off'          不使用 (内置合成器)
     N.shared._sfConfig = null;
@@ -211,7 +211,6 @@
     // ============ 横屏模式抽屉 ============
 
     // ---- 导出 ----
-    N._sfOnDemandTriggered = _sfOnDemandTriggered;
     N.updateSfStatusText = updateSfStatusText;
     N.getMidiSfMode = getMidiSfMode;
     N.startSfDownload = startSfDownload;
@@ -219,4 +218,5 @@
     N.initSoundfontLoader = initSoundfontLoader;
     N.initPrivacyPopup = initPrivacyPopup;
     N.showReleaseNotes = showReleaseNotes;
+    N._sfOnDemandTriggered = _sfOnDemandTriggered;
 })(window.WebNBS);

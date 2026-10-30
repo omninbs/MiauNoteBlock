@@ -6,23 +6,24 @@
     N.shared = N.shared || {};
 
     // ---- 跨模块依赖 ----
+    var state = N.state;
     function $() { return N.$.apply(this, arguments); }
-    function $setValue() { return N.$setValue.apply(this, arguments); }
     function $setText() { return N.$setText.apply(this, arguments); }
-    function saveOnPlay() { return N.saveOnPlay.apply(this, arguments); }
-    function stopPerformanceRecording() { return N.stopPerformanceRecording.apply(this, arguments); }
-    function startPerformanceRecordingSetup() { return N.startPerformanceRecordingSetup.apply(this, arguments); }
-    function commitPerformanceNotes() { return N.commitPerformanceNotes.apply(this, arguments); }
-    function stopPerformanceTickCounter() { return N.stopPerformanceTickCounter.apply(this, arguments); }
-    function updatePlayButtonForRecording() { return N.updatePlayButtonForRecording.apply(this, arguments); }
-    function stopContinuousMetronome() { return N.stopContinuousMetronome.apply(this, arguments); }
+    function $setValue() { return N.$setValue.apply(this, arguments); }
     function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
+    function commitPerformanceNotes() { return N.commitPerformanceNotes.apply(this, arguments); }
     function getNotesAtTick() { return N.getNotesAtTick.apply(this, arguments); }
-    function isTrackAudible() { return N.isTrackAudible.apply(this, arguments); }
+    function hideLyricsOverlay() { return N.hideLyricsOverlay.apply(this, arguments); }
     function isChannelAudible() { return N.isChannelAudible.apply(this, arguments); }
+    function isTrackAudible() { return N.isTrackAudible.apply(this, arguments); }
     function processLyricsAtTick() { return N.processLyricsAtTick.apply(this, arguments); }
     function resetStreamingLyrics() { return N.resetStreamingLyrics.apply(this, arguments); }
-    function hideLyricsOverlay() { return N.hideLyricsOverlay.apply(this, arguments); }
+    function saveOnPlay() { return N.saveOnPlay.apply(this, arguments); }
+    function startPerformanceRecordingSetup() { return N.startPerformanceRecordingSetup.apply(this, arguments); }
+    function stopContinuousMetronome() { return N.stopContinuousMetronome.apply(this, arguments); }
+    function stopPerformanceRecording() { return N.stopPerformanceRecording.apply(this, arguments); }
+    function stopPerformanceTickCounter() { return N.stopPerformanceTickCounter.apply(this, arguments); }
+    function updatePlayButtonForRecording() { return N.updatePlayButtonForRecording.apply(this, arguments); }
     function formatTime() { return N.formatTime.apply(this, arguments); }
 
 
@@ -464,7 +465,6 @@
 
     // ---- 导出 ----
     N.getSongLengthTicks = getSongLengthTicks;
-    N.formatTime = formatTime;
     N.updateAutoScrollBtnIcon = updateAutoScrollBtnIcon;
     N.openSettingsDialog = openSettingsDialog;
     N.closeSettingsDialog = closeSettingsDialog;

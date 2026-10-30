@@ -7,15 +7,16 @@
 
     // ---- 跨模块依赖 ----
     var state = N.state;
-    var CI_PRESET_COLORS = N.CI_PRESET_COLORS;
-    function getNbsKeyPitchLabel() { return N.getNbsKeyPitchLabel.apply(this, arguments); }
-    function getNbsKeyOctave() { return N.getNbsKeyOctave.apply(this, arguments); }
     function $() { return N.$.apply(this, arguments); }
-    function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
-    function updateInstrumentSelectorUI() { return N.updateInstrumentSelectorUI.apply(this, arguments); }
-    function showAppPrompt() { return N.showAppPrompt.apply(this, arguments); }
-    function showAppConfirm() { return N.showAppConfirm.apply(this, arguments); }
+    var CI_PRESET_COLORS = N.CI_PRESET_COLORS;
+    function exportInstrumentBackup() { return N.exportInstrumentBackup.apply(this, arguments); }
+    function getNbsKeyOctave() { return N.getNbsKeyOctave.apply(this, arguments); }
+    function getNbsKeyPitchLabel() { return N.getNbsKeyPitchLabel.apply(this, arguments); }
     function handleZipFile() { return N.handleZipFile.apply(this, arguments); }
+    function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
+    function showAppConfirm() { return N.showAppConfirm.apply(this, arguments); }
+    function showAppPrompt() { return N.showAppPrompt.apply(this, arguments); }
+    function updateInstrumentSelectorUI() { return N.updateInstrumentSelectorUI.apply(this, arguments); }
 
     var _ciPending = null;   // 导入中 { blob, buffer }
 
@@ -739,7 +740,6 @@
     }
 
     // ---- 导出 ----
-    N._ciPending = _ciPending;
     N.ciKeyLabel = ciKeyLabel;
     N.customInstPopupVisible = customInstPopupVisible;
     N.openCustomInstPopup = openCustomInstPopup;
@@ -750,8 +750,6 @@
     N.ciPlayItem = ciPlayItem;
     N.renderCustomInstList = renderCustomInstList;
     N.ciStartImport = ciStartImport;
-    N._ciFixPlay = _ciFixPlay;
-    N._ciFix = _ciFix;
     N.ciBeginImportFlow = ciBeginImportFlow;
     N.ciFixOpenWindow = ciFixOpenWindow;
     N.ciFixCloseWindow = ciFixCloseWindow;
@@ -771,7 +769,6 @@
     N.ciOpenInfoAfterFix = ciOpenInfoAfterFix;
     N.ciCloseImportInfo = ciCloseImportInfo;
     N.ciBackToFix = ciBackToFix;
-    N._ciSelectedColor = _ciSelectedColor;
     N.ciRenderColorPicker = ciRenderColorPicker;
     N.ciHexToRgb = ciHexToRgb;
     N.ciRgbToHex = ciRgbToHex;
@@ -782,4 +779,8 @@
     N.ciConfirmImport = ciConfirmImport;
     N.onCustomInstListClick = onCustomInstListClick;
     N.initCustomInstrumentsUI = initCustomInstrumentsUI;
+    N._ciPending = _ciPending;
+    N._ciFixPlay = _ciFixPlay;
+    N._ciFix = _ciFix;
+    N._ciSelectedColor = _ciSelectedColor;
 })(window.WebNBS);

@@ -9,8 +9,8 @@
     var state = N.state;
     function $() { return N.$.apply(this, arguments); }
     function getInstrumentNames() { return N.getInstrumentNames.apply(this, arguments); }
-    function markDirty() { return N.markDirty.apply(this, arguments); }
     function i18nText() { return N.i18nText.apply(this, arguments); }
+    function markDirty() { return N.markDirty.apply(this, arguments); }
 
 
     // ============ 乐器选择器 ============

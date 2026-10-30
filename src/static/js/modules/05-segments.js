@@ -7,18 +7,19 @@
 
     // ---- 跨模块依赖 ----
     var state = N.state;
-    var SEG_DEFAULT_LANE_H = N.SEG_DEFAULT_LANE_H;
-    function segmentEnsureLanes() { return N.segmentEnsureLanes.apply(this, arguments); }
-    function segmentEnsureEmptyLane() { return N.segmentEnsureEmptyLane.apply(this, arguments); }
     function $() { return N.$.apply(this, arguments); }
-    function rebuildFromNotes() { return N.rebuildFromNotes.apply(this, arguments); }
+    var SEG_DEFAULT_LANE_H = N.SEG_DEFAULT_LANE_H;
+    function dlBlob() { return N.dlBlob.apply(this, arguments); }
+    function escapeHtml() { return N.escapeHtml.apply(this, arguments); }
+    function exitLyricsEditMode() { return N.exitLyricsEditMode.apply(this, arguments); }
+    function getSongLengthTicks() { return N.getSongLengthTicks.apply(this, arguments); }
+    function i18nText() { return N.i18nText.apply(this, arguments); }
     function markDirty() { return N.markDirty.apply(this, arguments); }
     function pushUndo() { return N.pushUndo.apply(this, arguments); }
-    function dlBlob() { return N.dlBlob.apply(this, arguments); }
+    function rebuildFromNotes() { return N.rebuildFromNotes.apply(this, arguments); }
+    function segmentEnsureEmptyLane() { return N.segmentEnsureEmptyLane.apply(this, arguments); }
+    function segmentEnsureLanes() { return N.segmentEnsureLanes.apply(this, arguments); }
     function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
-    function escapeHtml() { return N.escapeHtml.apply(this, arguments); }
-    function i18nText() { return N.i18nText.apply(this, arguments); }
-    function exitLyricsEditMode() { return N.exitLyricsEditMode.apply(this, arguments); }
     function syncTrackPanelToggleButton() { return N.syncTrackPanelToggleButton.apply(this, arguments); }
 
 
@@ -943,12 +944,12 @@
     N.segmentMergeSelected = segmentMergeSelected;
     N.segmentMergeAll = segmentMergeAll;
     N.segmentExportOne = segmentExportOne;
-    N._sidePanelRetry = _sidePanelRetry;
     N.renderSegmentSidePanel = renderSegmentSidePanel;
-    N._segLaneResize = _segLaneResize;
     N.bindSegmentSidePanel = bindSegmentSidePanel;
     N.syncSegmentToolbarTop = syncSegmentToolbarTop;
     N.enterSegmentsEditMode = enterSegmentsEditMode;
     N.exitSegmentsEditMode = exitSegmentsEditMode;
     N.toggleSegmentsEditMode = toggleSegmentsEditMode;
+    N._sidePanelRetry = _sidePanelRetry;
+    N._segLaneResize = _segLaneResize;
 })(window.WebNBS);

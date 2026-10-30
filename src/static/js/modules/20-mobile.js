@@ -8,17 +8,17 @@
     // ---- 跨模块依赖 ----
     var state = N.state;
     function $() { return N.$.apply(this, arguments); }
-    function findPanelVisible() { return N.findPanelVisible.apply(this, arguments); }
-    function closeFindPanel() { return N.closeFindPanel.apply(this, arguments); }
-    function openFindPanel() { return N.openFindPanel.apply(this, arguments); }
-    function handlePasteOrSystemClipboard() { return N.handlePasteOrSystemClipboard.apply(this, arguments); }
-    function showMidiNotice() { return N.showMidiNotice.apply(this, arguments); }
-    function handleContextAction() { return N.handleContextAction.apply(this, arguments); }
-    function switchTool() { return N.switchTool.apply(this, arguments); }
     function $setText() { return N.$setText.apply(this, arguments); }
     function $setValue() { return N.$setValue.apply(this, arguments); }
+    function closeFindPanel() { return N.closeFindPanel.apply(this, arguments); }
+    function findPanelVisible() { return N.findPanelVisible.apply(this, arguments); }
+    function handleContextAction() { return N.handleContextAction.apply(this, arguments); }
+    function handlePasteOrSystemClipboard() { return N.handlePasteOrSystemClipboard.apply(this, arguments); }
     function markDirty() { return N.markDirty.apply(this, arguments); }
+    function openFindPanel() { return N.openFindPanel.apply(this, arguments); }
     function restartPlayback() { return N.restartPlayback.apply(this, arguments); }
+    function showMidiNotice() { return N.showMidiNotice.apply(this, arguments); }
+    function switchTool() { return N.switchTool.apply(this, arguments); }
 
     function createLandscapeDrawerDOM() {
         var btn = $('landscape-menu-btn');
@@ -472,11 +472,12 @@
     N.createLandscapeDrawerDOM = createLandscapeDrawerDOM;
     N.createMobileFabBar = createMobileFabBar;
     N.initMobileToolSwitcher = initMobileToolSwitcher;
+    N.initRadioTempoSlider = initRadioTempoSlider;
+    N.updateRadioTempoSlider = updateRadioTempoSlider;
+    N.setRadioTempo = setRadioTempo;
     N.RADIO_TEMPO_MIN = RADIO_TEMPO_MIN;
     N.RADIO_TEMPO_MAX = RADIO_TEMPO_MAX;
     N.RADIO_TEMPO_STEP = RADIO_TEMPO_STEP;
     N.RADIO_TEMPO_PX_PER_STEP = RADIO_TEMPO_PX_PER_STEP;
-    N.initRadioTempoSlider = initRadioTempoSlider;
-    N.updateRadioTempoSlider = updateRadioTempoSlider;
-    N.setRadioTempo = setRadioTempo;
+    N.radioTempoDragState = radioTempoDragState;
 })(window.WebNBS);

@@ -6,40 +6,41 @@
     N.shared = N.shared || {};
 
     // ---- 跨模块依赖 ----
-    var SEG_DEFAULT_LANE_H = N.SEG_DEFAULT_LANE_H;
+    var state = N.state;
     function $() { return N.$.apply(this, arguments); }
-    function getShiftedKeyboardPianoKey() { return N.getShiftedKeyboardPianoKey.apply(this, arguments); }
-    function getNbsKeyDisplayLabel() { return N.getNbsKeyDisplayLabel.apply(this, arguments); }
-    function hideWelcomeScreen() { return N.hideWelcomeScreen.apply(this, arguments); }
-    function handleZipFile() { return N.handleZipFile.apply(this, arguments); }
-    function handleMidiOpen() { return N.handleMidiOpen.apply(this, arguments); }
-    function resolveMissingCustomInstruments() { return N.resolveMissingCustomInstruments.apply(this, arguments); }
-    function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
-    function formatError() { return N.formatError.apply(this, arguments); }
-    function tabOpenInNewTabIfNeeded() { return N.tabOpenInNewTabIfNeeded.apply(this, arguments); }
-    function lyricRebuildIndex() { return N.lyricRebuildIndex.apply(this, arguments); }
-    function resetStreamingLyrics() { return N.resetStreamingLyrics.apply(this, arguments); }
-    function exitLyricsEditMode() { return N.exitLyricsEditMode.apply(this, arguments); }
-    function syncLyricsToRoll() { return N.syncLyricsToRoll.apply(this, arguments); }
-    function exitSegmentsEditMode() { return N.exitSegmentsEditMode.apply(this, arguments); }
-    function segmentEnsure() { return N.segmentEnsure.apply(this, arguments); }
-    function segmentCaptureFromSong() { return N.segmentCaptureFromSong.apply(this, arguments); }
-    function segmentSync() { return N.segmentSync.apply(this, arguments); }
-    function $setValue() { return N.$setValue.apply(this, arguments); }
     function $setText() { return N.$setText.apply(this, arguments); }
-    function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
-    function updateUndoRedoButtons() { return N.updateUndoRedoButtons.apply(this, arguments); }
-    function updateSongInfo() { return N.updateSongInfo.apply(this, arguments); }
-    function checkOctaveRange() { return N.checkOctaveRange.apply(this, arguments); }
-    function updateTrackPanelUI() { return N.updateTrackPanelUI.apply(this, arguments); }
-    function syncNbsLayerGroups() { return N.syncNbsLayerGroups.apply(this, arguments); }
-    function handleStop() { return N.handleStop.apply(this, arguments); }
-    function markDirty() { return N.markDirty.apply(this, arguments); }
-    function tabStash() { return N.tabStash.apply(this, arguments); }
-    function tabGetActive() { return N.tabGetActive.apply(this, arguments); }
-    function renderTabs() { return N.renderTabs.apply(this, arguments); }
-    function findTrackByLayer() { return N.findTrackByLayer.apply(this, arguments); }
+    function $setValue() { return N.$setValue.apply(this, arguments); }
+    var SEG_DEFAULT_LANE_H = N.SEG_DEFAULT_LANE_H;
     function autoSaveLocal() { return N.autoSaveLocal.apply(this, arguments); }
+    function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
+    function checkOctaveRange() { return N.checkOctaveRange.apply(this, arguments); }
+    function exitLyricsEditMode() { return N.exitLyricsEditMode.apply(this, arguments); }
+    function exitSegmentsEditMode() { return N.exitSegmentsEditMode.apply(this, arguments); }
+    function findTrackByLayer() { return N.findTrackByLayer.apply(this, arguments); }
+    function formatError() { return N.formatError.apply(this, arguments); }
+    function getNbsKeyDisplayLabel() { return N.getNbsKeyDisplayLabel.apply(this, arguments); }
+    function getShiftedKeyboardPianoKey() { return N.getShiftedKeyboardPianoKey.apply(this, arguments); }
+    function handleMidiOpen() { return N.handleMidiOpen.apply(this, arguments); }
+    function handleStop() { return N.handleStop.apply(this, arguments); }
+    function handleZipFile() { return N.handleZipFile.apply(this, arguments); }
+    function hideWelcomeScreen() { return N.hideWelcomeScreen.apply(this, arguments); }
+    function lyricRebuildIndex() { return N.lyricRebuildIndex.apply(this, arguments); }
+    function markDirty() { return N.markDirty.apply(this, arguments); }
+    function renderTabs() { return N.renderTabs.apply(this, arguments); }
+    function resetStreamingLyrics() { return N.resetStreamingLyrics.apply(this, arguments); }
+    function resolveMissingCustomInstruments() { return N.resolveMissingCustomInstruments.apply(this, arguments); }
+    function segmentCaptureFromSong() { return N.segmentCaptureFromSong.apply(this, arguments); }
+    function segmentEnsure() { return N.segmentEnsure.apply(this, arguments); }
+    function segmentSync() { return N.segmentSync.apply(this, arguments); }
+    function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
+    function syncLyricsToRoll() { return N.syncLyricsToRoll.apply(this, arguments); }
+    function syncNbsLayerGroups() { return N.syncNbsLayerGroups.apply(this, arguments); }
+    function tabGetActive() { return N.tabGetActive.apply(this, arguments); }
+    function tabOpenInNewTabIfNeeded() { return N.tabOpenInNewTabIfNeeded.apply(this, arguments); }
+    function tabStash() { return N.tabStash.apply(this, arguments); }
+    function updateSongInfo() { return N.updateSongInfo.apply(this, arguments); }
+    function updateTrackPanelUI() { return N.updateTrackPanelUI.apply(this, arguments); }
+    function updateUndoRedoButtons() { return N.updateUndoRedoButtons.apply(this, arguments); }
 
 
     function updatePianoKeyboardHighlight() {
@@ -483,6 +484,15 @@
     // ---- 导出 ----
     N.updatePianoKeyboardHighlight = updatePianoKeyboardHighlight;
     N.applyOctaveLabelSetting = applyOctaveLabelSetting;
+    N.showTaskProgress = showTaskProgress;
+    N.hideTaskProgress = hideTaskProgress;
+    N.updateTaskProgress = updateTaskProgress;
+    N.applyTaskProgress = applyTaskProgress;
+    N.formatBytes = formatBytes;
+    N.handleFileOpen = handleFileOpen;
+    N.applyLoadedSongData = applyLoadedSongData;
+    N.handleSave = handleSave;
+    N.getInstName = getInstName;
     N._taskProgressTimer = _taskProgressTimer;
     N._taskProgressShown = _taskProgressShown;
     N._taskLastPercent = _taskLastPercent;
@@ -493,15 +503,8 @@
     N._taskLastPhase = _taskLastPhase;
     N._taskShowTime = _taskShowTime;
     N._hideTaskTimer = _hideTaskTimer;
-    N.updateTaskProgress = updateTaskProgress;
     N._phaseNames = _phaseNames;
-    N.applyTaskProgress = applyTaskProgress;
-    N.formatBytes = formatBytes;
-    N.handleFileOpen = handleFileOpen;
-    N.applyLoadedSongData = applyLoadedSongData;
-    N.handleSave = handleSave;
     N.INSTRUMENT_NAMES = INSTRUMENT_NAMES;
-    N.getInstName = getInstName;
     N.NOTE_NAMES = NOTE_NAMES;
     N.formatTime = formatTime;
 })(window.WebNBS);

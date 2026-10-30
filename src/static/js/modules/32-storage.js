@@ -6,28 +6,29 @@
     N.shared = N.shared || {};
 
     // ---- 跨模块依赖 ----
-    function tabGetActive() { return N.tabGetActive.apply(this, arguments); }
-    function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
-    function tabMarkSaved() { return N.tabMarkSaved.apply(this, arguments); }
-    function tabOpenInNewTabIfNeeded() { return N.tabOpenInNewTabIfNeeded.apply(this, arguments); }
-    function resetStreamingLyrics() { return N.resetStreamingLyrics.apply(this, arguments); }
-    function lyricRebuildIndex() { return N.lyricRebuildIndex.apply(this, arguments); }
-    function syncLyricsToRoll() { return N.syncLyricsToRoll.apply(this, arguments); }
-    function $setValue() { return N.$setValue.apply(this, arguments); }
+    var state = N.state;
     function $() { return N.$.apply(this, arguments); }
     function $setText() { return N.$setText.apply(this, arguments); }
+    function $setValue() { return N.$setValue.apply(this, arguments); }
     function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
-    function updateUndoRedoButtons() { return N.updateUndoRedoButtons.apply(this, arguments); }
+    function escapeHTML() { return N.escapeHTML.apply(this, arguments); }
+    function formatError() { return N.formatError.apply(this, arguments); }
+    function handleStop() { return N.handleStop.apply(this, arguments); }
+    function lyricRebuildIndex() { return N.lyricRebuildIndex.apply(this, arguments); }
+    function markDirty() { return N.markDirty.apply(this, arguments); }
+    function renderTabs() { return N.renderTabs.apply(this, arguments); }
+    function resetStreamingLyrics() { return N.resetStreamingLyrics.apply(this, arguments); }
     function segmentEnsure() { return N.segmentEnsure.apply(this, arguments); }
     function segmentSync() { return N.segmentSync.apply(this, arguments); }
+    function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
+    function syncLyricsToRoll() { return N.syncLyricsToRoll.apply(this, arguments); }
+    function tabGetActive() { return N.tabGetActive.apply(this, arguments); }
+    function tabMarkSaved() { return N.tabMarkSaved.apply(this, arguments); }
+    function tabOpenInNewTabIfNeeded() { return N.tabOpenInNewTabIfNeeded.apply(this, arguments); }
+    function tabStash() { return N.tabStash.apply(this, arguments); }
     function updateSongInfo() { return N.updateSongInfo.apply(this, arguments); }
     function updateTrackPanelUI() { return N.updateTrackPanelUI.apply(this, arguments); }
-    function handleStop() { return N.handleStop.apply(this, arguments); }
-    function markDirty() { return N.markDirty.apply(this, arguments); }
-    function tabStash() { return N.tabStash.apply(this, arguments); }
-    function renderTabs() { return N.renderTabs.apply(this, arguments); }
-    function formatError() { return N.formatError.apply(this, arguments); }
-    function escapeHTML() { return N.escapeHTML.apply(this, arguments); }
+    function updateUndoRedoButtons() { return N.updateUndoRedoButtons.apply(this, arguments); }
 
 
     function hideHistorySubmenu() {
@@ -556,14 +557,8 @@
     N.cleanupOrphanedFiles = cleanupOrphanedFiles;
     N.safeSetItem = safeSetItem;
     N.saveFileToLocalStorage = saveFileToLocalStorage;
-    N._autoSaveIntervalMs = _autoSaveIntervalMs;
-    N._autoSaveIntervalTimer = _autoSaveIntervalTimer;
     N.startAutoSaveInterval = startAutoSaveInterval;
     N.saveOnPlay = saveOnPlay;
-    N.PROJECT_DB = PROJECT_DB;
-    N.PROJECT_STORE = PROJECT_STORE;
-    N.PROJECT_MIGRATED_KEY = PROJECT_MIGRATED_KEY;
-    N._projectDbPromise = _projectDbPromise;
     N.openProjectDB = openProjectDB;
     N.projectDbPut = projectDbPut;
     N.projectDbGet = projectDbGet;
@@ -576,4 +571,10 @@
     N.applyStoredFileData = applyStoredFileData;
     N.loadFileFromLocalStorage = loadFileFromLocalStorage;
     N.showHistoryDialog = showHistoryDialog;
+    N._autoSaveIntervalMs = _autoSaveIntervalMs;
+    N._autoSaveIntervalTimer = _autoSaveIntervalTimer;
+    N.PROJECT_DB = PROJECT_DB;
+    N.PROJECT_STORE = PROJECT_STORE;
+    N.PROJECT_MIGRATED_KEY = PROJECT_MIGRATED_KEY;
+    N._projectDbPromise = _projectDbPromise;
 })(window.WebNBS);

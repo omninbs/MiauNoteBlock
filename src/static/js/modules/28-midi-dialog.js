@@ -6,37 +6,45 @@
     N.shared = N.shared || {};
 
     // ---- 跨模块依赖 ----
-    var INSTRUMENT_OFFSET = N.INSTRUMENT_OFFSET;
-    var MC_MIDI_MIN = N.MC_MIDI_MIN;
-    var INSTRUMENT_NAMES = N.INSTRUMENT_NAMES;
-    var NOTE_NAMES = N.NOTE_NAMES;
+    var state = N.state;
     function $() { return N.$.apply(this, arguments); }
-    function escapeHTML() { return N.escapeHTML.apply(this, arguments); }
-    function getInstrumentIconHtml() { return N.getInstrumentIconHtml.apply(this, arguments); }
-    function loadSubstituteConfig() { return N.loadSubstituteConfig.apply(this, arguments); }
-    function collectTimbreFitting() { return N.collectTimbreFitting.apply(this, arguments); }
-    function handlePlayToggle() { return N.handlePlayToggle.apply(this, arguments); }
-    function stopMidiTrackPlayback() { return N.stopMidiTrackPlayback.apply(this, arguments); }
     function $setText() { return N.$setText.apply(this, arguments); }
-    function updateTaskProgress() { return N.updateTaskProgress.apply(this, arguments); }
-    function computeMidiFileHash() { return N.computeMidiFileHash.apply(this, arguments); }
-    function formatError() { return N.formatError.apply(this, arguments); }
-    function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
-    function getMidiConfigForHash() { return N.getMidiConfigForHash.apply(this, arguments); }
+    var INSTRUMENT_NAMES = N.INSTRUMENT_NAMES;
+    var INSTRUMENT_OFFSET = N.INSTRUMENT_OFFSET;
+    var MC_MIDI_MAX = N.MC_MIDI_MAX;
+    var MC_MIDI_MIN = N.MC_MIDI_MIN;
+    var MC_MIDI_SPAN = N.MC_MIDI_SPAN;
+    var MELODY_INSTRUMENT_IDS = N.MELODY_INSTRUMENT_IDS;
+    var NOTE_NAMES = N.NOTE_NAMES;
     function applyMidiBasicConfig() { return N.applyMidiBasicConfig.apply(this, arguments); }
-    function resetMidiBasicToDefaults() { return N.resetMidiBasicToDefaults.apply(this, arguments); }
-    function updateFittingLevelUI() { return N.updateFittingLevelUI.apply(this, arguments); }
-    function emptyTimbreFittingSaved() { return N.emptyTimbreFittingSaved.apply(this, arguments); }
+    function applySavedPercussionPrefs() { return N.applySavedPercussionPrefs.apply(this, arguments); }
     function bindMidiOctaveKeyChange() { return N.bindMidiOctaveKeyChange.apply(this, arguments); }
     function buildMidiTrackRows() { return N.buildMidiTrackRows.apply(this, arguments); }
     function buildTimbreFittingRows() { return N.buildTimbreFittingRows.apply(this, arguments); }
-    function parseMidiFileForPlayback() { return N.parseMidiFileForPlayback.apply(this, arguments); }
-    function applySavedPercussionPrefs() { return N.applySavedPercussionPrefs.apply(this, arguments); }
-    function updateSnapGridInfo() { return N.updateSnapGridInfo.apply(this, arguments); }
+    function collectTimbreFitting() { return N.collectTimbreFitting.apply(this, arguments); }
+    function computeMidiFileHash() { return N.computeMidiFileHash.apply(this, arguments); }
+    function emptyTimbreFittingSaved() { return N.emptyTimbreFittingSaved.apply(this, arguments); }
     function ensureSoundfontOnDemand() { return N.ensureSoundfontOnDemand.apply(this, arguments); }
+    function escapeHTML() { return N.escapeHTML.apply(this, arguments); }
+    function formatError() { return N.formatError.apply(this, arguments); }
+    function getInstName() { return N.getInstName.apply(this, arguments); }
+    function getInstrumentIconHtml() { return N.getInstrumentIconHtml.apply(this, arguments); }
+    function getMidiConfigForHash() { return N.getMidiConfigForHash.apply(this, arguments); }
+    function handlePlayToggle() { return N.handlePlayToggle.apply(this, arguments); }
+    function hideTaskProgress() { return N.hideTaskProgress.apply(this, arguments); }
+    function initMidiTrackMiniRolls() { return N.initMidiTrackMiniRolls.apply(this, arguments); }
+    function loadSubstituteConfig() { return N.loadSubstituteConfig.apply(this, arguments); }
     function midiTrackShouldPlay() { return N.midiTrackShouldPlay.apply(this, arguments); }
+    function parseMidiFileForPlayback() { return N.parseMidiFileForPlayback.apply(this, arguments); }
     function renderAllMidiTrackRows() { return N.renderAllMidiTrackRows.apply(this, arguments); }
+    function resetMidiBasicToDefaults() { return N.resetMidiBasicToDefaults.apply(this, arguments); }
+    function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
+    function showTaskProgress() { return N.showTaskProgress.apply(this, arguments); }
+    function stopMidiTrackPlayback() { return N.stopMidiTrackPlayback.apply(this, arguments); }
+    function updateFittingLevelUI() { return N.updateFittingLevelUI.apply(this, arguments); }
     function updateMidiTrackPlayerButtons() { return N.updateMidiTrackPlayerButtons.apply(this, arguments); }
+    function updateSnapGridInfo() { return N.updateSnapGridInfo.apply(this, arguments); }
+    function updateTaskProgress() { return N.updateTaskProgress.apply(this, arguments); }
 
 
     // 显示音色替代槽选择菜单 (风格与 timbre-slot-menu 一致)
@@ -2845,9 +2853,6 @@
     N.buildPitchSelect = buildPitchSelect;
     N.handleMidiOpen = handleMidiOpen;
     N.populateMidiDialog = populateMidiDialog;
-    N._midiPreviewTimeout = _midiPreviewTimeout;
-    N._midiPreviewNotes = _midiPreviewNotes;
-    N._tinySynth = _tinySynth;
     N.getTinySynth = getTinySynth;
     N.prepareTinySynthProgram = prepareTinySynthProgram;
     N.stopTinySynthAll = stopTinySynthAll;
@@ -2862,7 +2867,6 @@
     N.previewMidiChannel = previewMidiChannel;
     N.previewNbsChannel = previewNbsChannel;
     N.bindMidiPreviewButtons = bindMidiPreviewButtons;
-    N._midiTrackPlayback = _midiTrackPlayback;
     N.initMidiTrackStates = initMidiTrackStates;
     N.isChannelExcluded = isChannelExcluded;
     N.isChannelAudible = isChannelAudible;
@@ -2879,7 +2883,6 @@
     N.getMidiTrackMeta = getMidiTrackMeta;
     N.buildFallbackTrackPreviewNotes = buildFallbackTrackPreviewNotes;
     N.extractTrackNotes = extractTrackNotes;
-    N._sustainPreview = _sustainPreview;
     N.toggleSustainTrackPreview = toggleSustainTrackPreview;
     N.stopSustainTrackPreview = stopSustainTrackPreview;
     N.previewSustainTrack = previewSustainTrack;
@@ -2888,4 +2891,10 @@
     N.playNoteAsNbs = playNoteAsNbs;
     N.SimpleMidiRoll = SimpleMidiRoll;
     N.MiniMidiRoll = MiniMidiRoll;
+    N._midiPreviewTimeout = _midiPreviewTimeout;
+    N._midiPreviewNotes = _midiPreviewNotes;
+    N._tinySynth = _tinySynth;
+    N._midiPrefsByHash = _midiPrefsByHash;
+    N._midiTrackPlayback = _midiTrackPlayback;
+    N._sustainPreview = _sustainPreview;
 })(window.WebNBS);

@@ -7,34 +7,35 @@
 
     // ---- 跨模块依赖 ----
     var state = N.state;
-    function renderSegmentSidePanel() { return N.renderSegmentSidePanel.apply(this, arguments); }
-    function segmentCommitDrag() { return N.segmentCommitDrag.apply(this, arguments); }
     function $() { return N.$.apply(this, arguments); }
-    function findTrackByLayer() { return N.findTrackByLayer.apply(this, arguments); }
-    function pushUndo() { return N.pushUndo.apply(this, arguments); }
     function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
-    function segmentFollowSongEnd() { return N.segmentFollowSongEnd.apply(this, arguments); }
+    function commitLyricClipDrag() { return N.commitLyricClipDrag.apply(this, arguments); }
+    function createLyricClip() { return N.createLyricClip.apply(this, arguments); }
+    function deleteTrack() { return N.deleteTrack.apply(this, arguments); }
+    function findTrackByLayer() { return N.findTrackByLayer.apply(this, arguments); }
+    function markDirty() { return N.markDirty.apply(this, arguments); }
+    function moveTrackDown() { return N.moveTrackDown.apply(this, arguments); }
+    function moveTrackUp() { return N.moveTrackUp.apply(this, arguments); }
+    function mutedSoloToLock() { return N.mutedSoloToLock.apply(this, arguments); }
+    function pushUndo() { return N.pushUndo.apply(this, arguments); }
+    function renderSegmentSidePanel() { return N.renderSegmentSidePanel.apply(this, arguments); }
+    function reorderTrack() { return N.reorderTrack.apply(this, arguments); }
+    function seekToTick() { return N.seekToTick.apply(this, arguments); }
     function segmentAdoptTick() { return N.segmentAdoptTick.apply(this, arguments); }
+    function segmentCommitDrag() { return N.segmentCommitDrag.apply(this, arguments); }
+    function segmentFollowSongEnd() { return N.segmentFollowSongEnd.apply(this, arguments); }
+    function setLayerLock() { return N.setLayerLock.apply(this, arguments); }
+    function setTrackVolume() { return N.setTrackVolume.apply(this, arguments); }
+    function showContextMenu() { return N.showContextMenu.apply(this, arguments); }
+    function showLyricEditorPop() { return N.showLyricEditorPop.apply(this, arguments); }
+    function stopUnaudibleTrackAudio() { return N.stopUnaudibleTrackAudio.apply(this, arguments); }
+    function switchTool() { return N.switchTool.apply(this, arguments); }
+    function syncSoloLayersToSong() { return N.syncSoloLayersToSong.apply(this, arguments); }
+    function updateLyricsEditBar() { return N.updateLyricsEditBar.apply(this, arguments); }
     function updateNoteCount() { return N.updateNoteCount.apply(this, arguments); }
     function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
-    function markDirty() { return N.markDirty.apply(this, arguments); }
-    function updateTrackPanelUI() { return N.updateTrackPanelUI.apply(this, arguments); }
-    function showContextMenu() { return N.showContextMenu.apply(this, arguments); }
-    function setLayerLock() { return N.setLayerLock.apply(this, arguments); }
-    function stopUnaudibleTrackAudio() { return N.stopUnaudibleTrackAudio.apply(this, arguments); }
-    function syncSoloLayersToSong() { return N.syncSoloLayersToSong.apply(this, arguments); }
     function updateTrackName() { return N.updateTrackName.apply(this, arguments); }
-    function setTrackVolume() { return N.setTrackVolume.apply(this, arguments); }
-    function moveTrackUp() { return N.moveTrackUp.apply(this, arguments); }
-    function moveTrackDown() { return N.moveTrackDown.apply(this, arguments); }
-    function reorderTrack() { return N.reorderTrack.apply(this, arguments); }
-    function deleteTrack() { return N.deleteTrack.apply(this, arguments); }
-    function seekToTick() { return N.seekToTick.apply(this, arguments); }
-    function showLyricEditorPop() { return N.showLyricEditorPop.apply(this, arguments); }
-    function createLyricClip() { return N.createLyricClip.apply(this, arguments); }
-    function commitLyricClipDrag() { return N.commitLyricClipDrag.apply(this, arguments); }
-    function updateLyricsEditBar() { return N.updateLyricsEditBar.apply(this, arguments); }
-    function switchTool() { return N.switchTool.apply(this, arguments); }
+    function updateTrackPanelUI() { return N.updateTrackPanelUI.apply(this, arguments); }
 
 
     // ============ 钢琴卷帘初始化 ============

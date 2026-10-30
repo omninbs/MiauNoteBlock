@@ -7,20 +7,20 @@
 
     // ---- 跨模块依赖 ----
     var state = N.state;
-    function showToast() { return N.showToast.apply(this, arguments); }
-    function i18nText() { return N.i18nText.apply(this, arguments); }
     function $() { return N.$.apply(this, arguments); }
-    function pushUndo() { return N.pushUndo.apply(this, arguments); }
-    function trimSustainNotes() { return N.trimSustainNotes.apply(this, arguments); }
-    function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
-    function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
-    function updateNoteCount() { return N.updateNoteCount.apply(this, arguments); }
-    function segmentBuildNbsSplit() { return N.segmentBuildNbsSplit.apply(this, arguments); }
-    function mergeIdenticalSegmentTracks() { return N.mergeIdenticalSegmentTracks.apply(this, arguments); }
     function applyNbsRepeatSplit() { return N.applyNbsRepeatSplit.apply(this, arguments); }
-    function segmentSync() { return N.segmentSync.apply(this, arguments); }
-    function markDirty() { return N.markDirty.apply(this, arguments); }
+    function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
     function enterSegmentsEditMode() { return N.enterSegmentsEditMode.apply(this, arguments); }
+    function i18nText() { return N.i18nText.apply(this, arguments); }
+    function markDirty() { return N.markDirty.apply(this, arguments); }
+    function mergeIdenticalSegmentTracks() { return N.mergeIdenticalSegmentTracks.apply(this, arguments); }
+    function pushUndo() { return N.pushUndo.apply(this, arguments); }
+    function segmentBuildNbsSplit() { return N.segmentBuildNbsSplit.apply(this, arguments); }
+    function segmentSync() { return N.segmentSync.apply(this, arguments); }
+    function showToast() { return N.showToast.apply(this, arguments); }
+    function trimSustainNotes() { return N.trimSustainNotes.apply(this, arguments); }
+    function updateNoteCount() { return N.updateNoteCount.apply(this, arguments); }
+    function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
 
     var SEG_SPLIT_SUSTAIN_GAP = 2;
 
@@ -151,10 +151,10 @@
     }
 
     // ---- 导出 ----
-    N.SEG_SPLIT_SUSTAIN_GAP = SEG_SPLIT_SUSTAIN_GAP;
     N.openSegSplitPopup = openSegSplitPopup;
     N.closeSegSplitPopup = closeSegSplitPopup;
     N.runSegSplit = runSegSplit;
     N.initSegSplitPopup = initSegSplitPopup;
     N.splitSegmentByRanges = splitSegmentByRanges;
+    N.SEG_SPLIT_SUSTAIN_GAP = SEG_SPLIT_SUSTAIN_GAP;
 })(window.WebNBS);

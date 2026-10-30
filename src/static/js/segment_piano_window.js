@@ -1004,7 +1004,7 @@
                 ctx.lineWidth = 1;
             } else {
                 ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-                this.roundRect(ctx, x + 0.5, by + 0.5, w - 1, bh - 1, 3);
+                this.roundRect(ctx, x + 0.5, by + 0.5, Math.max(0.5, w - 1), Math.max(0.5, bh - 1), 3);
                 ctx.stroke();
             }
 
@@ -1069,13 +1069,17 @@
     };
 
     SegmentWindow.prototype.roundRect = function(ctx, x, y, w, h, r) {
-        var rr = Math.min(r, w / 2, h / 2);
+        // 缩放很小时音符宽度可能不足 1px, 此处统一收敛为正尺寸与非负圆角,
+        // 否则 arcTo 会因负半径抛 IndexSizeError 并中断整帧绘制
+        var ww = Math.max(0.5, w), hh = Math.max(0.5, h);
+        var rr = Math.min(Math.abs(r), ww / 2, hh / 2);
+        if (!(rr > 0)) rr = 0;
         ctx.beginPath();
         ctx.moveTo(x + rr, y);
-        ctx.arcTo(x + w, y, x + w, y + h, rr);
-        ctx.arcTo(x + w, y + h, x, y + h, rr);
-        ctx.arcTo(x, y + h, x, y, rr);
-        ctx.arcTo(x, y, x + w, y, rr);
+        ctx.arcTo(x + ww, y, x + ww, y + hh, rr);
+        ctx.arcTo(x + ww, y + hh, x, y + hh, rr);
+        ctx.arcTo(x, y + hh, x, y, rr);
+        ctx.arcTo(x, y, x + ww, y, rr);
         ctx.closePath();
     };
 

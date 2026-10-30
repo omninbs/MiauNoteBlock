@@ -6,93 +6,109 @@
     N.shared = N.shared || {};
 
     // ---- 跨模块依赖 ----
-    function loadNumpadRangeSettings() { return N.loadNumpadRangeSettings.apply(this, arguments); }
-    function updateInstrumentSelectorUI() { return N.updateInstrumentSelectorUI.apply(this, arguments); }
-    function updatePianoKeyboardHighlight() { return N.updatePianoKeyboardHighlight.apply(this, arguments); }
+    var state = N.state;
     function $() { return N.$.apply(this, arguments); }
-    function showFileMenu() { return N.showFileMenu.apply(this, arguments); }
-    function renderWelcomeRecent() { return N.renderWelcomeRecent.apply(this, arguments); }
-    function updateWelcomeResumeHint() { return N.updateWelcomeResumeHint.apply(this, arguments); }
-    function buildTimbreFittingRows() { return N.buildTimbreFittingRows.apply(this, arguments); }
-    function fillChannelInstrumentNames() { return N.fillChannelInstrumentNames.apply(this, arguments); }
-    function renderSubstituteRows() { return N.renderSubstituteRows.apply(this, arguments); }
-    function createContextMenuDOM() { return N.createContextMenuDOM.apply(this, arguments); }
-    function createInstrumentSelectorDOM() { return N.createInstrumentSelectorDOM.apply(this, arguments); }
-    function createPianoKeyboardDOM() { return N.createPianoKeyboardDOM.apply(this, arguments); }
-    function createTrackPanelDOM() { return N.createTrackPanelDOM.apply(this, arguments); }
-    function createLandscapeDrawerDOM() { return N.createLandscapeDrawerDOM.apply(this, arguments); }
-    function initPrivacyPopup() { return N.initPrivacyPopup.apply(this, arguments); }
-    function initPianoRoll() { return N.initPianoRoll.apply(this, arguments); }
-    function createMobileFabBar() { return N.createMobileFabBar.apply(this, arguments); }
-    function initMobileToolSwitcher() { return N.initMobileToolSwitcher.apply(this, arguments); }
-    function createFunctionsMenu() { return N.createFunctionsMenu.apply(this, arguments); }
-    function initSegSplitPopup() { return N.initSegSplitPopup.apply(this, arguments); }
-    function initLyricsUI() { return N.initLyricsUI.apply(this, arguments); }
-    function initSegmentsUI() { return N.initSegmentsUI.apply(this, arguments); }
-    function initTabsUI() { return N.initTabsUI.apply(this, arguments); }
-    function initTabs() { return N.initTabs.apply(this, arguments); }
-    function initClipboardPaste() { return N.initClipboardPaste.apply(this, arguments); }
-    function initExternalClipboardPaste() { return N.initExternalClipboardPaste.apply(this, arguments); }
-    function initMidiTrackPlayer() { return N.initMidiTrackPlayer.apply(this, arguments); }
-    function hideFileMenu() { return N.hideFileMenu.apply(this, arguments); }
-    function togglePerformanceRecording() { return N.togglePerformanceRecording.apply(this, arguments); }
-    function pushUndo() { return N.pushUndo.apply(this, arguments); }
-    function markDirty() { return N.markDirty.apply(this, arguments); }
-    function restartPlayback() { return N.restartPlayback.apply(this, arguments); }
-    function openPianoKeyboard() { return N.openPianoKeyboard.apply(this, arguments); }
-    function closeSettingsDialog() { return N.closeSettingsDialog.apply(this, arguments); }
-    function closeTempoDialog() { return N.closeTempoDialog.apply(this, arguments); }
-    function openSettingsDialog() { return N.openSettingsDialog.apply(this, arguments); }
-    function resetStreamingLyrics() { return N.resetStreamingLyrics.apply(this, arguments); }
-    function hideLyricsOverlay() { return N.hideLyricsOverlay.apply(this, arguments); }
-    function syncSegmentToolbarTop() { return N.syncSegmentToolbarTop.apply(this, arguments); }
-    function applyOctaveLabelSetting() { return N.applyOctaveLabelSetting.apply(this, arguments); }
-    function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
-    function startSfDownload() { return N.startSfDownload.apply(this, arguments); }
-    function showAppConfirm() { return N.showAppConfirm.apply(this, arguments); }
-    function updateSfStatusText() { return N.updateSfStatusText.apply(this, arguments); }
-    function initRadioTempoSlider() { return N.initRadioTempoSlider.apply(this, arguments); }
     function $setText() { return N.$setText.apply(this, arguments); }
-    function updateRadioTempoSlider() { return N.updateRadioTempoSlider.apply(this, arguments); }
-    function updateAutoScrollBtnIcon() { return N.updateAutoScrollBtnIcon.apply(this, arguments); }
-    function updateOctaveModeHint() { return N.updateOctaveModeHint.apply(this, arguments); }
-    function updateChannelOctaveForMode() { return N.updateChannelOctaveForMode.apply(this, arguments); }
-    function readSubstituteConfigFromUI() { return N.readSubstituteConfigFromUI.apply(this, arguments); }
-    function saveSubstituteConfig() { return N.saveSubstituteConfig.apply(this, arguments); }
-    function showMidiNotice() { return N.showMidiNotice.apply(this, arguments); }
-    function switchSubstituteTab() { return N.switchSubstituteTab.apply(this, arguments); }
-    function switchMidiTab() { return N.switchMidiTab.apply(this, arguments); }
-    function switchMidiSubTab() { return N.switchMidiSubTab.apply(this, arguments); }
-    function initFittingLevelControl() { return N.initFittingLevelControl.apply(this, arguments); }
-    function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
-    function initKeyboardShortcuts() { return N.initKeyboardShortcuts.apply(this, arguments); }
-    function startFpsDisplayTimer() { return N.startFpsDisplayTimer.apply(this, arguments); }
-    function initModalFloatGuard() { return N.initModalFloatGuard.apply(this, arguments); }
-    function initCreativeAssist() { return N.initCreativeAssist.apply(this, arguments); }
-    function initFindPanel() { return N.initFindPanel.apply(this, arguments); }
-    function initCustomInstrumentsUI() { return N.initCustomInstrumentsUI.apply(this, arguments); }
-    function getInstrumentNames() { return N.getInstrumentNames.apply(this, arguments); }
-    function closeLyricEditorPop() { return N.closeLyricEditorPop.apply(this, arguments); }
-    function hideContextMenu() { return N.hideContextMenu.apply(this, arguments); }
-    function closeCustomInstPopup() { return N.closeCustomInstPopup.apply(this, arguments); }
+    function applyOctaveLabelSetting() { return N.applyOctaveLabelSetting.apply(this, arguments); }
+    function buildTimbreFittingRows() { return N.buildTimbreFittingRows.apply(this, arguments); }
+    function checkStorageUsage() { return N.checkStorageUsage.apply(this, arguments); }
     function ciCloseImportInfo() { return N.ciCloseImportInfo.apply(this, arguments); }
     function ciFixCloseWindow() { return N.ciFixCloseWindow.apply(this, arguments); }
-    function findPickPop() { return N.findPickPop.apply(this, arguments); }
-    function findPanelVisible() { return N.findPanelVisible.apply(this, arguments); }
-    function closeFindPanel() { return N.closeFindPanel.apply(this, arguments); }
-    function loadInstruments() { return N.loadInstruments.apply(this, arguments); }
-    function initTracks() { return N.initTracks.apply(this, arguments); }
-    function syncTrackPanelToggleButton() { return N.syncTrackPanelToggleButton.apply(this, arguments); }
-    function resetToNewFile() { return N.resetToNewFile.apply(this, arguments); }
-    function startAutoSaveInterval() { return N.startAutoSaveInterval.apply(this, arguments); }
-    function initWelcomeScreen() { return N.initWelcomeScreen.apply(this, arguments); }
-    function migrateProjectsToIndexedDB() { return N.migrateProjectsToIndexedDB.apply(this, arguments); }
     function cleanupOrphanedFiles() { return N.cleanupOrphanedFiles.apply(this, arguments); }
-    function checkStorageUsage() { return N.checkStorageUsage.apply(this, arguments); }
+    function closeCustomInstPopup() { return N.closeCustomInstPopup.apply(this, arguments); }
+    function closeFindPanel() { return N.closeFindPanel.apply(this, arguments); }
+    function closeLyricEditorPop() { return N.closeLyricEditorPop.apply(this, arguments); }
+    function closeMidiPopup() { return N.closeMidiPopup.apply(this, arguments); }
+    function closeSettingsDialog() { return N.closeSettingsDialog.apply(this, arguments); }
+    function closeSubstituteSettings() { return N.closeSubstituteSettings.apply(this, arguments); }
+    function closeTempoDialog() { return N.closeTempoDialog.apply(this, arguments); }
+    function createContextMenuDOM() { return N.createContextMenuDOM.apply(this, arguments); }
+    function createFunctionsMenu() { return N.createFunctionsMenu.apply(this, arguments); }
+    function createInstrumentSelectorDOM() { return N.createInstrumentSelectorDOM.apply(this, arguments); }
+    function createLandscapeDrawerDOM() { return N.createLandscapeDrawerDOM.apply(this, arguments); }
+    function createMobileFabBar() { return N.createMobileFabBar.apply(this, arguments); }
+    function createPianoKeyboardDOM() { return N.createPianoKeyboardDOM.apply(this, arguments); }
+    function createTrackPanelDOM() { return N.createTrackPanelDOM.apply(this, arguments); }
+    function doImportMidi() { return N.doImportMidi.apply(this, arguments); }
+    function fillChannelInstrumentNames() { return N.fillChannelInstrumentNames.apply(this, arguments); }
+    function findPanelVisible() { return N.findPanelVisible.apply(this, arguments); }
+    function findPickPop() { return N.findPickPop.apply(this, arguments); }
+    function getInstrumentNames() { return N.getInstrumentNames.apply(this, arguments); }
+    function handleFileOpen() { return N.handleFileOpen.apply(this, arguments); }
+    function handlePlayToggle() { return N.handlePlayToggle.apply(this, arguments); }
+    function handleStop() { return N.handleStop.apply(this, arguments); }
+    function hideContextMenu() { return N.hideContextMenu.apply(this, arguments); }
+    function hideFileMenu() { return N.hideFileMenu.apply(this, arguments); }
+    function hideLyricsOverlay() { return N.hideLyricsOverlay.apply(this, arguments); }
+    function initClipboardPaste() { return N.initClipboardPaste.apply(this, arguments); }
+    function initCreativeAssist() { return N.initCreativeAssist.apply(this, arguments); }
+    function initCustomInstrumentsUI() { return N.initCustomInstrumentsUI.apply(this, arguments); }
+    function initExternalClipboardPaste() { return N.initExternalClipboardPaste.apply(this, arguments); }
+    function initFindPanel() { return N.initFindPanel.apply(this, arguments); }
+    function initFittingLevelControl() { return N.initFittingLevelControl.apply(this, arguments); }
+    function initKeyboardShortcuts() { return N.initKeyboardShortcuts.apply(this, arguments); }
+    function initLyricsUI() { return N.initLyricsUI.apply(this, arguments); }
+    function initMidiTrackPlayer() { return N.initMidiTrackPlayer.apply(this, arguments); }
+    function initMobileToolSwitcher() { return N.initMobileToolSwitcher.apply(this, arguments); }
+    function initModalFloatGuard() { return N.initModalFloatGuard.apply(this, arguments); }
+    function initPianoRoll() { return N.initPianoRoll.apply(this, arguments); }
+    function initPrivacyPopup() { return N.initPrivacyPopup.apply(this, arguments); }
+    function initRadioTempoSlider() { return N.initRadioTempoSlider.apply(this, arguments); }
+    function initSegSplitPopup() { return N.initSegSplitPopup.apply(this, arguments); }
+    function initSegmentsUI() { return N.initSegmentsUI.apply(this, arguments); }
+    function initTabs() { return N.initTabs.apply(this, arguments); }
+    function initTabsUI() { return N.initTabsUI.apply(this, arguments); }
+    function initTracks() { return N.initTracks.apply(this, arguments); }
+    function initWelcomeScreen() { return N.initWelcomeScreen.apply(this, arguments); }
+    function loadInstruments() { return N.loadInstruments.apply(this, arguments); }
+    function loadNumpadRangeSettings() { return N.loadNumpadRangeSettings.apply(this, arguments); }
+    function markDirty() { return N.markDirty.apply(this, arguments); }
+    function migrateProjectsToIndexedDB() { return N.migrateProjectsToIndexedDB.apply(this, arguments); }
+    function openPianoKeyboard() { return N.openPianoKeyboard.apply(this, arguments); }
+    function openSettingsDialog() { return N.openSettingsDialog.apply(this, arguments); }
+    function openSubstituteSettings() { return N.openSubstituteSettings.apply(this, arguments); }
+    function performRedo() { return N.performRedo.apply(this, arguments); }
+    function performUndo() { return N.performUndo.apply(this, arguments); }
+    function pushUndo() { return N.pushUndo.apply(this, arguments); }
+    function readSubstituteConfigFromUI() { return N.readSubstituteConfigFromUI.apply(this, arguments); }
+    function renderSubstituteRows() { return N.renderSubstituteRows.apply(this, arguments); }
+    function renderWelcomeRecent() { return N.renderWelcomeRecent.apply(this, arguments); }
+    function resetStreamingLyrics() { return N.resetStreamingLyrics.apply(this, arguments); }
+    function resetToNewFile() { return N.resetToNewFile.apply(this, arguments); }
+    function restartPlayback() { return N.restartPlayback.apply(this, arguments); }
+    function saveSubstituteConfig() { return N.saveSubstituteConfig.apply(this, arguments); }
+    function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
+    function showAppConfirm() { return N.showAppConfirm.apply(this, arguments); }
+    function showFileMenu() { return N.showFileMenu.apply(this, arguments); }
+    function showMidiNotice() { return N.showMidiNotice.apply(this, arguments); }
+    function showSustainTracksDialog() { return N.showSustainTracksDialog.apply(this, arguments); }
+    function startAutoSaveInterval() { return N.startAutoSaveInterval.apply(this, arguments); }
+    function startFpsDisplayTimer() { return N.startFpsDisplayTimer.apply(this, arguments); }
+    function startSfDownload() { return N.startSfDownload.apply(this, arguments); }
+    function switchMidiSubTab() { return N.switchMidiSubTab.apply(this, arguments); }
+    function switchMidiTab() { return N.switchMidiTab.apply(this, arguments); }
+    function switchSubstituteTab() { return N.switchSubstituteTab.apply(this, arguments); }
+    function syncSegmentToolbarTop() { return N.syncSegmentToolbarTop.apply(this, arguments); }
+    function syncTrackPanelToggleButton() { return N.syncTrackPanelToggleButton.apply(this, arguments); }
+    function togglePerformanceRecording() { return N.togglePerformanceRecording.apply(this, arguments); }
+    function updateAutoScrollBtnIcon() { return N.updateAutoScrollBtnIcon.apply(this, arguments); }
+    function updateChannelOctaveForMode() { return N.updateChannelOctaveForMode.apply(this, arguments); }
+    function updateInstrumentSelectorUI() { return N.updateInstrumentSelectorUI.apply(this, arguments); }
+    function updateOctaveModeHint() { return N.updateOctaveModeHint.apply(this, arguments); }
+    function updatePianoKeyboardHighlight() { return N.updatePianoKeyboardHighlight.apply(this, arguments); }
+    function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
+    function updateRadioTempoSlider() { return N.updateRadioTempoSlider.apply(this, arguments); }
+    function updateSfStatusText() { return N.updateSfStatusText.apply(this, arguments); }
+    function updateSustainTracksUI() { return N.updateSustainTracksUI.apply(this, arguments); }
+    function updateWelcomeResumeHint() { return N.updateWelcomeResumeHint.apply(this, arguments); }
 
 
     // ============ 初始化 ============
+    // init 会创建 DOM、绑定全局事件并启动渲染, 重复执行会导致双份 UI 与闪烁
+    var _appInited = false;
     function init() {
+        if (_appInited) return;
+        _appInited = true;
         loadNumpadRangeSettings();
         if (window.WebNBSI18n) window.WebNBSI18n.init();
         document.addEventListener('webnbs:languagechange', function() {

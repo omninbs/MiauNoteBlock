@@ -47,7 +47,10 @@
             '全选': 'Select all', '取消选择': 'Deselect', '复制': 'Copy', '剪切': 'Cut', '粘贴': 'Paste', '删除': 'Delete', '更改乐器': 'Change instrument', '更改音量': 'Change volume',
             '静音': 'Mute', '取消静音': 'Unmute', '独奏': 'Solo', '取消独奏': 'Unsolo', '删除音轨': 'Delete track', '上移轨道': 'Move track up', '下移轨道': 'Move track down', '音量:': 'Volume:',
             '打开文件': 'Open file', '新建文件': 'New file', '历史文件': 'History', '暂无历史文件': 'No saved files', '更多...': 'More...', '加载': 'Load', '重命名': 'Rename', '关闭': 'Close',
-            '展开/折叠钢琴键盘': 'Show/hide piano keyboard', '设置小键盘弹奏音域': 'Set numpad playing range', '超出范围': 'Out of range', '音符:': 'Notes:', '位置:': 'Position:'
+            '展开/折叠钢琴键盘': 'Show/hide piano keyboard', '设置小键盘弹奏音域': 'Set numpad playing range', '超出范围': 'Out of range', '音符:': 'Notes:', '位置:': 'Position:',
+            '片段分割': 'Segment split', '分割重复片段': 'Split repeated segments', '合并相同轨道（音色可不同）': 'Merge identical tracks (instruments may differ)',
+            '颗粒度': 'Granularity', '小（1 小节）': 'Small (1 bar)', '中（2 小节）': 'Medium (2 bars)', '大（4 小节）': 'Large (4 bars)',
+            '对 NBS 数据处理可能效果很差': 'Results on NBS data may be poor', '开始分割': 'Start split'
         },
         'pt-BR': {
             '文件': 'Arquivo', '速度': 'Andamento', '撤销': 'Desfazer', '重做': 'Refazer', '设置': 'Configurações', '关于': 'Sobre', '功能': 'Ferramentas',
@@ -62,7 +65,10 @@
             '全选': 'Selecionar tudo', '取消选择': 'Desmarcar', '复制': 'Copiar', '剪切': 'Recortar', '粘贴': 'Colar', '删除': 'Excluir', '更改乐器': 'Alterar instrumento', '更改音量': 'Alterar volume',
             '静音': 'Silenciar', '取消静音': 'Ativar som', '独奏': 'Solo', '取消独奏': 'Cancelar solo', '删除音轨': 'Excluir faixa', '上移轨道': 'Mover faixa para cima', '下移轨道': 'Mover faixa para baixo', '音量:': 'Volume:',
             '打开文件': 'Abrir arquivo', '新建文件': 'Novo arquivo', '历史文件': 'Histórico', '暂无历史文件': 'Nenhum arquivo salvo', '更多...': 'Mais...', '加载': 'Carregar', '重命名': 'Renomear', '关闭': 'Fechar',
-            '展开/折叠钢琴键盘': 'Mostrar/ocultar teclado de piano', '设置小键盘弹奏音域': 'Definir extensão do teclado numérico', '超出范围': 'Fora da extensão', '音符:': 'Notas:', '位置:': 'Posição:'
+            '展开/折叠钢琴键盘': 'Mostrar/ocultar teclado de piano', '设置小键盘弹奏音域': 'Definir extensão do teclado numérico', '超出范围': 'Fora da extensão', '音符:': 'Notas:', '位置:': 'Posição:',
+            '片段分割': 'Divisão de segmentos', '分割重复片段': 'Dividir segmentos repetidos', '合并相同轨道（音色可不同）': 'Mesclar faixas idênticas (instrumentos podem diferir)',
+            '颗粒度': 'Granularidade', '小（1 小节）': 'Pequeno (1 compasso)', '中（2 小节）': 'Médio (2 compassos)', '大（4 小节）': 'Grande (4 compassos)',
+            '对 NBS 数据处理可能效果很差': 'Os resultados em dados NBS podem ser ruins', '开始分割': 'Iniciar divisão'
         },
         'id-ID': {
             '文件': 'Berkas', '速度': 'Tempo', '撤销': 'Urungkan', '重做': 'Ulangi', '设置': 'Pengaturan', '关于': 'Tentang', '功能': 'Alat',
@@ -77,9 +83,38 @@
             '全选': 'Pilih semua', '取消选择': 'Batalkan pilihan', '复制': 'Salin', '剪切': 'Potong', '粘贴': 'Tempel', '删除': 'Hapus', '更改乐器': 'Ubah instrumen', '更改音量': 'Ubah volume',
             '静音': 'Bisukan', '取消静音': 'Bunyikan', '独奏': 'Solo', '取消独奏': 'Batalkan solo', '删除音轨': 'Hapus trek', '上移轨道': 'Naikkan trek', '下移轨道': 'Turunkan trek', '音量:': 'Volume:',
             '打开文件': 'Buka berkas', '新建文件': 'Berkas baru', '历史文件': 'Riwayat', '暂无历史文件': 'Belum ada berkas tersimpan', '更多...': 'Lainnya...', '加载': 'Muat', '重命名': 'Ubah nama', '关闭': 'Tutup',
-            '展开/折叠钢琴键盘': 'Tampilkan/sembunyikan keyboard piano', '设置小键盘弹奏音域': 'Atur jangkauan keypad numerik', '超出范围': 'Di luar jangkauan', '音符:': 'Not:', '位置:': 'Posisi:'
+            '展开/折叠钢琴键盘': 'Tampilkan/sembunyikan keyboard piano', '设置小键盘弹奏音域': 'Atur jangkauan keypad numerik', '超出范围': 'Di luar jangkauan', '音符:': 'Not:', '位置:': 'Posisi:',
+            '片段分割': 'Pemisahan segmen', '分割重复片段': 'Pisahkan segmen berulang', '合并相同轨道（音色可不同）': 'Gabungkan trek serupa (instrumen boleh beda)',
+            '颗粒度': 'Granularitas', '小（1 小节）': 'Kecil (1 bar)', '中（2 小节）': 'Sedang (2 bar)', '大（4 小节）': 'Besar (4 bar)',
+            '对 NBS 数据处理可能效果很差': 'Hasil pada data NBS mungkin buruk', '开始分割': 'Mulai pisahkan'
         }
     };
+
+    // 片段浮动钢琴卷帘窗口 (segment_piano_window.js) 文案
+    Object.assign(UI_TEXT['en-US'], {
+        '片段轨道': 'Segment track', '同步主窗口': 'Sync main view', '仅本窗口': 'This window only',
+        '参考片段': 'Reference segment', '参考中': 'Referencing', '不显示参考': 'No reference',
+        'Alt + 滚轮切换重叠音符': 'Alt + wheel to switch overlapping notes',
+        '最小化': 'Minimize', '最大化': 'Maximize', '力度': 'Velocity',
+        '1/2 小节': '1/2 bar', '1 小节': '1 bar', '播放模式': 'Playback mode', '网格吸附': 'Grid snap',
+        '选择 (S)': 'Select (S)', '画笔 (B)': 'Brush (B)', '橡皮擦 (E)': 'Eraser (E)'
+    });
+    Object.assign(UI_TEXT['pt-BR'], {
+        '片段轨道': 'Faixa de segmento', '同步主窗口': 'Sincronizar janela principal', '仅本窗口': 'Somente esta janela',
+        '参考片段': 'Segmento de referência', '参考中': 'Referenciando', '不显示参考': 'Sem referência',
+        'Alt + 滚轮切换重叠音符': 'Alt + rodinha para alternar notas sobrepostas',
+        '最小化': 'Minimizar', '最大化': 'Maximizar', '力度': 'Velocidade',
+        '1/2 小节': '1/2 compasso', '1 小节': '1 compasso', '播放模式': 'Modo de reprodução', '网格吸附': 'Ajuste à grade',
+        '选择 (S)': 'Selecionar (S)', '画笔 (B)': 'Pincel (B)', '橡皮擦 (E)': 'Borracha (E)'
+    });
+    Object.assign(UI_TEXT['id-ID'], {
+        '片段轨道': 'Trek segmen', '同步主窗口': 'Sinkron jendela utama', '仅本窗口': 'Hanya jendela ini',
+        '参考片段': 'Segmen referensi', '参考中': 'Merujuk', '不显示参考': 'Tanpa referensi',
+        'Alt + 滚轮切换重叠音符': 'Alt + roda untuk ganti not bertumpuk',
+        '最小化': 'Perkecil', '最大化': 'Perbesar', '力度': 'Velocity',
+        '1/2 小节': '1/2 bar', '1 小节': '1 bar', '播放模式': 'Mode pemutaran', '网格吸附': 'Snap kisi',
+        '选择 (S)': 'Pilih (S)', '画笔 (B)': 'Kuas (B)', '橡皮擦 (E)': 'Penghapus (E)'
+    });
 
     // Shared editor vocabulary used by settings, import dialogs, context menus and
     // dynamically-created controls. Keeping it here lets MutationObserver translate

@@ -8336,25 +8336,23 @@ textarea:disabled {
     outline: none;
     border-color: var(--accent);
 }
-.seg-split-hint {
+.seg-split-warning {
     margin: 0;
-    font-size: 11.5px;
-    line-height: 1.65;
-    color: var(--text-tertiary);
-}
-.seg-split-note {
-    margin: 0;
-    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
     border-radius: var(--radius-sm);
-    background: rgba(255, 169, 77, 0.10);
+    background: rgba(255, 169, 77, 0.08);
     border-left: 2px solid var(--accent-orange);
     font-size: 11.5px;
-    line-height: 1.6;
-    color: var(--text-secondary);
+    line-height: 1.5;
+    color: var(--text-tertiary);
 }
-.seg-split-note > i {
+.seg-split-warning > i {
+    flex: none;
     color: var(--accent-orange);
-    margin-right: 4px;
+    opacity: 0.85;
 }
 .seg-split-footer {
     display: flex;
@@ -8522,4 +8520,252 @@ textarea:disabled {
     #midi-popup .midi-control { min-width: 110px; }
     #midi-popup .midi-control-sm { min-width: 72px; }
     #midi-popup .midi-file-info { padding: 6px 10px; gap: 3px 12px; }
+}
+
+/* ==================================================================
+   片段浮动钢琴卷帘窗口 (FL Studio 风格, NBS 优化)
+   层级: 900+ (高于片段工具栏 30, 低于系统弹窗 9996+)
+   ================================================================== */
+.spw {
+    position: fixed;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    background: var(--mica-base, rgba(32, 32, 32, 0.92));
+    border: 1px solid var(--ctrl-stroke-secondary);
+    border-radius: 10px;
+    box-shadow: var(--shadow-dialog);
+    overflow: hidden;
+    color: var(--text-primary);
+    font-family: var(--font-family);
+}
+.spw.spw-max {
+    border-radius: 8px;
+}
+.spw-titlebar {
+    flex: none;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 6px 0 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid var(--ctrl-stroke-default);
+    cursor: default;
+    user-select: none;
+}
+.spw-glyph {
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    color: var(--accent);
+    font-size: 12px;
+    background: rgba(76, 194, 255, 0.12);
+    flex: none;
+}
+.spw-title {
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 40%;
+}
+.spw-sub {
+    font-size: 11.5px;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+}
+.spw-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex: none;
+}
+.spw-btn {
+    width: 26px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 0;
+    transition: background var(--anim-fast), color var(--anim-fast);
+}
+.spw-btn:hover {
+    background: var(--ctrl-fill-hover);
+    color: var(--text-primary);
+}
+.spw-btn.active {
+    background: rgba(76, 194, 255, 0.18);
+    color: var(--accent);
+}
+.spw-close:hover {
+    background: rgba(255, 90, 90, 0.22);
+    color: #ff8a8a;
+}
+.spw-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+.spw-toolbar {
+    flex: none;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 8px;
+    border-bottom: 1px solid var(--ctrl-stroke-default);
+    background: rgba(0, 0, 0, 0.16);
+    overflow: hidden;
+}
+.spw-sep {
+    width: 1px;
+    height: 16px;
+    background: var(--ctrl-stroke-default);
+    margin: 0 4px;
+    flex: none;
+}
+.spw-spacer { flex: 1; }
+.spw-hint {
+    font-size: 10.5px;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 40%;
+}
+.spw-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 24px;
+    padding: 0 8px 0 6px;
+    border: 1px solid var(--ctrl-stroke-default);
+    border-radius: 12px;
+    background: var(--ctrl-fill-default);
+    color: var(--text-secondary);
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
+    font-family: var(--font-family);
+}
+.spw-switch:hover { background: var(--ctrl-fill-hover); }
+.spw-switch-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-tertiary);
+    transition: background var(--anim-fast);
+}
+.spw-switch.on .spw-switch-dot { background: var(--accent); }
+.spw-switch.on { color: var(--text-primary); }
+.spw-grid, .spw-ref {
+    width: auto;
+    min-width: 26px;
+    padding: 0 8px;
+    gap: 4px;
+    font-size: 11px;
+}
+.spw-stage {
+    flex: 1;
+    position: relative;
+    min-height: 0;
+    background: #1b1b1f;
+    overflow: hidden;
+}
+.spw-stage canvas,
+.spw-vel canvas {
+    position: absolute;
+    inset: 0;
+    display: block;
+}
+.spw-vel {
+    flex: none;
+    position: relative;
+    height: 58px;
+    border-top: 1px solid var(--ctrl-stroke-default);
+    background: #17171b;
+}
+.spw-resize {
+    position: absolute;
+    z-index: 5;
+}
+.spw-rz-n { top: 0; left: 8px; right: 8px; height: 6px; cursor: ns-resize; }
+.spw-rz-s { bottom: 0; left: 8px; right: 8px; height: 6px; cursor: ns-resize; }
+.spw-rz-e { right: 0; top: 8px; bottom: 8px; width: 6px; cursor: ew-resize; }
+.spw-rz-w { left: 0; top: 8px; bottom: 8px; width: 6px; cursor: ew-resize; }
+.spw-rz-ne { top: 0; right: 0; width: 12px; height: 12px; cursor: nesw-resize; }
+.spw-rz-nw { top: 0; left: 0; width: 12px; height: 12px; cursor: nwse-resize; }
+.spw-rz-se { bottom: 0; right: 0; width: 12px; height: 12px; cursor: nwse-resize; }
+.spw-rz-sw { bottom: 0; left: 0; width: 12px; height: 12px; cursor: nesw-resize; }
+
+/* 最小化: 只保留矮标题栏, 默认靠右上角堆叠 */
+.spw.spw-min {
+    border-radius: 8px;
+    min-width: 0;
+}
+.spw-min .spw-body,
+.spw-min .spw-resize {
+    display: none;
+}
+.spw-min .spw-titlebar {
+    height: 30px;
+    border-bottom: none;
+}
+.spw-min .spw-glyph,
+.spw-min .spw-sub {
+    display: none;
+}
+.spw-min .spw-title {
+    flex: 1;
+    max-width: none;
+}
+.spw-min .spw-actions button[data-act="maximize"] {
+    display: none;
+}
+.spw-min .spw-btn {
+    width: 24px;
+    height: 22px;
+}
+
+/* 参考片段下拉 */
+.spw-menu {
+    position: absolute;
+    min-width: 150px;
+    max-height: 220px;
+    overflow-y: auto;
+    padding: 4px;
+    background: var(--mica-acrylic, rgba(44, 44, 46, 0.96));
+    border: 1px solid var(--ctrl-stroke-secondary);
+    border-radius: 6px;
+    box-shadow: var(--shadow-flyout);
+    z-index: 20;
+}
+.spw-menu-item {
+    padding: 5px 8px;
+    font-size: 11.5px;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.spw-menu-item:hover {
+    background: var(--ctrl-fill-hover);
+    color: var(--accent);
 }

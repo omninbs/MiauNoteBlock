@@ -1287,6 +1287,13 @@ body.segment-edit-mode .tool-bar {
     gap: 4px;
     flex-shrink: 0;
 }
+/* 快速添加 / 对齐音符: 桌面端也保留 (不随 ops 一起隐藏) */
+.lyrics-edit-bar-quick {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
 .lyrics-lane-add,
 .lyrics-op-btn {
     padding: 4px 9px;
@@ -1426,6 +1433,182 @@ body.segment-edit-mode .tool-bar {
 .lyric-editor-pop-icon:disabled {
     opacity: 0.38;
     cursor: default;
+}
+
+/* ============ 歌词快速添加弹窗 (LRC 导入 / 逐字对齐) ============ */
+.lq-tabs {
+    display: flex;
+    gap: 6px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--ctrl-stroke-default, rgba(255, 255, 255, 0.1));
+}
+.lq-tab {
+    padding: 6px 14px;
+    border-radius: 8px 8px 0 0;
+    border: 1px solid transparent;
+    border-bottom: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+}
+.lq-tab:hover {
+    background: var(--ctrl-fill-hover, rgba(255, 255, 255, 0.08));
+    color: var(--text-primary);
+}
+.lq-tab.is-active {
+    background: var(--ctrl-fill-secondary, rgba(255, 255, 255, 0.12));
+    border-color: var(--ctrl-stroke-default, rgba(255, 255, 255, 0.16));
+    color: var(--text-primary);
+    font-weight: 600;
+}
+.lq-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+}
+.lq-hint {
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text-tertiary, #9aa0a6);
+}
+.lq-hint b {
+    color: var(--accent, #4ecdc4);
+}
+.lq-textarea {
+    width: 100%;
+    min-height: 168px;
+    max-height: 42vh;
+    resize: vertical;
+    box-sizing: border-box;
+    font-family: var(--font-family-mono, monospace);
+    font-size: 12px;
+    line-height: 1.6;
+    white-space: pre;
+    overflow: auto;
+}
+.lq-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.lq-spacer {
+    flex: 1;
+}
+.lq-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+.lq-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 11px;
+    border-radius: 6px;
+    border: 1px solid var(--ctrl-stroke-default, #555);
+    background: var(--ctrl-fill-default, #1c1c1c);
+    color: var(--text-primary);
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.lq-btn:hover {
+    background: var(--ctrl-fill-secondary, #262626);
+}
+.lq-stat {
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--accent, #4ecdc4);
+    min-height: 18px;
+}
+.lq-stat-inline {
+    font-size: 12px;
+    color: var(--accent, #4ecdc4);
+    white-space: nowrap;
+}
+.lq-list {
+    max-height: 240px;
+    overflow-y: auto;
+    border: 1px solid var(--ctrl-stroke-default, rgba(255, 255, 255, 0.12));
+    border-radius: 8px;
+    background: var(--ctrl-fill-tertiary, rgba(0, 0, 0, 0.22));
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.lq-list-empty {
+    padding: 14px 8px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-tertiary, #9aa0a6);
+}
+.lq-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 6px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-secondary, #d0d0d0);
+}
+.lq-item:hover {
+    background: var(--ctrl-fill-hover, rgba(255, 255, 255, 0.07));
+}
+.lq-item.is-active {
+    background: rgba(78, 205, 196, 0.18);
+    box-shadow: inset 0 0 0 1px rgba(78, 205, 196, 0.5);
+    color: var(--text-primary);
+}
+.lq-item-idx {
+    flex: 0 0 34px;
+    text-align: right;
+    font-family: var(--font-family-mono, monospace);
+    font-size: 11px;
+    color: var(--text-tertiary, #9aa0a6);
+}
+.lq-item-ch {
+    flex: 0 0 auto;
+    min-width: 18px;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+.lq-item-note {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-family-mono, monospace);
+    font-size: 11px;
+}
+.lq-step {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 20px;
+    border-radius: 5px;
+    border: 1px solid var(--ctrl-stroke-default, #555);
+    background: var(--ctrl-fill-default, #1c1c1c);
+    color: var(--text-primary);
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+}
+.lq-step:hover {
+    background: var(--ctrl-fill-secondary, #262626);
+}
+@media (max-width: 768px) {
+    .lq-textarea { min-height: 120px; max-height: 30vh; }
+    .lq-list { max-height: 32vh; }
+    .lq-field { font-size: 11px; }
 }
 
 /* Light visual polish only: keep layout and behavior unchanged. */

@@ -128,7 +128,8 @@
                 original_author: songMeta.original_author || '',
                 description: songMeta.description || '',
                 tempo: state.tempo,
-                notes: state.notes,
+                // 音符只在顶层 data.notes 存一份 (song.notes 与之重复会让文件体积翻倍,
+                // 长曲容易触发配额失败, 加载端优先读取 data.notes)
                 layers: songMeta.layers || [],
                 solo_layers: Array.isArray(songMeta.solo_layers) ? songMeta.solo_layers.slice() : [],
                 lyrics: JSON.parse(JSON.stringify(state.lyrics || [])),
@@ -191,6 +192,11 @@
                 } else {
                     showAppAlert('存储空间不足, 部分数据可能未保存', {title: '警告', icon: 'fa-solid fa-triangle-exclamation'});
                 }
+            } else if (!fileOk) {
+                // 静默保存(快捷键/自动保存)也失败时必须提示, 否则用户会以为已保存而丢内容
+                showAppAlert('保存失败：浏览器本地存储空间不足，请到设置中清理旧工程后重试。', {
+                    title: '保存失败', icon: 'fa-solid fa-triangle-exclamation'
+                });
             }
         });
         return historyOk;
@@ -440,8 +446,12 @@
         lyricRebuildIndex();
         syncLyricsToRoll();
         state.notes = notes;
-        // 从历史记录加载，清除残留的 MIDI 音轨状态
-        state.layerChannelMap = {};
+        // 新格式不再把音符重复写入 song, 这里补齐, 保证 song.notes 与 state.notes 一致
+        state.song.notes = notes;
+        // 从历史记录加载，清除残留的 MIDI 音轨状态。
+        // 注意: layer→channel 映射属于文件自身数据, 必须从 song 恢复,
+        // 否则重新打开后片段轨道无法按通道/声部归位, 表现为音符缺失
+        state.layerChannelMap = JSON.parse(JSON.stringify(song.layer_channel_map || {}));
         N.shared._midiTrackStates = {};
         state._channelTracks = {};
         state.tempo = data.tempo || song.tempo || 20;

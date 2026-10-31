@@ -350,7 +350,10 @@
             var lane = Math.max(0, Math.min(LYRIC_LANE_COUNT - 1, parseInt(clip.lane, 10) || 0));
             incomingLanes[lane] = true;
             var prevEnd = state._streamingLyricEndTick[lane];
-            if (prevEnd !== null && clip.tick !== prevEnd) {
+            // lineStart: 快速添加 (LRC / 逐字对齐) 标记的句首, 强制从新的一句开始累积
+            if (clip.lineStart) {
+                state._streamingLyricLanes[lane] = '';
+            } else if (prevEnd !== null && clip.tick !== prevEnd) {
                 state._streamingLyricLanes[lane] = '';
             }
             var merged = joinStreamingText(state._streamingLyricLanes[lane], text);
@@ -404,12 +407,24 @@
         });
         var arr = [];
         for (var i = 0; i < sorted.length; i++) {
-            arr.push({
+            var item = {
                 tick: sorted[i].tick,
                 lane: sorted[i].lane || 0,
                 text: sorted[i].text,
                 duration: sorted[i].duration || LYRIC_DEFAULT_DURATION
-            });
+            };
+            // 逐字对齐附加信息 (断句 / 绑定音符 / 字序号), 存在时才写出
+            if (sorted[i].lineStart) item.lineStart = true;
+            if (isFinite(Number(sorted[i].noteLayer)) && sorted[i].noteLayer !== null && sorted[i].noteLayer !== undefined) {
+                item.noteLayer = Number(sorted[i].noteLayer);
+            }
+            if (isFinite(Number(sorted[i].noteTick)) && sorted[i].noteTick !== null && sorted[i].noteTick !== undefined) {
+                item.noteTick = Number(sorted[i].noteTick);
+            }
+            if (isFinite(Number(sorted[i].charIndex)) && sorted[i].charIndex !== null && sorted[i].charIndex !== undefined) {
+                item.charIndex = Number(sorted[i].charIndex);
+            }
+            arr.push(item);
         }
         return {
             type: 'noteblock-web-lyrics',

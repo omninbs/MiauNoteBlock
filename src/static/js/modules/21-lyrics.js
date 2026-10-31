@@ -44,6 +44,7 @@
     var LYRIC_DEFAULT_TEXT = '请输入文本';
 
     // 归一化单个歌词片段 (补齐 id / lane / duration); 非法返回 null
+    // 逐字对齐生成的片段额外带 lineStart / noteLayer / noteTick / charIndex, 一并保留
     function normalizeLyricClip(c) {
         if (!c || typeof c !== 'object') return null;
         var tick = parseInt(c.tick, 10);
@@ -53,13 +54,21 @@
         if (lane > LYRIC_LANE_COUNT - 1) lane = LYRIC_LANE_COUNT - 1;
         var dur = parseInt(c.duration, 10);
         if (!isFinite(dur) || dur < 1) dur = LYRIC_DEFAULT_DURATION;
-        return {
+        var out = {
             id: c.id || genLyricId(),
             tick: tick,
             lane: lane,
             text: String(c.text == null ? '' : c.text),
             duration: dur
         };
+        if (c.lineStart) out.lineStart = true;
+        var noteLayer = parseInt(c.noteLayer, 10);
+        if (isFinite(noteLayer) && c.noteLayer !== null && c.noteLayer !== undefined) out.noteLayer = noteLayer;
+        var noteTick = parseInt(c.noteTick, 10);
+        if (isFinite(noteTick) && c.noteTick !== null && c.noteTick !== undefined) out.noteTick = Math.max(0, noteTick);
+        var charIndex = parseInt(c.charIndex, 10);
+        if (isFinite(charIndex) && c.charIndex !== null && c.charIndex !== undefined) out.charIndex = Math.max(0, charIndex);
+        return out;
     }
 
     // tick -> [该 tick 上所有生效的歌词] (允许多条轨道同时有歌词)
@@ -86,10 +95,16 @@
         var copyBtn = $('lyrics-copy');
         var cutBtn = $('lyrics-cut');
         var pasteBtn = $('lyrics-paste');
-        var hasSel = !!getSelectedLyricClip();
+        var selected = getSelectedLyricClip();
+        var hasSel = !!selected;
         if (copyBtn) copyBtn.disabled = !hasSel;
         if (cutBtn) cutBtn.disabled = !hasSel;
         if (pasteBtn) pasteBtn.disabled = !state.lyricClipboard.length;
+        // 按音符重新锚定: 仅逐字对齐生成的片段可用
+        var anchorBtn = $('lyrics-note-anchor');
+        if (anchorBtn) {
+            anchorBtn.disabled = !(selected && N.isCharAlignedClip && N.isCharAlignedClip(selected));
+        }
     }
 
     function syncLyricsToRoll() {
@@ -429,6 +444,16 @@
         if (copyBtn) copyBtn.addEventListener('click', function() { copyLyricClip(false); });
         var pasteBtn = $('lyrics-paste');
         if (pasteBtn) pasteBtn.addEventListener('click', function() { pasteLyricClips(); });
+        // 快速添加 (LRC 导入 / 人声轨道逐字对齐)
+        var quickBtn = $('lyrics-quick-add');
+        if (quickBtn) quickBtn.addEventListener('click', function() {
+            if (N.showLyricsQuickDialog) N.showLyricsQuickDialog('lrc');
+        });
+        // 按音符重新锚定选中的逐字歌词片段 (后续字自动顺移)
+        var anchorBtn = $('lyrics-note-anchor');
+        if (anchorBtn) anchorBtn.addEventListener('click', function() {
+            if (N.beginLyricAnchorPick) N.beginLyricAnchorPick(getSelectedLyricClip());
+        });
         // 捕获阶段拦截: 弹窗打开时 Esc 只应由弹窗自身处理, 避免同时退出编辑模式
         window.addEventListener('keydown', function(e) {
             if (e.key !== 'Escape' || !state.lyricsEditMode) return;

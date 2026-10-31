@@ -132,6 +132,8 @@
             state.currentInstrument = data.currentInstrument || 0;
             // 恢复上一次的持久文件 ID, 避免刷新后保存产生重复的历史记录
             state.currentFileId = data.currentFileId || null;
+            // 恢复 layer -> 通道映射 (片段轨道按通道/声部归位依赖它)
+            state.layerChannelMap = JSON.parse(JSON.stringify((data.song && data.song.layer_channel_map) || {}));
             // 兼容旧版 autoScrollMode 数据: 非 0 视为开启
             if (data.smoothScroll !== undefined) {
                 state.smoothScroll = !!data.smoothScroll;

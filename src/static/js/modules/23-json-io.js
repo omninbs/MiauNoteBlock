@@ -22,6 +22,7 @@
     function i18nText() { return N.i18nText.apply(this, arguments); }
     function lyricRebuildIndex() { return N.lyricRebuildIndex.apply(this, arguments); }
     function markDirty() { return N.markDirty.apply(this, arguments); }
+    function normalizeLyricClip() { return N.normalizeLyricClip.apply(this, arguments); }
     function openFindPanel() { return N.openFindPanel.apply(this, arguments); }
     function openSegSplitPopup() { return N.openSegSplitPopup.apply(this, arguments); }
     function pushUndo() { return N.pushUndo.apply(this, arguments); }
@@ -34,6 +35,7 @@
     function showArpeggioTracksDialog() { return N.showArpeggioTracksDialog.apply(this, arguments); }
     function showClearSustainDialog() { return N.showClearSustainDialog.apply(this, arguments); }
     function showCompressSongDialog() { return N.showCompressSongDialog.apply(this, arguments); }
+    function showLyricsQuickDialog() { return N.showLyricsQuickDialog.apply(this, arguments); }
     function showRangeProcessDialog() { return N.showRangeProcessDialog.apply(this, arguments); }
     function showSustainFillAlert() { return N.showSustainFillAlert.apply(this, arguments); }
     function showSustainFillDialog() { return N.showSustainFillDialog.apply(this, arguments); }
@@ -170,7 +172,12 @@
                     tick: parseInt(it.tick, 10),
                     lane: parseInt(it.lane, 10),
                     text: String(it.text == null ? '' : it.text),
-                    duration: parseInt(it.duration, 10)
+                    duration: parseInt(it.duration, 10),
+                    // 逐字对齐附加信息 (可选): 断句 / 绑定音符 / 字序号
+                    lineStart: it.lineStart,
+                    noteLayer: it.noteLayer,
+                    noteTick: it.noteTick,
+                    charIndex: it.charIndex
                 });
             }
         } else if (raw && typeof raw === 'object') {
@@ -195,7 +202,17 @@
             var dur = (isFinite(n.duration) && n.duration >= 1) ? n.duration : LYRIC_DEFAULT_DURATION;
             var key = lane + ':' + n.tick;
             if (byKey[key] === undefined) order.push(key);
-            byKey[key] = { id: genLyricId(), tick: n.tick, lane: lane, text: n.text, duration: dur };
+            byKey[key] = normalizeLyricClip({
+                id: genLyricId(),
+                tick: n.tick,
+                lane: lane,
+                text: n.text,
+                duration: dur,
+                lineStart: n.lineStart,
+                noteLayer: n.noteLayer,
+                noteTick: n.noteTick,
+                charIndex: n.charIndex
+            });
         }
         var out = [];
         for (var t = 0; t < order.length; t++) out.push(byKey[order[t]]);
@@ -333,6 +350,8 @@
                         else openFindPanel();
                     } else if (action === 'lyrics-edit') {
                         enterLyricsEditMode();
+                    } else if (action === 'lyrics-quick-add') {
+                        showLyricsQuickDialog('lrc');
                     }
                 });
             })(items[i]);

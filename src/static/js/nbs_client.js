@@ -2847,11 +2847,6 @@ function _convertMidiToNBS(arrayBuffer, settings) {
             }
         }
 
-        // 清理临时字段, 避免写入工程数据
-        for (var ci = 0; ci < songNotes.length; ci++) {
-            delete songNotes[ci]._ch;
-            delete songNotes[ci]._voice;
-        }
     } else {
         for (var l = 0; l <= maxLayer; l++) {
             songLayers.push({
@@ -2900,6 +2895,12 @@ function _convertMidiToNBS(arrayBuffer, settings) {
                 }
             }
         }
+    }
+
+    // ---- 清理转换期的临时标记, 避免写入工程/导出数据 ----
+    for (var _clr = 0; _clr < songNotes.length; _clr++) {
+        if (songNotes[_clr]._ch !== undefined) delete songNotes[_clr]._ch;
+        if (songNotes[_clr]._voice !== undefined) delete songNotes[_clr]._voice;
     }
 
     // ---- 音色拟合: 重命名对应图层 ----

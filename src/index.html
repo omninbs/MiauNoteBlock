@@ -139,6 +139,10 @@
             <i class="fa-solid fa-microphone-lines"></i>
             <span>歌词标注</span>
         </div>
+        <div class="functions-menu-item" data-action="lyrics-quick-add">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            <span>快速添加歌词</span>
+        </div>
         <div class="functions-menu-item" data-action="split-segments" title="基于当前 NBS 工程（先自动清除延音）把每条轨道切成循环块；效果不如 MIDI 导入时的后处理分割">
             <i class="fa-solid fa-scissors"></i>
             <span>片段分割</span>
@@ -258,6 +262,11 @@
             <button class="lyrics-op-btn" id="lyrics-cut" type="button">剪切</button>
             <button class="lyrics-op-btn" id="lyrics-copy" type="button">复制</button>
             <button class="lyrics-op-btn" id="lyrics-paste" type="button">粘贴</button>
+        </div>
+        <!-- 快速添加 / 按音符重排: 桌面端也显示 (ops 里的按钮在桌面端隐藏) -->
+        <div class="lyrics-edit-bar-quick">
+            <button class="lyrics-op-btn" id="lyrics-quick-add" type="button" title="快速添加歌词：导入 LRC，或把歌词逐字对齐到人声轨道">快速添加</button>
+            <button class="lyrics-op-btn" id="lyrics-note-anchor" type="button" title="选中逐字对齐的歌词片段后，点击卷帘中的音符重新对齐" disabled>对齐音符</button>
         </div>
         <span class="lyrics-edit-bar-count"><span id="lyrics-edit-bar-count">0</span> 条歌词</span>
         <button class="lyrics-edit-bar-exit" id="lyrics-edit-bar-exit" type="button">退出</button>
@@ -1705,7 +1714,7 @@
     }
 </script>
 <!-- nbs_client.js 必须在 api_client.js 之前加载 (api_client.js 引用 NBSClient 全局对象) -->
-<script src="static/js/nbs_client.js?v=20261031e"></script>
+<script src="static/js/nbs_client.js?v=20261031f"></script>
 <script src="static/js/compress_est.js?v=20260926b"></script>
 <script src="static/js/api_client.js?v=20260905a"></script>
 <script src="static/js/custom_dropdown.js?v=20261031a"></script>
@@ -1760,9 +1769,10 @@
 <script src="static/js/modules/29-midi-tracks.js?v=20261030c"></script>
 <script src="static/js/modules/30-timbre.js?v=20261031b"></script>
 <script src="static/js/modules/31-midi-config.js?v=20261031b"></script>
-<script src="static/js/modules/32-storage.js?v=20261031b"></script>
+<script src="static/js/modules/32-storage.js?v=20261031f"></script>
 <script src="static/js/modules/33-export.js?v=20261030c"></script>
-<script src="static/js/modules/34-autosave.js?v=20261031b"></script>
+<script src="static/js/modules/34-autosave.js?v=20261031f"></script>
+<script src="static/js/modules/35-lyrics-quick.js?v=20261101a"></script>
 <script src="static/js/main.js?v=20261030c"></script>
 
 <script>

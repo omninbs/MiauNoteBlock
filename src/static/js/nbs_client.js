@@ -808,6 +808,24 @@ function _writeNBS(songData) {
     var layers = songData.layers || [];
     var notes = songData.notes || [];
 
+    // 防御: song_layers 必须覆盖所有音符实际使用的层。
+    // 若层数不足, 其它软件会直接忽略超出层的音符 (表现为区域性消失/断层),
+    // 因此写 header 之前先按音符的最大 layer 补齐空层。
+    var _layerNeed = layers.length;
+    for (var _ln = 0; _ln < notes.length; _ln++) {
+        var _nlayer = Math.floor(notes[_ln].layer);
+        if (isFinite(_nlayer) && _nlayer >= _layerNeed) _layerNeed = _nlayer + 1;
+    }
+    if (_layerNeed > layers.length) {
+        layers = layers.slice();
+        while (layers.length < _layerNeed) {
+            layers.push({
+                name: 'Layer ' + (layers.length + 1),
+                volume: 100, stereo: 100, lock: 0
+            });
+        }
+    }
+
     // ---- Header ----
     writer.wShort(0);                        // song_length = 0 (新格式标记)
     writer.wByte(version);                    // NBS version
@@ -1557,6 +1575,156 @@ function _parseMidiInfoFallback(arrayBuffer) {
 }
 
 // ====================================================================
+// 声部分离: 判断同一通道内是否混装了多个声部(钢琴左右手 / 人声与伴奏)
+// ====================================================================
+
+function _midiAvgPitch(list) {
+    if (!list || !list.length) return 0;
+    var sum = 0;
+    for (var i = 0; i < list.length; i++) sum += list[i].note || 0;
+    return sum / list.length;
+}
+
+// 分析单个通道的音符, 决定是否/如何拆分声部
+// 返回 { voiceOf: Map(event -> 0|1), mode: 'track'|'pitch' } 或 null(不拆分)
+// 0 = 低声部(左手 / 伴奏), 1 = 高声部(右手 / 主旋律)
+function _planChannelVoices(list, ignoreMeta) {
+    if (!list || list.length < 8) return null;
+
+    var minNote = 999, maxNote = -1;
+    for (var i = 0; i < list.length; i++) {
+        var n = list[i].note;
+        if (n < minNote) minNote = n;
+        if (n > maxNote) maxNote = n;
+    }
+    var span = maxNote - minNote;
+
+    // 同 tick 的音符视为一个单元 (和弦不能拆散)
+    var units = [];
+    var unitByTick = {};
+    for (var j = 0; j < list.length; j++) {
+        var e = list[j];
+        var tk = e.tick;
+        var u = unitByTick[tk];
+        if (!u) {
+            u = { tick: tk, list: [], sum: 0 };
+            unitByTick[tk] = u;
+            units.push(u);
+        }
+        u.list.push(e);
+        u.sum += e.note;
+    }
+    units.sort(function (a, b) { return a.tick - b.tick; });
+    for (var k = 0; k < units.length; k++) units[k].mean = units[k].sum / units[k].list.length;
+
+    var poly = list.length / units.length;
+
+    // ---- 优先使用 MIDI 轨道(track)结构, 这是最可靠的线索 ----
+    if (!ignoreMeta) {
+        var byTrack = {};
+        var trackOrder = [];
+        for (var t = 0; t < list.length; t++) {
+            var tKey = list[t].track || 0;
+            if (!byTrack[tKey]) { byTrack[tKey] = []; trackOrder.push(tKey); }
+            byTrack[tKey].push(list[t]);
+        }
+        var minTrackNotes = Math.max(6, Math.floor(list.length * 0.08));
+        var usable = [];
+        for (var ut = 0; ut < trackOrder.length; ut++) {
+            if (byTrack[trackOrder[ut]].length >= minTrackNotes) usable.push(trackOrder[ut]);
+        }
+        if (usable.length >= 2) {
+            // 按平均音高排序: 高的一半 → 高声部
+            usable.sort(function (a, b) { return _midiAvgPitch(byTrack[a]) - _midiAvgPitch(byTrack[b]); });
+            var half = Math.ceil(usable.length / 2);
+            var voiceOfTrack = new Map();
+            for (var ui = 0; ui < usable.length; ui++) {
+                var v = ui < half ? 0 : 1;
+                var arr = byTrack[usable[ui]];
+                for (var ai = 0; ai < arr.length; ai++) voiceOfTrack.set(arr[ai], v);
+            }
+            return { voiceOf: voiceOfTrack, mode: 'track' };
+        }
+    }
+
+    // ---- 复杂度判定: 单声部 / 窄音域乐器不拆分 ----
+    if (span < 10) return null;
+    if (poly < 1.12 && span < 15) return null;
+
+    // ---- 初始分界: 音高排序后的最大间隙 ----
+    var sorted = list.slice().sort(function (a, b) { return a.note - b.note; });
+    var bestGap = -1, bestIdx = -1;
+    for (var g = 1; g < sorted.length; g++) {
+        var gap = sorted[g].note - sorted[g - 1].note;
+        if (gap > bestGap) { bestGap = gap; bestIdx = g; }
+    }
+    var muLow, muHigh;
+    if (bestGap >= 2 && bestIdx > 0) {
+        muLow = sorted[Math.max(0, bestIdx - 1)].note;
+        muHigh = sorted[Math.min(sorted.length - 1, bestIdx)].note;
+    } else {
+        muLow = sorted[Math.floor(sorted.length * 0.25)].note;
+        muHigh = sorted[Math.floor(sorted.length * 0.75)].note;
+    }
+
+    // ---- 逐音符两簇聚类 (k-means 一维) ----
+    // 逐音符而非按 tick 聚合: 人声与伴奏、左右手会在同一时刻同时发声,
+    // 按 tick 聚合会把它们锁死在同一组, 无法分离。
+    var assign = new Map();
+    var converged = false;
+    for (var iter = 0; iter < 8 && !converged; iter++) {
+        var sumLow = 0, cntLow = 0, sumHigh = 0, cntHigh = 0;
+        var changed = false;
+        for (var ci2 = 0; ci2 < list.length; ci2++) {
+            var ce = list[ci2];
+            var d0 = Math.abs(ce.note - muLow);
+            var d1 = Math.abs(ce.note - muHigh);
+            var vv = (d1 < d0) ? 1 : 0;
+            if (assign.get(ce) !== vv) changed = true;
+            assign.set(ce, vv);
+            if (vv === 0) { sumLow += ce.note; cntLow++; }
+            else { sumHigh += ce.note; cntHigh++; }
+        }
+        if (!cntLow || !cntHigh) return null;
+        var nextLow = sumLow / cntLow, nextHigh = sumHigh / cntHigh;
+        converged = !changed &&
+            Math.abs(nextLow - muLow) < 0.01 && Math.abs(nextHigh - muHigh) < 0.01;
+        muLow = nextLow;
+        muHigh = nextHigh;
+    }
+    if (muHigh - muLow < 2) return null;   // 两个簇几乎重合, 不构成两个声部
+
+    // ---- 和弦保护: 同一时刻音高相近的音不应被拆到两个声部 ----
+    var tickBuckets = {};
+    for (var ti2 = 0; ti2 < list.length; ti2++) {
+        var te = list[ti2];
+        if (!tickBuckets[te.tick]) tickBuckets[te.tick] = [];
+        tickBuckets[te.tick].push(te);
+    }
+    for (var tb in tickBuckets) {
+        if (!tickBuckets.hasOwnProperty(tb)) continue;
+        var bucket = tickBuckets[tb];
+        if (bucket.length < 2) continue;
+        bucket.sort(function (a, b) { return a.note - b.note; });
+        for (var bi2 = 0; bi2 < bucket.length - 1; bi2++) {
+            if (bucket[bi2 + 1].note - bucket[bi2].note <= 5 &&
+                assign.get(bucket[bi2]) !== assign.get(bucket[bi2 + 1])) {
+                // 统一到较高音所在的声部 (旋律优先, 低音跟随)
+                assign.set(bucket[bi2], assign.get(bucket[bi2 + 1]));
+            }
+        }
+    }
+
+    // ---- 碎片守卫: 任一声部过于稀疏时不拆分 ----
+    var countLow = 0, countHigh = 0;
+    assign.forEach(function (v) { if (v === 0) countLow++; else countHigh++; });
+    var minSize = Math.max(4, Math.floor(list.length * 0.06));
+    if (countLow < minSize || countHigh < minSize) return null;
+
+    return { voiceOf: assign, mode: 'pitch' };
+}
+
+// ====================================================================
 // MIDI 导入转换 (复刻 midi_handler.py import_midi)
 // ====================================================================
 
@@ -2120,6 +2288,28 @@ function _convertMidiToNBS(arrayBuffer, settings) {
     var songNotes = [];
     var layerCounters = {}; // "ch,nbsTick" -> used count
 
+    // ---- 声部分析: 为每个 MIDI 音符标记所属声部 (0=低/1=高) ----
+    // 仅当同一通道内确实混装多个声部时标记; 单声部乐器保持原样, 不会被拆分
+    var voicePlans = {};
+    if (settings.separate_voices === true) {
+        var _voiceByCh = {};
+        for (var ve = 0; ve < events.length; ve++) {
+            var evv = events[ve];
+            if (!evv || evv.note === undefined || evv.note === null) continue;
+            if (evv.channel === 9) continue;   // 打击乐不参与声部分离
+            if (!_voiceByCh[evv.channel]) _voiceByCh[evv.channel] = [];
+            _voiceByCh[evv.channel].push(evv);
+        }
+        var _ignoreMeta = settings.voice_ignore_metadata === true;
+        for (var vchK in _voiceByCh) {
+            if (!_voiceByCh.hasOwnProperty(vchK)) continue;
+            var _vPlan = _planChannelVoices(_voiceByCh[vchK], _ignoreMeta);
+            if (!_vPlan) continue;
+            voicePlans[vchK] = _vPlan;
+            _vPlan.voiceOf.forEach(function (voiceVal, evRef) { evRef._voice = voiceVal; });
+        }
+    }
+
     // ---- 和弦音符排序 (保证同一时刻的音符顺序确定, 避免导入结果抖动) ----
     // 同一时刻、同一通道内同时发声的音符 (和弦) 按音高从高到低排列:
     // NBS layer 索引越小越靠上, 因此高音获得更靠上的轨道, 低音在下方。
@@ -2333,7 +2523,9 @@ function _convertMidiToNBS(arrayBuffer, settings) {
             key: nbsKey,
             velocity: velocity,
             pan: 50,
-            pitch: 0
+            pitch: 0,
+            _ch: ch,
+            _voice: e._voice
         });
 
         // ---- 音色拟合: slot2/slot3 ----
@@ -2423,7 +2615,9 @@ function _convertMidiToNBS(arrayBuffer, settings) {
                         key: slotNbsKey,
                         velocity: slotVelocity,
                         pan: 50,
-                        pitch: 0
+                        pitch: 0,
+                        _ch: ch,
+                        _voice: e._voice
                     });
                     // 保持音符长度也应用于 slot2/slot3
                     if (shouldSustain) {
@@ -2443,7 +2637,9 @@ function _convertMidiToNBS(arrayBuffer, settings) {
                                 key: slotNbsKey,
                                 velocity: slotVelocity,
                                 pan: 50,
-                                pitch: 0
+                                pitch: 0,
+                                _ch: ch,
+                                _voice: e._voice
                             });
                         }
                     }
@@ -2469,7 +2665,8 @@ function _convertMidiToNBS(arrayBuffer, settings) {
                         key: nbsKey,
                         velocity: pSlotVelocity,
                         pan: 50,
-                        pitch: 0
+                        pitch: 0,
+                        _ch: ch
                     });
                 }
             }
@@ -2493,7 +2690,9 @@ function _convertMidiToNBS(arrayBuffer, settings) {
                     key: nbsKey,
                     velocity: velocity,
                     pan: 50,
-                    pitch: 0 // 延续音符
+                    pitch: 0, // 延续音符
+                    _ch: ch,
+                    _voice: e._voice
                 });
             }
         }
@@ -2526,57 +2725,186 @@ function _convertMidiToNBS(arrayBuffer, settings) {
         if (songNotes[i].layer > maxLayer) maxLayer = songNotes[i].layer;
     }
     var songLayers = [];
-    for (var l = 0; l <= maxLayer; l++) {
-        songLayers.push({
-            name: 'Layer ' + (l + 1),
-            volume: 100,
-            stereo: 100,
-            lock: 0
-        });
+    var layerChannelMap = {};
+    var layerVoiceMap = {};      // layer -> 0(低/左手) / 1(高/右手), 供片段轨道等上层使用
+
+    // 是否执行了声部分离 (有任一音符带 _voice 标记)
+    var hasVoiceSplit = false;
+    for (var hv = 0; hv < songNotes.length; hv++) {
+        if (songNotes[hv]._voice !== undefined) { hasVoiceSplit = true; break; }
     }
 
-    // ---- 构建 layer -> channel 映射 ----
-    var layerChannelMap = {};
-    for (var mapCh in channelLayerOffset) {
-        if (channelLayerOffset.hasOwnProperty(mapCh)) {
-            var mapChNum = parseInt(mapCh, 10);
-            var offset = channelLayerOffset[mapCh];
-            var count = channelLayersNeeded[mapChNum] || 0;
-            if (count <= 0) continue;
-            for (var ml = offset; ml < offset + count; ml++) {
-                // 防御: 不写入超出实际存在的层 (songLayers 只到 maxLayer)
-                if (ml > maxLayer) break;
-                layerChannelMap[ml] = mapChNum;
+    if (hasVoiceSplit) {
+        // ---- 按 (通道 + 声部) 重新分配连续 layer ----
+        // 打击乐不参与声部分离, 保持原有相对层顺序(族内分层)
+        var vGroups = {};
+        var vGroupOrder = [];
+        for (var vi = 0; vi < songNotes.length; vi++) {
+            var vn = songNotes[vi];
+            var vchKey = (vn._ch === undefined || vn._ch === null) ? 0 : vn._ch;
+            var vKey = (vchKey === 9) ? '9' : (vchKey + ':' + (vn._voice === undefined ? 's' : vn._voice));
+            if (!vGroups[vKey]) {
+                vGroups[vKey] = {
+                    channel: vchKey,
+                    voice: (vchKey === 9 || vn._voice === undefined) ? null : vn._voice,
+                    notes: []
+                };
+                vGroupOrder.push(vKey);
+            }
+            vGroups[vKey].notes.push(vn);
+        }
+
+        // 通道升序; 同通道内 高声部(1) → 未分离(s) → 低声部(0)
+        vGroupOrder.sort(function (a, b) {
+            var ga = vGroups[a], gb = vGroups[b];
+            if (ga.channel !== gb.channel) return ga.channel - gb.channel;
+            var rank = function (v) { return v === 1 ? 0 : (v === null ? 1 : 2); };
+            return rank(ga.voice) - rank(gb.voice);
+        });
+
+        var vCursor = 0;
+        for (var go = 0; go < vGroupOrder.length; go++) {
+            var g = vGroups[vGroupOrder[go]];
+            g.base = vCursor;
+            if (g.channel === 9) {
+                // 打击乐: 保持族内相对层号不变
+                var drumOldBase = channelLayerOffset[9] || 0;
+                var drumNeed = channelLayersNeeded[9] || 0;
+                for (var dgi = 0; dgi < g.notes.length; dgi++) {
+                    g.notes[dgi].layer = g.base + (g.notes[dgi].layer - drumOldBase);
+                }
+                g.need = drumNeed;
+                vCursor += drumNeed;
+                continue;
+            }
+            if (g.voice === null) {
+                // 未分离的通道: 完全保持原有层结构 (含延音/拟合槽位的层复用)
+                var plainOldBase = channelLayerOffset[g.channel] || 0;
+                var plainNeed = channelLayersNeeded[g.channel] || 0;
+                for (var pgi = 0; pgi < g.notes.length; pgi++) {
+                    g.notes[pgi].layer = g.base + (g.notes[pgi].layer - plainOldBase);
+                }
+                g.need = plainNeed;
+                vCursor += plainNeed;
+                continue;
+            }
+            // 声部组: 组内按 tick 压紧, 保证同 tick 的音符不落在同一层
+            g.notes.sort(function (a, b) {
+                if (a.tick !== b.tick) return a.tick - b.tick;
+                return a.layer - b.layer;
+            });
+            var tickUsed = {};
+            var need = 0;
+            var rels = [];
+            for (var gi = 0; gi < g.notes.length; gi++) {
+                var gn = g.notes[gi];
+                var usedCnt = tickUsed[gn.tick] || 0;
+                tickUsed[gn.tick] = usedCnt + 1;
+                rels.push(usedCnt);
+                if (usedCnt + 1 > need) need = usedCnt + 1;
+            }
+            g.need = need;
+            for (var gr = 0; gr < g.notes.length; gr++) {
+                g.notes[gr].layer = g.base + rels[gr];
+            }
+            vCursor += need;
+        }
+
+        // ---- 按组生成 layers / 映射 / 名称 ----
+        for (var gl = 0; gl < vGroupOrder.length; gl++) {
+            var g2 = vGroups[vGroupOrder[gl]];
+            var gch = g2.channel;
+            var baseName = '';
+            if (gch !== 9) {
+                baseName = nameAfterPatches
+                    ? (chDisplayName[gch] || ('通道 ' + (gch + 1)))
+                    : ('通道 ' + (gch + 1));
+            }
+            // 钢琴类通道(GM 0-7)使用「右手/左手」, 其它乐器用「高声部/低声部」
+            var isPianoCh = false;
+            if (gch !== 9 && channelFirstProgram) {
+                var progV = channelFirstProgram[gch];
+                isPianoCh = (progV !== undefined && progV >= 0 && progV <= 7);
+            }
+            for (var sub = 0; sub < g2.need; sub++) {
+                var absLayer = g2.base + sub;
+                var layerName;
+                if (!nameLayers) {
+                    layerName = 'Layer ' + (absLayer + 1);
+                } else if (gch === 9) {
+                    layerName = drumLayerFamilyName[(channelLayerOffset[9] || 0) + sub] || '打击乐';
+                } else if (g2.voice === null) {
+                    layerName = baseName;
+                } else {
+                    var vSuffix = isPianoCh
+                        ? (g2.voice === 1 ? '右手' : '左手')
+                        : (g2.voice === 1 ? '高声部' : '低声部');
+                    layerName = baseName + ' · ' + vSuffix + (sub > 0 ? (' ' + (sub + 1)) : '');
+                }
+                songLayers.push({ name: layerName, volume: 100, stereo: 100, lock: 0 });
+                layerChannelMap[absLayer] = gch;
+                if (g2.voice !== null) layerVoiceMap[absLayer] = g2.voice;
             }
         }
-    }
 
-    // ---- 图层命名 ----
-    if (nameLayers) {
-        var yy = 0;
-        for (var nc = 0; nc <= maxChannel; nc++) {
-            var ncCount = channelLayersNeeded[nc] || 0;
-            for (var nb = 0; nb < ncCount; nb++) {
-                if (yy < songLayers.length) {
-                    songLayers[yy].stereo = 100;
-                    if (nc === 9) {
-                        // 打击乐层直接以鼓族命名, 便于看出结构与二次编辑
-                        songLayers[yy].name = drumLayerFamilyName[yy] || '打击乐';
-                    } else if (nameAfterPatches) {
-                        // 使用 MIDI 通道名 (轨道名/GM 音色名), 没有名字时用通道号
-                        songLayers[yy].name = chDisplayName[nc] || ('通道 ' + (nc + 1));
-                    } else {
-                        songLayers[yy].name = '通道 ' + (nc + 1);
-                    }
-                    songLayers[yy].volume = 100;
+        // 清理临时字段, 避免写入工程数据
+        for (var ci = 0; ci < songNotes.length; ci++) {
+            delete songNotes[ci]._ch;
+            delete songNotes[ci]._voice;
+        }
+    } else {
+        for (var l = 0; l <= maxLayer; l++) {
+            songLayers.push({
+                name: 'Layer ' + (l + 1),
+                volume: 100,
+                stereo: 100,
+                lock: 0
+            });
+        }
+
+        // ---- 构建 layer -> channel 映射 ----
+        for (var mapCh in channelLayerOffset) {
+            if (channelLayerOffset.hasOwnProperty(mapCh)) {
+                var mapChNum = parseInt(mapCh, 10);
+                var offset = channelLayerOffset[mapCh];
+                var count = channelLayersNeeded[mapChNum] || 0;
+                if (count <= 0) continue;
+                for (var ml = offset; ml < offset + count; ml++) {
+                    // 防御: 不写入超出实际存在的层 (songLayers 只到 maxLayer)
+                    if (ml > maxLayer) break;
+                    layerChannelMap[ml] = mapChNum;
                 }
-                yy++;
+            }
+        }
+
+        // ---- 图层命名 ----
+        if (nameLayers) {
+            var yy = 0;
+            for (var nc = 0; nc <= maxChannel; nc++) {
+                var ncCount = channelLayersNeeded[nc] || 0;
+                for (var nb = 0; nb < ncCount; nb++) {
+                    if (yy < songLayers.length) {
+                        songLayers[yy].stereo = 100;
+                        if (nc === 9) {
+                            // 打击乐层直接以鼓族命名, 便于看出结构与二次编辑
+                            songLayers[yy].name = drumLayerFamilyName[yy] || '打击乐';
+                        } else if (nameAfterPatches) {
+                            // 使用 MIDI 通道名 (轨道名/GM 音色名), 没有名字时用通道号
+                            songLayers[yy].name = chDisplayName[nc] || ('通道 ' + (nc + 1));
+                        } else {
+                            songLayers[yy].name = '通道 ' + (nc + 1);
+                        }
+                        songLayers[yy].volume = 100;
+                    }
+                    yy++;
+                }
             }
         }
     }
 
     // ---- 音色拟合: 重命名对应图层 ----
-    if (timbreFitting) {
+    // 声部分离后层号已重排, 原来的通道层区间不再适用, 跳过该重命名(层名已含声部后缀)
+    if (timbreFitting && !hasVoiceSplit) {
         var layerInstruments = {};
         for (var i = 0; i < songNotes.length; i++) {
             layerInstruments[songNotes[i].layer] = songNotes[i].instrument;
@@ -2643,6 +2971,8 @@ function _convertMidiToNBS(arrayBuffer, settings) {
         note_count: songNotes.length,
         notes: songNotes,
         layer_channel_map: layerChannelMap,
+        // 声部分离标记: layer -> 0(低声部/左手) / 1(高声部/右手), 无分离时为空对象
+        layer_voice_map: layerVoiceMap,
         // 通道显示名 (供片段轨道命名等上层使用)
         channel_names: chBaseNames,
         // MIDI -> NBS 坐标换算元信息 (供上层做基于 MIDI 的分析, 如重复片段分割)

@@ -1277,6 +1277,10 @@ function buildTimbreFittingRows(info) {
             split_repeats: $('midi-split-repeats') ? $('midi-split-repeats').checked : true,
             // 颗粒度等级: small(最小1小节) / medium(最小2小节, 默认) / large(最小4小节)
             repeat_granularity: $('midi-repeat-granularity') ? $('midi-repeat-granularity').value : 'medium',
+            // 声部分离: 把同一条 MIDI 轨道/通道里的多个声部(钢琴左右手、人声+伴奏)拆到不同 NBS 轨道
+            separate_voices: $('midi-separate-voices') ? !!$('midi-separate-voices').checked : false,
+            // 忽略 MIDI 元数据: 不使用 track / 名称线索, 完全按音高与时间连续性推断
+            voice_ignore_metadata: $('midi-voice-ignore-metadata') ? !!$('midi-voice-ignore-metadata').checked : false,
         };
 
         // 收集音色替代配置

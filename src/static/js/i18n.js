@@ -2176,6 +2176,49 @@
         if (Object.prototype.hasOwnProperty.call(_timelinePosI18n, _nl)) Object.assign(UI_TEXT[_nl], _timelinePosI18n[_nl]);
     }
 
+    // ============ 片段钢琴窗口设置 / 本地缓存清理 词条 (先补英文, 其它语言回退英文) ============
+    var _spwStorageI18n = {
+        'en-US': {
+            '片段钢琴窗口': 'Segment piano window', '显示时间栏': 'Show timeline',
+            '显示进度条地图': 'Show minimap', '显示力度控制器': 'Show velocity',
+            '清理本地缓存': 'Clear local cache', '已保存到浏览器': 'Saved to browser',
+            '当前总占用': 'Total usage', '历史歌曲数据': 'Project data',
+            '自定义音色音频': 'Custom instrument audio', '音色库文件': 'Soundfont files',
+            '设置与元数据': 'Settings & metadata', '按时间清理工程': 'Clean projects by age',
+            '不清理工程': 'Keep all projects', '清理 7 天前的工程': 'Clean projects older than 7 days',
+            '清理 1 个月前的工程': 'Clean projects older than 1 month',
+            '清理全部工程': 'Clean all projects', '其它缓存': 'Other cache',
+            '没有符合该时间范围的工程': 'No projects in this range',
+            '将删除': 'Will delete', '个工程': 'project(s)',
+            '当前打开的工程会保留': 'the open project is kept', '音符': 'note(s)',
+            '没有需要清理的内容': 'Nothing to clean', '清理': 'Clean',
+            '清理后无法恢复，请先导出需要保留的作品。': 'This cannot be undone. Export anything you want to keep first.',
+            '本地缓存占用已超过 100 MB，可勾选下方内容进行清理，或选择忽略。': 'Local cache usage exceeds 100 MB. Choose what to clean below, or ignore.',
+            '本地缓存占用提醒': 'Local cache usage', '忽略': 'Ignore', '立即清理': 'Clean now',
+            '背景图片': 'Background image',
+            '清理后自定义音色会被移除，内置音色不受影响。': 'Custom instruments will be removed. Built-in instruments are unaffected.',
+            '清理后需要重新下载音色库，且可能导致 MIDI 音色不准确或丢失。': 'The soundfont must be downloaded again; MIDI timbre may become inaccurate or missing.'
+        }
+    };
+    for (_nl in _spwStorageI18n) {
+        if (Object.prototype.hasOwnProperty.call(_spwStorageI18n, _nl)) Object.assign(UI_TEXT[_nl], _spwStorageI18n[_nl]);
+    }
+
+    // ============ MIDI 声部分离 词条 (先补英文) ============
+    var _voiceSepI18n = {
+        'en-US': {
+            '声部分离': 'Voice separation',
+            '分离混在同一条轨道里的声部': 'Split voices packed into one track',
+            '忽略 MIDI 元数据，直接算法处理': 'Ignore MIDI metadata, use the algorithm',
+            '右手': 'Right hand', '左手': 'Left hand',
+            '高声部': 'Upper voice', '低声部': 'Lower voice',
+            '打击乐': 'Percussion', '其他': 'Other'
+        }
+    };
+    for (_nl in _voiceSepI18n) {
+        if (Object.prototype.hasOwnProperty.call(_voiceSepI18n, _nl)) Object.assign(UI_TEXT[_nl], _voiceSepI18n[_nl]);
+    }
+
     // ============ 弹窗排版重排后的分组标题 / 选项文案 (9 种非中文语言) ============
     var _dialogLayoutI18n = {
         'en-US': {

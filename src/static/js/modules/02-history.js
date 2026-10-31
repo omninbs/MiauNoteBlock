@@ -49,7 +49,11 @@
             lyrics: JSON.parse(JSON.stringify(state.lyrics || [])),
             // 片段数据随快照记录, 使片段编辑同样可撤销/重做
             segments: JSON.parse(JSON.stringify(state.segments || [])),
-            segmentLanes: JSON.parse(JSON.stringify(state.segmentLanes || []))
+            segmentLanes: JSON.parse(JSON.stringify(state.segmentLanes || [])),
+            // 层 -> 通道 / 层 -> 声部 映射: 撤销后 layer 索引可能变化,
+            // 若不同步恢复, 片段归位会失配, 音符会被丢弃(表现为区域性断层)
+            layerChannelMap: JSON.parse(JSON.stringify(state.layerChannelMap || {})),
+            layerVoiceMap: JSON.parse(JSON.stringify((state.song && state.song.layer_voice_map) || {}))
         };
     }
 
@@ -63,6 +67,13 @@
         state.lyrics = JSON.parse(JSON.stringify(snapshot.lyrics || []));
         state.segments = JSON.parse(JSON.stringify(snapshot.segments || []));
         state.segmentLanes = JSON.parse(JSON.stringify(snapshot.segmentLanes || []));
+        // 旧快照没有这两个字段时保持当前映射, 避免把映射清空导致归位失配
+        if (snapshot.layerChannelMap) {
+            state.layerChannelMap = JSON.parse(JSON.stringify(snapshot.layerChannelMap));
+        }
+        if (snapshot.layerVoiceMap) {
+            state.song.layer_voice_map = JSON.parse(JSON.stringify(snapshot.layerVoiceMap));
+        }
         rebuildFromNotes();
         updateTrackPanelUI();
         // 歌词恢复后重建索引并同步到轨道

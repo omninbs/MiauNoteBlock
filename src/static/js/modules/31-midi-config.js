@@ -72,7 +72,9 @@
                 snap_beat: settings.snap_beat,
                 auto_split_segments: !!settings.auto_split_segments,
                 split_repeats: settings.split_repeats !== false,
-                repeat_granularity: settings.repeat_granularity || 'medium'
+                repeat_granularity: settings.repeat_granularity || 'medium',
+                separate_voices: !!settings.separate_voices,
+                voice_ignore_metadata: !!settings.voice_ignore_metadata
             },
             sustain_track_indices: (settings.sustain_tracks || []).slice(),
             percussion_instruments: settings.percussion_instruments || {},
@@ -107,6 +109,8 @@
         if (saved.auto_split_segments !== undefined && $('midi-auto-split-segments')) $('midi-auto-split-segments').checked = !!saved.auto_split_segments;
         if (saved.split_repeats !== undefined && $('midi-split-repeats')) $('midi-split-repeats').checked = saved.split_repeats !== false;
         if (saved.repeat_granularity !== undefined && $('midi-repeat-granularity')) $('midi-repeat-granularity').value = saved.repeat_granularity;
+        if (saved.separate_voices !== undefined && $('midi-separate-voices')) $('midi-separate-voices').checked = !!saved.separate_voices;
+        if (saved.voice_ignore_metadata !== undefined && $('midi-voice-ignore-metadata')) $('midi-voice-ignore-metadata').checked = !!saved.voice_ignore_metadata;
         if (saved.snap_enabled !== undefined && $('midi-snap-enabled')) $('midi-snap-enabled').checked = saved.snap_enabled;
         if (saved.snap_beat !== undefined && $('midi-snap-beat')) $('midi-snap-beat').value = saved.snap_beat;
     }
@@ -130,6 +134,8 @@
         setChk('midi-auto-split-segments', true);
         setChk('midi-split-repeats', true);
         setVal('midi-repeat-granularity', 'medium');
+        setChk('midi-separate-voices', true);
+        setChk('midi-voice-ignore-metadata', false);
         setChk('midi-snap-enabled', false);
         setVal('midi-snap-beat', '4');
     }

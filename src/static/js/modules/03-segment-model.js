@@ -72,6 +72,8 @@
                 // isDrum 显式标记: 按 layer 分组时 channel 只是音轨索引, 不能用 === 9 判断打击乐
                 isDrum: !!g.isDrum
             };
+            // 声部分离: 同通道的两条轨道 channel 相同, 必须靠 voice 区分归属
+            if (g.voice !== undefined && g.voice !== null) lane.voice = g.voice;
             // 按音轨 (非 MIDI 通道) 分组时记录归属 layer, 供进入片段模式时精确归位
             if (g.layerKey !== undefined) lane.layerKey = g.layerKey;
             lanes.push(lane);
@@ -96,12 +98,8 @@
                 notes: segNotes
             });
         }
-        // 末尾保留一条空轨, 方便继续拖入新轨
-        lanes.push({
-            id: lanes.length + 1, muted: false, solo: false,
-            volume: 100, height: SEG_DEFAULT_LANE_H
-        });
-
+        // 不追加空的占位轨道: 导入/拆分结果应保持干净,
+        // 空轨只在用户实际编辑(拖动/新增)时按需补出
         state.segmentLanes = lanes;
         state.segments = segments;
         state._segmentIdSeq = seq;
@@ -118,49 +116,72 @@
     function segmentBuildChannelSplit(song) {
         var notes = (song && song.notes) || [];
         var channelMap = (song && song.layer_channel_map) || {};
-        var groups = {};      // key -> { channel, notes: [] }
+        // 声部分离标记: layer -> 0(低/左手) / 1(高/右手)
+        var voiceMap = (song && song.layer_voice_map) || {};
+        var groups = {};      // key -> { channel, voice, notes: [] }
         var order = [];
         for (var i = 0; i < notes.length; i++) {
             var n = notes[i];
             var ch = channelMap[n.layer];
-            var key = (ch === undefined || ch === null) ? 'x' : String(ch);
+            var voice = (ch === undefined || ch === null || ch === 9) ? undefined : voiceMap[n.layer];
+            var key;
+            if (ch === undefined || ch === null) key = 'x';
+            else if (voice === undefined) key = String(ch);
+            else key = ch + 'v' + voice;
             if (!groups[key]) {
-                groups[key] = { channel: (key === 'x') ? null : ch, notes: [] };
+                groups[key] = {
+                    channel: (key === 'x') ? null : ch,
+                    voice: (voice === undefined) ? null : voice,
+                    firstLayer: n.layer,
+                    notes: []
+                };
                 order.push(key);
+            } else if (isFinite(n.layer) && n.layer < groups[key].firstLayer) {
+                groups[key].firstLayer = n.layer;
             }
             groups[key].notes.push(n);
         }
         if (!order.length) return false;
 
-        // 排序: 旋律通道按通道号升序, 打击乐 (9) 放最后, 未映射的更后
+        // 排序: 旋律通道按通道号升序, 同通道内 高声部 → 未分离 → 低声部;
+        // 打击乐 (9) 放最后, 未映射的更后
         order.sort(function(a, b) {
             if (a === 'x') return 1;
             if (b === 'x') return -1;
-            var ca = groups[a].channel, cb = groups[b].channel;
-            if (ca === 9) return 1;
-            if (cb === 9) return -1;
-            return ca - cb;
+            var ga = groups[a], gb = groups[b];
+            var ca = ga.channel, cb = gb.channel;
+            if (ca === 9 && cb !== 9) return 1;
+            if (cb === 9 && ca !== 9) return -1;
+            if (ca !== cb) return ca - cb;
+            var rank = function(v) { return v === 1 ? 0 : (v === null ? 1 : 2); };
+            return rank(ga.voice) - rank(gb.voice);
         });
 
         var defs = [];
         for (var oi = 0; oi < order.length; oi++) {
             var g = groups[order[oi]];
             var name;
-            // 轨道名: 打击乐 / 通道号 + 通道名 / 其他
+            // 轨道名: 打击乐 / 音轨名(含声部后缀) / 通道号 + 通道名 / 其他
             if (g.channel === 9) {
                 name = '打击乐';
             } else if (g.channel === null) {
                 name = '其他';
             } else {
+                var layerName = (song.layers && song.layers[g.firstLayer]) ? (song.layers[g.firstLayer].name || '') : '';
                 var chName = (song.channel_names && song.channel_names[g.channel]) ? song.channel_names[g.channel] : '';
-                name = chName
-                    ? ('通道 ' + (g.channel + 1) + ' · ' + chName)
-                    : ('通道 ' + (g.channel + 1));
+                if (layerName) {
+                    name = layerName;
+                } else {
+                    name = chName
+                        ? ('通道 ' + (g.channel + 1) + ' · ' + chName)
+                        : ('通道 ' + (g.channel + 1));
+                }
             }
             defs.push({
                 name: name,
                 channel: g.channel,
                 isDrum: g.channel === 9,
+                voice: (g.voice === null ? undefined : g.voice),
                 notes: g.notes
             });
         }

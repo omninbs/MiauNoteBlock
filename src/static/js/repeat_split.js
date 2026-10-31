@@ -6,7 +6,8 @@
  *   2. 所有切割点强制对齐小节线 (NBS 4/4: 16 tick = 1 小节)
  *   3. 硬约束: 切割点不得落在任何音符的持续区间内部 (延音不会被从中间断开)
  *   4. 自动寻优: 对候选模式长度 (1/2/4/8 小节) 分别切分并评分,
- *      目标为「片段种类数最少 + 片段数量按歌曲长度适量 + 抑制过长片段」
+ *      优先「片段种类数最少」, 其次片段数量接近目标, 并抑制过长片段;
+ *      没有可利用的重复结构时退化为「按周期均匀切块」(片段名各自不同), 不会整轨不切
  *   5. 每轨独立切点
  */
 (function () {
@@ -20,7 +21,6 @@
     // 鼓点密集、规律性强, 因此以 1 小节为主, 不设 8 小节 (过长无意义)。
     var DRUM_CANDIDATE_BARS = [1, 2, 4];
     var MAX_PIECE_BARS = 8;                  // 单片段超过此长度视为"过长"
-    var MIN_REUSE = 0.20;                    // 重用率低于此值视为"没有明显重复", 整轨不分割
     var MIN_PIECES = 2;                      // 少于 2 段等于没切
     var MIN_AVG_NOTES = 2.5;                 // 平均每段音符数低于此值时视为"碎得没意义"
 
@@ -429,7 +429,7 @@
             }
             if (drumOne) {
                 var drumReuse = drumOne.pieces > 0 ? (1 - drumOne.kinds / drumOne.pieces) : 0;
-                best = (drumReuse >= MIN_REUSE * 0.8) ? drumOne : candidates[0];
+                best = (drumReuse >= 0.16) ? drumOne : candidates[0];
             } else {
                 best = candidates[0];
             }
@@ -437,9 +437,8 @@
             best = candidates[0];
         }
 
-        // 质量门槛: 重用率过低 (大量片段互不相同) 说明没有可利用的重复结构
-        var bestReuse = best.pieces > 0 ? (1 - best.kinds / best.pieces) : 0;
-        if (bestReuse < MIN_REUSE) return null;
+        // 门槛: 至少切成 2 段才有意义
+        // (不再按"重用率"拒绝: 无重复结构时按周期均匀切块, 只是片段名各不相同)
         if (best.pieces < MIN_PIECES) return null;
 
         // ---- 裁掉片段内部的「大面积空白」 ----

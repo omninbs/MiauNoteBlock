@@ -96,6 +96,10 @@
   - [x] 12.5 `window.X = X;` 别名导出行不再计为模块定义，修复 `02-history` 加载即抛 `showAppAlert is not defined` 并连锁导致 `deepCloneNotes` 未导出
   - [x] 12.6 构造函数跨模块处理：扩展 `prototype` 的模块用真实引用，仅 `new` 的模块用惰性构造转发，修复 MIDI 弹窗 `this._computeRange is not a function`
   - [x] 12.7 回归：HTTP 与 `file://` 均 init=1、无 pageerror；MIDI 导入弹窗正常解析；13k 音符大文件片段窗口可绘制；45 步压力测试无失败且 DOM 无增长
+  - [x] 12.8 片段分割「没有分割 / 效果极差」修复（`repeat_split.js`）：
+    - 根因：`MIN_REUSE = 0.20` 的「重用率」硬门槛把「内容各不相同但数量合理」的轨道整轨拒掉。实测 MONTAGEM_486.nbs 26 条轨全部命中 `reason-low-reuse`（reuse 0.00~0.18），最终一条都没有切分；该门槛与拆分前的旧代码行为一致，并非拆分引入。
+    - 修复：移除重用率拒绝，仅保留「至少切 2 段」门槛；候选评分仍以「片段种类数最少」优先，因此有重复结构时照旧按重复段落切，无重复时退化为按 2/4/8 小节均匀切块（片段名各自不同）。鼓轨的「优先 1 小节」判断改为固定的 `0.16` 阈值，语义不变。
+    - 回归：MONTAGEM_486 26 轨 → 185 片段（21 轨参与切分）；Dead_Inside 316 片段；Animals 392 片段；`segNotes` 与切分后音符总数完全相等（无音符丢失）；Animals.mid 导入后处理仍为 7 轨全部切分、308 片段；自造 4 小节循环 MIDI 由 1 段变为 2 段；HTTP 与 `file://` 均无 pageerror。
 
 # Task Dependencies
 

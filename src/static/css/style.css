@@ -960,10 +960,48 @@ body.segment-edit-mode .tool-bar {
     font-weight: 700;
     color: #eaf7ff;
 }
-/* 手机端: 顶部横向空间不足, 改用悬浮提示条上的文字按钮 */
+/* 片段模式专用退出按钮: 仅在手机端显示 */
+.segment-toolbar .seg-mobile-only {
+    display: none !important;
+}
+/* 手机端: 沿用桌面端顶部工具栏 (横向可滚动), 不再使用悬浮按钮栏 */
 @media (max-width: 768px) {
-    .segment-toolbar { display: none !important; }
-    .segment-edit-bar { display: flex; }
+    .segment-toolbar {
+        display: flex;
+        max-width: calc(100vw - 16px);
+        overflow-x: auto;
+        overflow-y: hidden;
+        gap: 2px;
+        padding: 0 4px;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+    .segment-toolbar::-webkit-scrollbar { display: none; }
+    .segment-toolbar .seg-tool-btn {
+        width: 32px;
+        min-width: 32px;
+        height: 32px;
+        font-size: 13px;
+    }
+    .segment-toolbar .seg-mobile-only {
+        display: inline-flex !important;
+        margin-left: auto;
+        width: auto !important;
+        min-width: 44px !important;
+        padding: 0 10px !important;
+        font-size: 12px !important;
+        color: #eaf7ff;
+        background: rgba(76, 194, 255, 0.16);
+    }
+    /* 片段模式下隐藏 NBS 专属的悬浮按钮栏 / 工具切换器 */
+    body.segment-edit-mode #mobile-fab-single,
+    body.segment-edit-mode #mobile-fab-deselect,
+    body.segment-edit-mode .fab-context-menu,
+    body.segment-edit-mode #mobile-tool-switcher {
+        display: none !important;
+    }
+    /* 底部提示条在新工具栏下不再需要, 避免与桌面端重复 */
+    .segment-edit-bar { display: none !important; }
 }
 @media (min-width: 769px) {
     .segment-edit-bar { display: none !important; }
@@ -3629,37 +3667,39 @@ body.segment-edit-mode .tool-bar {
 .settings-header {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
-    padding: 8px 12px;
+    gap: 6px;
+    padding: 4px 10px;
     border-bottom: 1px solid var(--ctrl-stroke-default);
     background: transparent;
+    min-height: 0;
 }
 .settings-header h4 {
     flex: 1;
     margin: 0;
     color: var(--text-primary);
-    font-size: var(--font-size-subtitle);
+    font-size: 14px;
+    line-height: 1.25;
     font-weight: 600;
     font-family: var(--font-family);
 }
 .settings-header i {
     color: var(--accent);
-    font-size: 16px;
+    font-size: 12px;
 }
 .settings-close-btn {
     background: transparent;
     border: none;
     color: var(--text-secondary);
     cursor: pointer;
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     transition: background var(--anim-fast), color var(--anim-fast);
     padding: 0;
-    font-size: 14px;
+    font-size: 12px;
     line-height: 1;
 }
 .settings-close-btn:hover {
@@ -7861,6 +7901,62 @@ textarea:disabled {
     color: var(--text-tertiary, #888);
     text-align: right;
 }
+/* 设置窗口「清理本地缓存」: 只读占用行 + 按时间清理工程 */
+.storage-clean-row-static {
+    cursor: default;
+}
+.storage-clean-row-static:hover {
+    background: var(--ctrl-fill-default);
+    border-color: var(--ctrl-stroke-default);
+}
+.storage-manager-section {
+    margin-top: 14px;
+}
+.storage-manager-section-title {
+    margin-bottom: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary, #bbb);
+    letter-spacing: 0.02em;
+}
+.storage-manager-range {
+    display: flex;
+    gap: 8px;
+}
+.storage-manager-range .settings-control {
+    flex: 1;
+    min-width: 0;
+}
+.storage-manager-preview {
+    margin-top: 8px;
+    max-height: 168px;
+    overflow-y: auto;
+    border: 1px solid var(--ctrl-stroke-default);
+    border-radius: 8px;
+    background: var(--ctrl-fill-default);
+}
+.storage-manager-preview-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    font-size: 12.5px;
+    border-bottom: 1px solid var(--ctrl-stroke-default);
+}
+.storage-manager-preview-row:last-child {
+    border-bottom: none;
+}
+.storage-manager-empty {
+    padding: 10px;
+    font-size: 12px;
+    color: var(--text-tertiary, #888);
+    text-align: center;
+}
+.storage-manager-summary {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-secondary, #bbb);
+}
 /* --- 平板 / 中等宽度: 侧栏收窄 --- */
 @media (max-width: 900px) {
     .welcome-card { max-width: 680px; }
@@ -8002,7 +8098,10 @@ textarea:disabled {
 /* 移动端: 收紧内边距与间距, 把纵向空间还给可操作项 */
 @media (max-width: 768px) {
     #settings-popup { --dialog-body-h: min(440px, calc(100svh - 176px)); }
-    .settings-header { padding: 6px 10px; }
+    .settings-header { padding: 3px 8px; gap: 5px; }
+    .settings-header h4 { font-size: 12.5px; line-height: 1.2; }
+    .settings-header i { font-size: 11px; }
+    .settings-close-btn { width: 18px; height: 18px; font-size: 11px; }
     .settings-body { padding: 6px 8px; gap: 8px; }
     .settings-tabs { padding: 0 6px; }
     .settings-row { padding: 1px 0; }
@@ -8538,44 +8637,50 @@ textarea:disabled {
     overflow: hidden;
     color: var(--text-primary);
     font-family: var(--font-family);
+    animation: spw-in 160ms cubic-bezier(0.2, 0.9, 0.25, 1);
+    transform-origin: center;
+}
+@keyframes spw-in {
+    from { opacity: 0; transform: scale(0.97); }
+    to   { opacity: 1; transform: scale(1); }
 }
 .spw.spw-max {
     border-radius: 8px;
 }
 .spw-titlebar {
     flex: none;
-    height: 34px;
+    height: 26px;
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 0 6px 0 10px;
-    background: rgba(255, 255, 255, 0.04);
+    gap: 6px;
+    padding: 0 4px 0 8px;
+    background: rgba(255, 255, 255, 0.045);
     border-bottom: 1px solid var(--ctrl-stroke-default);
     cursor: default;
     user-select: none;
 }
 .spw-glyph {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 4px;
+    border-radius: 3px;
     color: var(--accent);
-    font-size: 12px;
+    font-size: 10px;
     background: rgba(76, 194, 255, 0.12);
     flex: none;
 }
 .spw-title {
-    font-size: 12.5px;
+    font-size: 11.5px;
     font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 40%;
+    max-width: 45%;
 }
 .spw-sub {
-    font-size: 11.5px;
+    font-size: 10.5px;
     color: var(--text-tertiary);
     white-space: nowrap;
     overflow: hidden;
@@ -8586,30 +8691,33 @@ textarea:disabled {
 .spw-actions {
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 1px;
     flex: none;
 }
 .spw-btn {
-    width: 26px;
-    height: 24px;
+    width: 22px;
+    height: 20px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     border: none;
-    border-radius: 4px;
+    border-radius: 3px;
     background: transparent;
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: 10px;
     cursor: pointer;
     padding: 0;
-    transition: background var(--anim-fast), color var(--anim-fast);
+    outline: none;
+    transition: background 120ms, color 120ms;
+    -webkit-user-select: none;
+    user-select: none;
 }
 .spw-btn:hover {
     background: var(--ctrl-fill-hover);
     color: var(--text-primary);
 }
 .spw-btn.active {
-    background: rgba(76, 194, 255, 0.18);
+    background: rgba(76, 194, 255, 0.16);
     color: var(--accent);
 }
 .spw-close:hover {
@@ -8624,68 +8732,84 @@ textarea:disabled {
 }
 .spw-toolbar {
     flex: none;
-    height: 34px;
+    height: 28px;
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 0 8px;
+    gap: 3px;
+    padding: 0 6px;
     border-bottom: 1px solid var(--ctrl-stroke-default);
     background: rgba(0, 0, 0, 0.16);
     overflow: hidden;
 }
 .spw-sep {
     width: 1px;
-    height: 16px;
+    height: 14px;
     background: var(--ctrl-stroke-default);
-    margin: 0 4px;
+    margin: 0 3px;
     flex: none;
 }
 .spw-spacer { flex: 1; }
-.spw-hint {
-    font-size: 10.5px;
-    color: var(--text-tertiary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 40%;
-}
+/* 播放模式开关: 滑块形式 */
 .spw-switch {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    height: 24px;
-    padding: 0 8px 0 6px;
-    border: 1px solid var(--ctrl-stroke-default);
-    border-radius: 12px;
-    background: var(--ctrl-fill-default);
+    height: 22px;
+    padding: 0 8px 0 4px;
+    border: none;
+    border-radius: 11px;
+    background: transparent;
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: 10.5px;
     cursor: pointer;
     white-space: nowrap;
     font-family: var(--font-family);
+    outline: none;
+    -webkit-user-select: none;
+    user-select: none;
 }
 .spw-switch:hover { background: var(--ctrl-fill-hover); }
-.spw-switch-dot {
-    width: 8px;
-    height: 8px;
+.spw-switch-track {
+    position: relative;
+    width: 26px;
+    height: 14px;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.14);
+    flex: none;
+    transition: background 160ms ease;
+}
+.spw-switch-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
     background: var(--text-tertiary);
-    transition: background var(--anim-fast);
+    transition: left 160ms cubic-bezier(0.2, 0.9, 0.25, 1), background 160ms ease;
 }
-.spw-switch.on .spw-switch-dot { background: var(--accent); }
+.spw-switch.on .spw-switch-track { background: rgba(76, 194, 255, 0.28); }
+.spw-switch.on .spw-switch-thumb {
+    left: 14px;
+    background: var(--accent);
+}
 .spw-switch.on { color: var(--text-primary); }
+.spw-switch-label {
+    font-size: 10.5px;
+    letter-spacing: 0.2px;
+}
 .spw-grid, .spw-ref {
     width: auto;
-    min-width: 26px;
-    padding: 0 8px;
+    min-width: 24px;
+    padding: 0 6px;
     gap: 4px;
-    font-size: 11px;
+    font-size: 10px;
 }
 .spw-stage {
     flex: 1;
     position: relative;
     min-height: 0;
-    background: #1b1b1f;
+    background: #1e292e;
     overflow: hidden;
 }
 .spw-stage canvas,
@@ -8697,9 +8821,9 @@ textarea:disabled {
 .spw-vel {
     flex: none;
     position: relative;
-    height: 58px;
+    height: 54px;
     border-top: 1px solid var(--ctrl-stroke-default);
-    background: #17171b;
+    background: #1a2429;
 }
 .spw-resize {
     position: absolute;
@@ -8714,6 +8838,13 @@ textarea:disabled {
 .spw-rz-se { bottom: 0; right: 0; width: 12px; height: 12px; cursor: nwse-resize; }
 .spw-rz-sw { bottom: 0; left: 0; width: 12px; height: 12px; cursor: nesw-resize; }
 
+/* 拖动/缩放期间关闭过渡, 保证跟手 */
+.spw.spw-dragging,
+.spw.spw-resizing {
+    animation: none;
+    will-change: left, top, width, height;
+}
+
 /* 最小化: 只保留矮标题栏, 默认靠右上角堆叠 */
 .spw.spw-min {
     border-radius: 8px;
@@ -8724,7 +8855,7 @@ textarea:disabled {
     display: none;
 }
 .spw-min .spw-titlebar {
-    height: 30px;
+    height: 26px;
     border-bottom: none;
 }
 .spw-min .spw-glyph,
@@ -8739,13 +8870,13 @@ textarea:disabled {
     display: none;
 }
 .spw-min .spw-btn {
-    width: 24px;
-    height: 22px;
+    width: 22px;
+    height: 20px;
 }
 
-/* 参考片段下拉 */
+/* 参考片段下拉 (挂载到 body, fixed 定位, 避免被窗口裁剪) */
 .spw-menu {
-    position: absolute;
+    position: fixed;
     min-width: 150px;
     max-height: 220px;
     overflow-y: auto;
@@ -8754,7 +8885,7 @@ textarea:disabled {
     border: 1px solid var(--ctrl-stroke-secondary);
     border-radius: 6px;
     box-shadow: var(--shadow-flyout);
-    z-index: 20;
+    z-index: 2000;
 }
 .spw-menu-item {
     padding: 5px 8px;

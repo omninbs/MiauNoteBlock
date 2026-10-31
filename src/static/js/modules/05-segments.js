@@ -62,7 +62,6 @@
                 id: ++state._segmentIdSeq, lane: 0, start: 0, end: segmentSongEnd(),
                 name: '片段 1', notes: []
             });
-            segmentEnsureEmptyLane();
             return;
         }
         for (var i = 0; i < state.segments.length; i++) {
@@ -73,7 +72,8 @@
             if (!isFinite(s.id)) s.id = ++state._segmentIdSeq;
         }
         segmentFollowSongEnd();
-        segmentEnsureEmptyLane();
+        // 不在这里自动补空轨: 只在用户实际编辑时(segmentAfterEdit)按需补,
+        // 避免导入后多出一条没有内容的片段轨道
     }
 
     function segmentLaneCount() {
@@ -143,14 +143,25 @@
             var nt = notes[n];
             var placed = false;
             var fallbackSeg = null;
+            // 声部标记缺失/失配时的次选片段: 只按通道归位, 保证音符不会凭空消失
+            var channelFallbackSeg = null;
             // 音符所属 MIDI 通道: 自动分割生成的多片段轨道要按通道归位,
             // 否则所有音符都会落进第一条片段 (整曲片段会互相重叠)
             var ntChannel = (state.layerChannelMap && nt.layer !== undefined)
                 ? state.layerChannelMap[nt.layer] : undefined;
+            // 声部分离: 同通道的多条轨道靠 voice 区分, 否则全部音符会挤进第一条(高音)轨道
+            var ntVoice = (state.song && state.song.layer_voice_map && nt.layer !== undefined)
+                ? state.song.layer_voice_map[nt.layer] : undefined;
             for (var k = 0; k < segs.length; k++) {
                 if (!(nt.tick >= segs[k].start && nt.tick < segs[k].end)) continue;
-                if (!fallbackSeg) fallbackSeg = segs[k];
-                var laneCfg = lanes[segs[k].lane];
+                var fbLane = lanes[segs[k].lane];
+                var fbVoice = fbLane ? fbLane.voice : undefined;
+                // 兜底片段优先匹配声部; voice 信息缺失时允许退化 (宁可粗略归位也不能丢音符)
+                if (!fallbackSeg && (fbVoice === undefined || fbVoice === null ||
+                        ntVoice === undefined || ntVoice === fbVoice)) {
+                    fallbackSeg = segs[k];
+                }
+                var laneCfg = fbLane;
                 // 合并后的轨道覆盖多个 NBS 层: 命中任意一层即归入该片段
                 if (laneCfg && Array.isArray(laneCfg.layerKeys)) {
                     var ntLayer = isFinite(nt.layer) ? nt.layer : 0;
@@ -173,10 +184,23 @@
                 }
                 var laneCh = laneCfg ? laneCfg.channel : undefined;
                 if (ntChannel !== undefined && laneCh !== undefined && laneCh === ntChannel) {
+                    // 声部分离的轨道: channel 相同, 还要比对声部标记。
+                    // 只有两边都能确定声部且不一致时才跳过; 任一方缺失时退化为按通道归位,
+                    // 避免撤销/重排/旧工程导致 voice 映射失配时音符被丢弃 (表现为区域性断层)
+                    var laneVoice = laneCfg ? laneCfg.voice : undefined;
+                    if (laneVoice !== undefined && laneVoice !== null &&
+                        ntVoice !== undefined && ntVoice !== laneVoice) {
+                        if (!channelFallbackSeg) channelFallbackSeg = segs[k];
+                        continue;
+                    }
                     pushSegmentNote(segs[k], nt);
                     placed = true;
                     break;
                 }
+            }
+            if (!placed && channelFallbackSeg) {
+                pushSegmentNote(channelFallbackSeg, nt);
+                placed = true;
             }
             if (!placed && fallbackSeg) {
                 pushSegmentNote(fallbackSeg, nt);
@@ -255,6 +279,7 @@
         var out = [];
         var seq = 0;
         var layerChannelOut = null;   // 片段合成后的 layer -> MIDI 通道 (自动分轨工程用)
+        var composeLayerMap = {};     // 原始 layer -> 合成后的 layer (声部映射同步用)
         for (var li = 0; li < lanes.length; li++) {
             var lane = lanes[li];
             var segs = [];
@@ -271,7 +296,10 @@
             }
             var rels = Object.keys(used).map(Number).sort(function(x, y) { return x - y; });
             var map = {};
-            for (var r = 0; r < rels.length; r++) map[rels[r]] = base + r;
+            for (var r = 0; r < rels.length; r++) {
+                map[rels[r]] = base + r;
+                composeLayerMap[rels[r]] = base + r;
+            }
             // 记录本轨合成后的新 layer 归属, 再次进入片段模式时按通道归位
             if (lane.layerChannels) {
                 // 合并轨道: 每个原始层保留自己的通道
@@ -336,6 +364,16 @@
         state.notes = out;
         if (state.song) state.song.notes = out;
         if (layerChannelOut) state.layerChannelMap = layerChannelOut;
+        // 声部分离: layer 重排后同步 voice 映射, 否则再次进入片段模式无法按声部归位
+        if (state.song && state.song.layer_voice_map) {
+            var voiceOld = state.song.layer_voice_map;
+            var voiceOut = {};
+            for (var vk in composeLayerMap) {
+                if (!composeLayerMap.hasOwnProperty(vk)) continue;
+                if (voiceOld[vk] !== undefined) voiceOut[composeLayerMap[vk]] = voiceOld[vk];
+            }
+            state.song.layer_voice_map = voiceOut;
+        }
         var layerCount = Math.max(1, base);
         if (state.song && Array.isArray(state.song.layers)) {
             while (state.song.layers.length < layerCount) {

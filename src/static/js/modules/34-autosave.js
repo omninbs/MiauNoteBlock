@@ -90,7 +90,11 @@
                     description: state.song.description || '',
                     layers: state.song.layers || [],
                     solo_layers: Array.isArray(state.song.solo_layers) ? state.song.solo_layers.slice() : [],
-                    lyrics: JSON.parse(JSON.stringify(state.lyrics || []))
+                    lyrics: JSON.parse(JSON.stringify(state.lyrics || [])),
+                    layer_channel_map: state.song.layer_channel_map || {},
+                    layer_voice_map: state.song.layer_voice_map || {},
+                    channel_names: state.song.channel_names || {},
+                    _midi_meta: state.song._midi_meta || null
                 } : null,
                 lyrics: JSON.parse(JSON.stringify(state.lyrics || [])),
                 segments: JSON.parse(JSON.stringify(state.segments || [])),
@@ -147,7 +151,11 @@
                     notes: state.notes,
                     layers: data.song.layers || [],
                     solo_layers: Array.isArray(data.song.solo_layers) ? data.song.solo_layers.slice() : [],
-                    lyrics: Array.isArray(data.song.lyrics) ? data.song.lyrics.slice() : []
+                    lyrics: Array.isArray(data.song.lyrics) ? data.song.lyrics.slice() : [],
+                    layer_channel_map: data.song.layer_channel_map || {},
+                    layer_voice_map: data.song.layer_voice_map || {},
+                    channel_names: data.song.channel_names || {},
+                    _midi_meta: data.song._midi_meta || null
                 };
             }
             if (!state.song) {
@@ -707,6 +715,253 @@
         });
     }
 
+    // ============ 设置窗口「清理本地缓存」管理器 ============
+    // 展示各分区占用, 并支持按时间范围(7 天前 / 1 个月前 / 全部)批量清理工程。
+    function showStorageManagerDialog() {
+        collectStorageBreakdown().then(function(b) {
+            var overlay = _appDialogOverlay();
+            var box = _appDialogBox(i18nText('清理本地缓存'), '', 'fa-solid fa-broom', { maxWidth: 560 });
+            var body = box.querySelector('.settings-body');
+            body.style.whiteSpace = 'normal';
+            body.innerHTML = '';
+
+            var desc = document.createElement('p');
+            desc.className = 'storage-clean-desc';
+            desc.textContent = i18nText('当前总占用') + ' ' + formatStorageSize(b.total)
+                + '。' + i18nText('清理后无法恢复，请先导出需要保留的作品。');
+            body.appendChild(desc);
+
+            var list = document.createElement('div');
+            list.className = 'storage-clean-list';
+            var parts = [
+                { label: '历史歌曲数据', size: b.projects },
+                { label: '自定义音色音频', size: b.customInstruments },
+                { label: '音色库文件', size: b.soundfont },
+                { label: '背景图片', size: b.background },
+                { label: '设置与元数据', size: b.settings }
+            ];
+            parts.forEach(function(it) {
+                var row = document.createElement('div');
+                row.className = 'storage-clean-row storage-clean-row-static';
+                var name = document.createElement('span');
+                name.className = 'storage-clean-name';
+                name.textContent = i18nText(it.label);
+                var size = document.createElement('span');
+                size.className = 'storage-clean-size';
+                size.textContent = formatStorageSize(it.size);
+                row.appendChild(name);
+                row.appendChild(size);
+                list.appendChild(row);
+            });
+            body.appendChild(list);
+
+            // ---- 按时间清理工程 ----
+            var history = getHistoryFiles();
+            var currentId = state.currentFileId ? String(state.currentFileId) : null;
+
+            var section = document.createElement('div');
+            section.className = 'storage-manager-section';
+            var title = document.createElement('div');
+            title.className = 'storage-manager-section-title';
+            title.textContent = i18nText('按时间清理工程');
+            section.appendChild(title);
+
+            var rangeRow = document.createElement('div');
+            rangeRow.className = 'storage-manager-range';
+            var rangeSelect = document.createElement('select');
+            rangeSelect.className = 'settings-control';
+            [
+                { value: 'none', label: '不清理工程' },
+                { value: '7', label: '清理 7 天前的工程' },
+                { value: '30', label: '清理 1 个月前的工程' },
+                { value: 'all', label: '清理全部工程' }
+            ].forEach(function(opt) {
+                var o = document.createElement('option');
+                o.value = opt.value;
+                o.textContent = i18nText(opt.label);
+                rangeSelect.appendChild(o);
+            });
+            rangeRow.appendChild(rangeSelect);
+            section.appendChild(rangeRow);
+
+            var preview = document.createElement('div');
+            preview.className = 'storage-manager-preview';
+            section.appendChild(preview);
+
+            var summaryEl = document.createElement('div');
+            summaryEl.className = 'storage-manager-summary';
+            section.appendChild(summaryEl);
+            body.appendChild(section);
+
+            function entryTs(h) {
+                var ts = Number(h && h.ts);
+                if (isFinite(ts) && ts > 0) return ts;
+                var parsed = h && h.date ? new Date(h.date).getTime() : NaN;
+                return isFinite(parsed) ? parsed : 0;
+            }
+            function pickEntries(range) {
+                if (range === 'none') return [];
+                if (range === 'all') return history.slice();
+                var days = parseInt(range, 10) || 0;
+                var cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+                return history.filter(function(h) { return entryTs(h) < cutoff; });
+            }
+            function isCurrentEntry(h) {
+                return !!currentId && String(h.id) === currentId;
+            }
+
+            function renderPreview() {
+                preview.innerHTML = '';
+                if (rangeSelect.value === 'none') {
+                    preview.style.display = 'none';
+                    summaryEl.textContent = '';
+                    return;
+                }
+                preview.style.display = 'block';
+                var picked = pickEntries(rangeSelect.value);
+                var removable = picked.filter(function(h) { return !isCurrentEntry(h); });
+                if (!removable.length) {
+                    var empty = document.createElement('div');
+                    empty.className = 'storage-manager-empty';
+                    empty.textContent = i18nText('没有符合该时间范围的工程');
+                    preview.appendChild(empty);
+                    summaryEl.textContent = '';
+                    return;
+                }
+                removable.forEach(function(h) {
+                    var row = document.createElement('div');
+                    row.className = 'storage-manager-preview-row';
+                    var name = document.createElement('span');
+                    name.className = 'storage-clean-name';
+                    name.textContent = (h.name || 'Untitled') + ' · ' + (h.date || '');
+                    var size = document.createElement('span');
+                    size.className = 'storage-clean-size';
+                    size.textContent = (Number(h.size) || 0) + ' ' + i18nText('音符');
+                    row.appendChild(name);
+                    row.appendChild(size);
+                    preview.appendChild(row);
+                });
+                summaryEl.textContent = i18nText('将删除') + ' ' + removable.length + ' ' + i18nText('个工程')
+                    + (picked.length > removable.length ? '（' + i18nText('当前打开的工程会保留') + '）' : '');
+            }
+            rangeSelect.addEventListener('change', renderPreview);
+
+            // ---- 其它缓存 (可选清理) ----
+            var extraSection = document.createElement('div');
+            extraSection.className = 'storage-manager-section';
+            var extraTitle = document.createElement('div');
+            extraTitle.className = 'storage-manager-section-title';
+            extraTitle.textContent = i18nText('其它缓存');
+            extraSection.appendChild(extraTitle);
+            var extras = [
+                { key: 'customInstruments', label: '自定义音色音频', size: b.customInstruments },
+                { key: 'soundfont', label: '音色库文件', size: b.soundfont },
+                { key: 'background', label: '背景图片', size: b.background }
+            ];
+            var extraInputs = {};
+            extras.forEach(function(it) {
+                var row = document.createElement('label');
+                row.className = 'storage-clean-row';
+                var cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.disabled = it.size <= 0;
+                extraInputs[it.key] = cb;
+                var name = document.createElement('span');
+                name.className = 'storage-clean-name';
+                name.textContent = i18nText(it.label);
+                var size = document.createElement('span');
+                size.className = 'storage-clean-size';
+                size.textContent = formatStorageSize(it.size);
+                row.appendChild(cb);
+                row.appendChild(name);
+                row.appendChild(size);
+                extraSection.appendChild(row);
+            });
+            body.appendChild(extraSection);
+
+            renderPreview();
+
+            var close = function() { _closeAppDialog(overlay); };
+            var cancelBtn = _appDialogBtn(i18nText('取消'), false);
+            var cleanBtn = _appDialogBtn(i18nText('清理'), true);
+
+            cancelBtn.addEventListener('click', close);
+            cleanBtn.addEventListener('click', function() {
+                var pickedProjects = pickEntries(rangeSelect.value).filter(function(h) {
+                    return !isCurrentEntry(h);
+                });
+                var extraKeys = Object.keys(extraInputs).filter(function(k) {
+                    return extraInputs[k].checked && !extraInputs[k].disabled;
+                });
+                if (!pickedProjects.length && !extraKeys.length) {
+                    showToast(i18nText('没有需要清理的内容'));
+                    return;
+                }
+                close();
+                performRangeCleanup(pickedProjects, extraKeys);
+            });
+
+            box.querySelector('#app-dialog-x').addEventListener('click', close);
+            var actions = box.querySelector('.popup-actions');
+            actions.appendChild(cancelBtn);
+            actions.appendChild(cleanBtn);
+            overlay.appendChild(box);
+            document.body.appendChild(overlay);
+            _appDialogStack.push(overlay);
+        }).catch(function() {
+            showAppAlert('读取本地缓存占用失败，请稍后再试。', {
+                title: '清理本地缓存',
+                icon: 'fa-solid fa-triangle-exclamation'
+            });
+        });
+    }
+
+    // 按时间范围清理工程 + 选中的其它缓存分区
+    function performRangeCleanup(projects, extraKeys) {
+        var jobs = [];
+        var needsReload = false;
+        if (projects && projects.length) {
+            var delIds = {};
+            projects.forEach(function(h) { delIds[String(h.id)] = true; });
+            projects.forEach(function(h) { jobs.push(projectDbDelete(h.id)); });
+            var remain = getHistoryFiles().filter(function(h) { return !delIds[String(h.id)]; });
+            safeSetItem('nbs_history', JSON.stringify(remain));
+        }
+        if (extraKeys.indexOf('customInstruments') >= 0) {
+            needsReload = true;
+            jobs.push(clearObjectStore('webnbs_custom_instruments', 'audio'));
+            try { localStorage.removeItem('webnbs_custom_list'); } catch (e) {}
+        }
+        if (extraKeys.indexOf('soundfont') >= 0) {
+            needsReload = true;
+            jobs.push(clearObjectStore('webnbs_soundfont', 'files'));
+        }
+        if (extraKeys.indexOf('background') >= 0) {
+            needsReload = true;
+            jobs.push(clearObjectStore('webnbs_bg', 'kv'));
+            try {
+                localStorage.removeItem('bg_filename');
+                localStorage.removeItem('bg_migrated_v2');
+            } catch (e) {}
+        }
+        Promise.all(jobs).then(function() {
+            try { localStorage.removeItem(STORAGE_SNOOZE_KEY); } catch (e) {}
+            if ($('welcome-screen')) {
+                renderWelcomeRecent();
+                updateWelcomeResumeHint();
+            }
+            if (needsReload) {
+                return showAppConfirm('已清理所选内容。部分内容需要刷新页面后才会生效，是否立即刷新？', {
+                    title: '清理完成',
+                    icon: 'fa-solid fa-broom'
+                }).then(function(ok) { if (ok) location.reload(); });
+            }
+            showAppAlert('已清理所选内容。', { title: '清理完成', icon: 'fa-solid fa-circle-check' });
+        }).catch(function() {
+            showAppAlert('清理过程中出现异常，请重试。', { title: '清理失败', icon: 'fa-solid fa-triangle-exclamation' });
+        });
+    }
+
     // 立即把待写入内容落盘 (用于防抖尚未触发时的紧急保存)
     var _lastFlushAt = 0;
     function flushPendingSave() {
@@ -866,6 +1121,8 @@
     N.clearObjectStore = clearObjectStore;
     N.showStorageCleanupDialog = showStorageCleanupDialog;
     N.performStorageCleanup = performStorageCleanup;
+    N.showStorageManagerDialog = showStorageManagerDialog;
+    N.performRangeCleanup = performRangeCleanup;
     N.flushPendingSave = flushPendingSave;
     N._saveTimer = _saveTimer;
     N._saveDebounceMs = _saveDebounceMs;

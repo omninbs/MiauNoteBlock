@@ -180,6 +180,7 @@
             fileId: state.currentFileId || null,
             // MIDI 相关元信息: 片段分割依赖 layer→channel 映射与 tick 换算参数
             layerChannelMap: JSON.parse(JSON.stringify(song.layer_channel_map || {})),
+            layerVoiceMap: JSON.parse(JSON.stringify(song.layer_voice_map || {})),
             channelNames: JSON.parse(JSON.stringify(song.channel_names || {})),
             midiMeta: song._midi_meta ? JSON.parse(JSON.stringify(song._midi_meta)) : null,
             zoom: state.pianoRoll ? state.pianoRoll.zoom : 1,
@@ -209,6 +210,7 @@
             notes: state.notes,
             layers: JSON.parse(JSON.stringify(s.layers || [])),
             layer_channel_map: s.layerChannelMap || {},
+            layer_voice_map: s.layerVoiceMap || {},
             channel_names: s.channelNames || {},
             _midi_meta: s.midiMeta || null
         });

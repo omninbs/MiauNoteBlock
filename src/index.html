@@ -22,7 +22,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="static/css/style.css?v=20261030a">
+    <link rel="stylesheet" href="static/css/style.css?v=20261031a">
 </head>
 <body>
 
@@ -192,6 +192,7 @@
                     <i class="fa-solid fa-object-group"></i>
                 </button>
                 <span class="seg-tool-count" id="seg-tool-count">1</span>
+                <button class="toolbar-btn seg-tool-btn seg-mobile-only" id="seg-tb-exit" aria-label="退出片段编辑">退出</button>
             </div>
             <!-- 片段编辑: 右键菜单 -->
             <div class="segment-context-menu" id="segment-context-menu" style="display:none;"></div>
@@ -691,6 +692,25 @@
                             </label>
                         </div>
                     </div>
+                    <!-- ===== 片段钢琴窗口 ===== -->
+                    <div class="settings-group">
+                        <div class="settings-group-title">片段钢琴窗口</div>
+                        <div class="settings-row">
+                            <label class="settings-label">
+                                <input type="checkbox" id="settings-spw-ruler" checked> 显示时间栏
+                            </label>
+                        </div>
+                        <div class="settings-row">
+                            <label class="settings-label">
+                                <input type="checkbox" id="settings-spw-minimap" checked> 显示进度条地图
+                            </label>
+                        </div>
+                        <div class="settings-row">
+                            <label class="settings-label">
+                                <input type="checkbox" id="settings-spw-velocity" checked> 显示力度控制器
+                            </label>
+                        </div>
+                    </div>
                     <!-- ===== 性能 ===== -->
                     <div class="settings-group">
                         <div class="settings-group-title">性能</div>
@@ -725,6 +745,9 @@
                                 <option value="ko-KR">🇰🇷 한국어</option>
                                 <option value="id-ID">🇮🇩 Bahasa Indonesia</option>
                             </select>
+                        </div>
+                        <div class="settings-row">
+                            <button class="popup-btn" id="settings-storage-clean-btn" style="width:100%;">清理本地缓存</button>
                         </div>
                         <div class="settings-row">
                             <button class="popup-btn" id="settings-about-btn" style="width:100%;">关于 MiauNoteBlock</button>
@@ -1395,6 +1418,24 @@
                         </section>
 
                         <section class="midi-group">
+                            <h5 class="midi-group-title">声部分离</h5>
+                            <div class="midi-row">
+                                <label class="midi-check">
+                                    <input type="checkbox" id="midi-separate-voices" checked>
+                                    <span>分离混在同一条轨道里的声部</span>
+                                    <i class="fa-solid fa-circle-question midi-help" title="有些 MIDI 会把钢琴左右手、或人声与伴奏写在同一个轨道/通道里，导入后它们会挤在一条音轨上。开启后会自动拆成两条（左右手 / 主旋律与伴奏），方便分别调音量、单独静音或按声部切片段；只有一个声部的乐器（笛子、贝斯、鼓等）不会被拆分"></i>
+                                </label>
+                            </div>
+                            <div class="midi-row midi-row-sub">
+                                <label class="midi-check">
+                                    <input type="checkbox" id="midi-voice-ignore-metadata">
+                                    <span>忽略 MIDI 元数据，直接算法处理</span>
+                                    <i class="fa-solid fa-circle-question midi-help" title="默认优先使用文件自带的轨道(track)划分和名称线索来分离，这种方式最准确。若某些 MIDI 的元数据标错、导致分离结果不理想，勾选此项可改为只依据音高分布与时间连续性推断声部"></i>
+                                </label>
+                            </div>
+                        </section>
+
+                        <section class="midi-group">
                             <h5 class="midi-group-title">清理</h5>
                             <div class="midi-row">
                                 <label class="midi-check"><input type="checkbox" id="midi-remove-silent" checked><span>移除无音符轨道</span></label>
@@ -1664,11 +1705,11 @@
     }
 </script>
 <!-- nbs_client.js 必须在 api_client.js 之前加载 (api_client.js 引用 NBSClient 全局对象) -->
-<script src="static/js/nbs_client.js?v=20261030a"></script>
+<script src="static/js/nbs_client.js?v=20261031e"></script>
 <script src="static/js/compress_est.js?v=20260926b"></script>
 <script src="static/js/api_client.js?v=20260905a"></script>
-<script src="static/js/custom_dropdown.js?v=20261017d"></script>
-<script src="static/js/i18n.js?v=20261030a"></script>
+<script src="static/js/custom_dropdown.js?v=20261031a"></script>
+<script src="static/js/i18n.js?v=20261031a"></script>
 <script src="static/js/audio_engine.js?v=20260919c"></script>
 <script src="static/js/custom_instruments.js?v=20260905a"></script>
 <script src="static/js/audio_fix_utils.js?v=20260905a"></script>
@@ -1683,19 +1724,19 @@
 <script src="static/js/render_jsmix.js?v=20260906e"></script>
 <script src="static/js/audio_render.js?v=20260919c"></script>
 <!-- MIDI 重复片段分割 (MIDI 事件层分析), 必须在 main.js 之前加载 -->
-<script src="static/js/repeat_split.js?v=20261030a"></script>
+<script src="static/js/repeat_split.js?v=20261031a"></script>
 <!-- 片段浮动钢琴卷帘窗口: 依赖 main.js 暴露的 window.WebNBS.host -->
-<script src="static/js/segment_piano_window.js?v=20261030b"></script>
+<script src="static/js/segment_piano_window.js?v=20261031a"></script>
 <!-- 功能模块 (由原 main.js 按功能拆分), 必须按序加载 -->
 <script src="static/js/modules/00-core.js?v=20261030c"></script>
 <script src="static/js/modules/01-dialogs.js?v=20261030c"></script>
-<script src="static/js/modules/02-history.js?v=20261030c"></script>
-<script src="static/js/modules/03-segment-model.js?v=20261030c"></script>
+<script src="static/js/modules/02-history.js?v=20261031e"></script>
+<script src="static/js/modules/03-segment-model.js?v=20261031d"></script>
 <script src="static/js/modules/04-segment-split.js?v=20261030c"></script>
-<script src="static/js/modules/05-segments.js?v=20261030c"></script>
+<script src="static/js/modules/05-segments.js?v=20261031e"></script>
 <script src="static/js/modules/06-notes-index.js?v=20261030c"></script>
-<script src="static/js/modules/07-tabs.js?v=20261030c"></script>
-<script src="static/js/modules/08-app-init.js?v=20261030c"></script>
+<script src="static/js/modules/07-tabs.js?v=20261031b"></script>
+<script src="static/js/modules/08-app-init.js?v=20261031a"></script>
 <script src="static/js/modules/09-piano-roll.js?v=20261030c"></script>
 <script src="static/js/modules/10-assist.js?v=20261030c"></script>
 <script src="static/js/modules/11-find.js?v=20261030c"></script>
@@ -1713,15 +1754,15 @@
 <script src="static/js/modules/23-json-io.js?v=20261030c"></script>
 <script src="static/js/modules/24-features-a.js?v=20261030c"></script>
 <script src="static/js/modules/25-features-b.js?v=20261030c"></script>
-<script src="static/js/modules/26-piano-keyboard.js?v=20261030c"></script>
+<script src="static/js/modules/26-piano-keyboard.js?v=20261031a"></script>
 <script src="static/js/modules/27-file-io.js?v=20261030c"></script>
 <script src="static/js/modules/28-midi-dialog.js?v=20261030c"></script>
 <script src="static/js/modules/29-midi-tracks.js?v=20261030c"></script>
-<script src="static/js/modules/30-timbre.js?v=20261030c"></script>
-<script src="static/js/modules/31-midi-config.js?v=20261030c"></script>
-<script src="static/js/modules/32-storage.js?v=20261030c"></script>
+<script src="static/js/modules/30-timbre.js?v=20261031b"></script>
+<script src="static/js/modules/31-midi-config.js?v=20261031b"></script>
+<script src="static/js/modules/32-storage.js?v=20261031b"></script>
 <script src="static/js/modules/33-export.js?v=20261030c"></script>
-<script src="static/js/modules/34-autosave.js?v=20261030c"></script>
+<script src="static/js/modules/34-autosave.js?v=20261031b"></script>
 <script src="static/js/main.js?v=20261030c"></script>
 
 <script>

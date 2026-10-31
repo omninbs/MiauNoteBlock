@@ -131,7 +131,12 @@
                 notes: state.notes,
                 layers: songMeta.layers || [],
                 solo_layers: Array.isArray(songMeta.solo_layers) ? songMeta.solo_layers.slice() : [],
-                lyrics: JSON.parse(JSON.stringify(state.lyrics || []))
+                lyrics: JSON.parse(JSON.stringify(state.lyrics || [])),
+                // 片段轨道 / 声部分离依赖的映射信息, 必须随工程一起保存
+                layer_channel_map: songMeta.layer_channel_map || {},
+                layer_voice_map: songMeta.layer_voice_map || {},
+                channel_names: songMeta.channel_names || {},
+                _midi_meta: songMeta._midi_meta || null
             },
             notes: state.notes,
             tempo: state.tempo,

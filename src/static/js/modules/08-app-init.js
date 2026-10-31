@@ -79,6 +79,7 @@
     function saveSubstituteConfig() { return N.saveSubstituteConfig.apply(this, arguments); }
     function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
     function showAppConfirm() { return N.showAppConfirm.apply(this, arguments); }
+    function showStorageManagerDialog() { return N.showStorageManagerDialog.apply(this, arguments); }
     function showFileMenu() { return N.showFileMenu.apply(this, arguments); }
     function showMidiNotice() { return N.showMidiNotice.apply(this, arguments); }
     function showSustainTracksDialog() { return N.showSustainTracksDialog.apply(this, arguments); }
@@ -299,6 +300,15 @@
             });
         }
 
+        // 设置弹窗中的「清理本地缓存」按钮
+        var settingsStorageBtn = $('settings-storage-clean-btn');
+        if (settingsStorageBtn) {
+            settingsStorageBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                showStorageManagerDialog();
+            });
+        }
+
         // 平滑翻页开关 (在设置弹窗里)
         var smoothScrollChk = $('settings-smooth-scroll');
         if (smoothScrollChk) {
@@ -515,6 +525,27 @@
                 }
             });
         }
+        // 片段钢琴窗口 (浮动窗口): 时间栏 / 进度条地图 / 力度控制器 显隐
+        (function () {
+            var spw = window.SegmentPianoWindow;
+            var current = (spw && spw.getSettings) ? spw.getSettings() : { ruler: true, minimap: true, velocity: true };
+            function bind(id, key) {
+                var el = $(id);
+                if (!el) return;
+                el.checked = current[key] !== false;
+                el.addEventListener('change', function () {
+                    if (spw && spw.setSettings) {
+                        var patch = {};
+                        patch[key] = this.checked;
+                        spw.setSettings(patch);
+                    }
+                });
+            }
+            bind('settings-spw-ruler', 'ruler');
+            bind('settings-spw-minimap', 'minimap');
+            bind('settings-spw-velocity', 'velocity');
+        })();
+
         if (state.pianoRoll) {
             if (state.pianoRoll.setSegmentLaneDividersEnabled) {
                 state.pianoRoll.setSegmentLaneDividersEnabled(segLaneDivChk ? segLaneDivChk.checked : true);

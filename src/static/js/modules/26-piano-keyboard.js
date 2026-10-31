@@ -24,15 +24,18 @@
     function handleStop() { return N.handleStop.apply(this, arguments); }
     function handleZipFile() { return N.handleZipFile.apply(this, arguments); }
     function hideWelcomeScreen() { return N.hideWelcomeScreen.apply(this, arguments); }
+    function i18nText() { return N.i18nText.apply(this, arguments); }
     function lyricRebuildIndex() { return N.lyricRebuildIndex.apply(this, arguments); }
     function markDirty() { return N.markDirty.apply(this, arguments); }
     function renderTabs() { return N.renderTabs.apply(this, arguments); }
     function resetStreamingLyrics() { return N.resetStreamingLyrics.apply(this, arguments); }
     function resolveMissingCustomInstruments() { return N.resolveMissingCustomInstruments.apply(this, arguments); }
+    function saveFileToLocalStorage() { return N.saveFileToLocalStorage.apply(this, arguments); }
     function segmentCaptureFromSong() { return N.segmentCaptureFromSong.apply(this, arguments); }
     function segmentEnsure() { return N.segmentEnsure.apply(this, arguments); }
     function segmentSync() { return N.segmentSync.apply(this, arguments); }
     function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
+    function showToast() { return N.showToast.apply(this, arguments); }
     function syncLyricsToRoll() { return N.syncLyricsToRoll.apply(this, arguments); }
     function syncNbsLayerGroups() { return N.syncNbsLayerGroups.apply(this, arguments); }
     function tabGetActive() { return N.tabGetActive.apply(this, arguments); }
@@ -385,76 +388,18 @@
     }
 
     function handleSave() {
-        // 导出锁: 防止与 exportNBS 冲突
+        // 快捷键保存 = 保存到浏览器本地持久化 (IndexedDB);
+        // 需要下载 .nbs 文件请使用「导出 NBS」。
         if (N.shared._isExporting) return;
-
-        var song = state.song || {
-            name: 'Untitled', song_name: 'Untitled',
-            author: '', original_author: '', description: '',
-            tempo: state.tempo, length: state.maxTick + 4,
-            notes: state.notes, layers: []
-        };
-        song.notes = state.notes;
-        song.tempo = state.tempo;
-        song.length = state.maxTick + 4;
-
-        if (!song.layers || song.layers.length === 0) {
-            var maxLayer = 0;
-            for (var i = 0; i < state.notes.length; i++) {
-                if (state.notes[i].layer > maxLayer) maxLayer = state.notes[i].layer;
-            }
-            song.layers = [];
-            for (var l = 0; l <= maxLayer; l++) {
-                song.layers.push({ name: 'Layer ' + (l + 1), volume: 100, stereo: 100, lock: 0 });
-            }
+        var ok = saveFileToLocalStorage(true);
+        if (ok) {
+            showToast(i18nText('已保存到浏览器'));
+        } else {
+            showAppAlert('保存失败：浏览器本地存储空间不足，请到设置中清理旧工程后重试。', {
+                title: '保存失败',
+                icon: 'fa-solid fa-triangle-exclamation'
+            });
         }
-
-        // 保存时根据当前轨道状态写入 lock 字段 (NBS 只表达静音)
-        // 独奏不在标准 NBS 中, 以描述尾部标记 + solo_layers 字段承载
-        for (var li = 0; li < song.layers.length; li++) {
-            if (song.layers[li].lock === undefined) song.layers[li].lock = 0;
-            var t = findTrackByLayer(li);
-            if (t) {
-                song.layers[li].lock = t.muted ? 1 : 0;
-            }
-        }
-
-        var soloLayers = [];
-        for (var si = 0; si < state.tracks.length; si++) {
-            if (state.tracks[si].solo) soloLayers.push(state.tracks[si].layer);
-        }
-        // 独奏标记 / solo_layers 只写入导出副本, 不改动 state.song (避免界面描述显示标记)
-        var baseDesc = String(song.description || '').replace(/\s*\[NoteBlockWeb:solo=v1:[^\]]*\]/g, '');
-        if (soloLayers.length) baseDesc += (baseDesc ? '\n' : '') + '[NoteBlockWeb:solo=v1:' + soloLayers.join(',') + ']';
-        var payload = {};
-        for (var pk in song) {
-            if (Object.prototype.hasOwnProperty.call(song, pk)) payload[pk] = song[pk];
-        }
-        payload.description = baseDesc;
-        payload.solo_layers = soloLayers;
-
-        var saveName = (state.importedFileName || song.name || song.song_name || 'Untitled') + '.nbs';
-        showTaskProgress(saveName, '保存 NBS');
-        API.saveSong(payload, function(loaded, total, speed, percent, eta, phase) {
-            updateTaskProgress(loaded, total, speed, percent, eta, phase);
-        }).then(function(result) {
-            hideTaskProgress();
-            var filename = result.filename || saveName;
-            // 使用 <a download> 触发下载，保留文件名
-            var a = document.createElement('a');
-            a.href = result.downloadUrl;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(function() {
-                if (a.parentNode) a.parentNode.removeChild(a);
-                URL.revokeObjectURL(result.downloadUrl);
-            }, 5000);
-            autoSaveLocal();
-        }).catch(function(err) {
-            hideTaskProgress();
-            showAppAlert('保存失败: ' + formatError(err, '无法保存文件'), {title: '保存失败', icon: 'fa-solid fa-triangle-exclamation'});
-        });
     }
 
     // ============ MIDI 导入 ============

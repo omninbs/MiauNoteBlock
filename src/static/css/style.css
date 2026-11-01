@@ -1287,13 +1287,6 @@ body.segment-edit-mode .tool-bar {
     gap: 4px;
     flex-shrink: 0;
 }
-/* 快速添加 / 对齐音符: 桌面端也保留 (不随 ops 一起隐藏) */
-.lyrics-edit-bar-quick {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    flex-shrink: 0;
-}
 .lyrics-lane-add,
 .lyrics-op-btn {
     padding: 4px 9px;
@@ -2371,8 +2364,9 @@ body.segment-edit-mode .tool-bar {
     bottom: 0;
     /* 遮罩层: 仅半透明黑色, 不使用模糊 (兼容性更好) */
     background: rgba(0, 0, 0, 0.55);
-    /* 模态弹窗需覆盖一切常驻 UI 与悬浮菜单 (工具栏菜单/右键菜单/抽屉/浮层面板 均在 10006 以下) */
-    z-index: 100200;
+    /* 模态弹窗统一层级: 覆盖一切常驻 UI 与悬浮菜单 (工具栏菜单/右键菜单/抽屉/浮层面板 均在 10006 以下)
+       所有模态弹窗共用一个层级, 由 DOM 顺序决定前后 (后打开的在上面), 避免「弹窗盖弹窗」 */
+    z-index: 100400;
     align-items: center;
     justify-content: center;
 }
@@ -2382,13 +2376,13 @@ body.segment-edit-mode .tool-bar {
     animation: popupFadeIn var(--anim-control);
 }
 
-/* 音色替代设置弹窗: 需显示在 MIDI 导入弹窗(100200)之上 */
+/* 音色替代设置弹窗: 需显示在 MIDI 导入弹窗之上 */
 #midi-substitute-popup {
-    z-index: 100240;
+    z-index: 100410;
 }
-/* 音色替代槽位选择菜单: 需显示在替代弹窗(100240)之上 */
+/* 音色替代槽位选择菜单: 需显示在替代弹窗与自定义下拉之上 */
 #substitute-slot-menu {
-    z-index: 100260;
+    z-index: 100430;
 }
 
 @keyframes popupFadeIn {
@@ -4927,12 +4921,26 @@ textarea:disabled {
     .toolbar-btn,
     .track-panel-list .instrument-btn,
     .track-panel-add,
-    .popup-content button,
+    .popup-content button:not(.settings-close-btn):not(.lq-step):not(.lq-btn):not(.lyric-editor-pop-btn):not(.lyric-editor-pop-close):not(.lyric-editor-pop-icon),
     .context-menu-item,
     .instrument-popup-item,
     .status-btn {
         min-width: 44px;
         min-height: 44px;
+    }
+
+    /* 关闭按钮: 保持紧凑视觉, 用伪元素把触控热区扩到 44×44 (不撑高标题栏) */
+    .popup-content .settings-close-btn {
+        min-width: 0;
+        min-height: 0;
+        width: 28px;
+        height: 28px;
+        position: relative;
+    }
+    .popup-content .settings-close-btn::after {
+        content: '';
+        position: absolute;
+        inset: -8px;
     }
 
     .progress-bar {
@@ -8281,7 +8289,7 @@ textarea:disabled {
 /* 移动端: 收紧内边距与间距, 把纵向空间还给可操作项 */
 @media (max-width: 768px) {
     #settings-popup { --dialog-body-h: min(440px, calc(100svh - 176px)); }
-    .settings-header { padding: 3px 8px; gap: 5px; }
+    .settings-header { padding: 2px 8px; gap: 5px; }
     .settings-header h4 { font-size: 12.5px; line-height: 1.2; }
     .settings-header i { font-size: 11px; }
     .settings-close-btn { width: 18px; height: 18px; font-size: 11px; }
@@ -8307,6 +8315,52 @@ textarea:disabled {
     --dlg-control-h: 26px;
     --dlg-divider: rgba(255, 255, 255, 0.06);
 }
+
+/* 弹窗内「一句话说明」: 界面上只留结论, 细节放进 title (自定义 tooltip)
+   用法: <div class="dlg-hint" title="详细解释"><i class="fa-solid fa-circle-info"></i><span>简短说明</span></div> */
+.popup-content .dlg-hint,
+.dlg-hint {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+}
+.dlg-hint > i {
+    flex: 0 0 auto;
+    margin-top: 3px;
+    font-size: 11px;
+    color: var(--text-tertiary);
+}
+.dlg-hint > span {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.dlg-hint[title],
+.dlg-hint[data-tip] {
+    cursor: help;
+}
+.dlg-hint b {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+/* 元数据弹窗字段: 竖排标签 + 输入框 */
+.dlg-field { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+.dlg-field .dlg-label { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+.dlg-field .dlg-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 7px 9px;
+    font-size: 13px;
+    font-family: inherit;
+    border: 1px solid var(--ctrl-stroke-default);
+    border-radius: var(--radius-sm);
+    background: var(--ctrl-fill-default);
+    color: var(--text-primary);
+    resize: vertical;
+}
+.dlg-field .dlg-input:focus { outline: none; border-color: var(--accent); }
 
 /* 分组标题: 作为「标签」层级, 小而克制, 不与对话框标题争视觉权重 */
 .popup-content .settings-group-title,

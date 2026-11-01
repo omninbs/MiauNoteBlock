@@ -16,6 +16,7 @@
     function closeFindPanel() { return N.closeFindPanel.apply(this, arguments); }
     function copyLyricClip() { return N.copyLyricClip.apply(this, arguments); }
     function deleteLyricClip() { return N.deleteLyricClip.apply(this, arguments); }
+    function deleteLyricClips() { return N.deleteLyricClips.apply(this, arguments); }
     function findPanelVisible() { return N.findPanelVisible.apply(this, arguments); }
     function findTrackByLayer() { return N.findTrackByLayer.apply(this, arguments); }
     function getPianoKeyFromKeyboardEvent() { return N.getPianoKeyFromKeyboardEvent.apply(this, arguments); }
@@ -1134,8 +1135,13 @@
                 if (aboutEl) { aboutEl.style.display = ''; aboutEl.classList.remove('active'); }
             } else if (e.key === 'Delete' || e.key === 'Backspace') {
                 e.preventDefault();
-                var lclip = state.lyricsEditMode ? getSelectedLyricClip() : null;
-                if (lclip) {
+                // 选中歌词块时优先删除歌词块 (点击歌词行会清空音符选中, 反之亦然)
+                // 存在批量选中 (右键轨道「全选」) 时一次性删除
+                var lsel = (state.pianoRoll && state.pianoRoll.lyricSelectedIds) || [];
+                var lclip = getSelectedLyricClip();
+                if (lsel.length > 1) {
+                    deleteLyricClips(lsel);
+                } else if (lclip) {
                     deleteLyricClip(lclip.id);
                 } else if (state.pianoRoll) {
                     var sel = state.pianoRoll.getSelectedNotes();
@@ -1150,7 +1156,7 @@
                 }
             } else if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
                 e.preventDefault();
-                if (state.lyricsEditMode && getSelectedLyricClip()) {
+                if (getSelectedLyricClip()) {
                     copyLyricClip(false);
                 } else if (state.pianoRoll) {
                     state.pianoRoll.copySelected();
@@ -1158,10 +1164,10 @@
                 }
             } else if ((e.ctrlKey || e.metaKey) && e.key === 'x') {
                 e.preventDefault();
-                if (state.lyricsEditMode && getSelectedLyricClip()) copyLyricClip(true);
+                if (getSelectedLyricClip()) copyLyricClip(true);
             } else if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
                 e.preventDefault();
-                if (state.lyricsEditMode && state.lyricClipboard.length) pasteLyricClips();
+                if (getSelectedLyricClip() || (state.lyricClipboard.length && !state.pianoRoll.getSelectedNotes().length)) pasteLyricClips();
                 else handlePaste();
             } else if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
                 e.preventDefault();

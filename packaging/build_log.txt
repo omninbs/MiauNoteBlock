@@ -1,0 +1,18 @@
+﻿tauri.cmd :         Info Looking up installed tauri packages to check mismatched versions...
+所在位置 行:15 字符: 1256
++ ... OR='never'; & 'd:\软件开发项目\NoteBlockWeb\node_modules\.bin\tauri.cmd' bu ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (        Info Lo...hed versions...:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+   Compiling miaunoteblock v1.0.0 (D:\软件开发项目\NoteBlockWeb\packaging\src-tauri)
+warning: miaunoteblock@1.0.0: STATIC_VCRUNTIME is deprecated; use build.windows.staticVCRuntime in tauri.conf.json or t
+auri_build::WindowsAttributes::static_vc_runtime instead.
+warning: linker stdout: 正在创建库 D:\软件开发项目\NoteBlockWeb\packaging\src-tauri\target\release\deps\miaunoteblock_lib.dll.lib 
+和对象 D:\软件开发项目\NoteBlockWeb\packaging\src-tauri\target\release\deps\miaunoteblock_lib.dll.exp
+  |
+  = note: `#[warn(linker_messages)]` on by default
+
+warning: `miaunoteblock` (lib) generated 1 warning
+    Finished `release` profile [optimized] target(s) in 2m 00s
+       Built application at: D:\软件开发项目\NoteBlockWeb\packaging\src-tauri\target\release\MiauNoteBlock.exe

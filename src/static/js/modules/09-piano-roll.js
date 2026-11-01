@@ -8,16 +8,21 @@
     // ---- 跨模块依赖 ----
     var state = N.state;
     function $() { return N.$.apply(this, arguments); }
+    function addLyricLane() { return N.addLyricLane.apply(this, arguments); }
     function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
     function commitLyricClipDrag() { return N.commitLyricClipDrag.apply(this, arguments); }
     function createLyricClip() { return N.createLyricClip.apply(this, arguments); }
     function deleteTrack() { return N.deleteTrack.apply(this, arguments); }
+    function ensureLyricLanes() { return N.ensureLyricLanes.apply(this, arguments); }
     function findTrackByLayer() { return N.findTrackByLayer.apply(this, arguments); }
     function markDirty() { return N.markDirty.apply(this, arguments); }
+    function moveLyricLaneTo() { return N.moveLyricLaneTo.apply(this, arguments); }
     function moveTrackDown() { return N.moveTrackDown.apply(this, arguments); }
     function moveTrackUp() { return N.moveTrackUp.apply(this, arguments); }
     function mutedSoloToLock() { return N.mutedSoloToLock.apply(this, arguments); }
     function pushUndo() { return N.pushUndo.apply(this, arguments); }
+    function removeLyricLane() { return N.removeLyricLane.apply(this, arguments); }
+    function renameLyricLane() { return N.renameLyricLane.apply(this, arguments); }
     function renderSegmentSidePanel() { return N.renderSegmentSidePanel.apply(this, arguments); }
     function reorderTrack() { return N.reorderTrack.apply(this, arguments); }
     function seekToTick() { return N.seekToTick.apply(this, arguments); }
@@ -27,11 +32,12 @@
     function setLayerLock() { return N.setLayerLock.apply(this, arguments); }
     function setTrackVolume() { return N.setTrackVolume.apply(this, arguments); }
     function showContextMenu() { return N.showContextMenu.apply(this, arguments); }
+    function showLyricClipMenu() { return N.showLyricClipMenu.apply(this, arguments); }
+    function showLyricLaneMenu() { return N.showLyricLaneMenu.apply(this, arguments); }
     function showLyricEditorPop() { return N.showLyricEditorPop.apply(this, arguments); }
     function stopUnaudibleTrackAudio() { return N.stopUnaudibleTrackAudio.apply(this, arguments); }
     function switchTool() { return N.switchTool.apply(this, arguments); }
     function syncSoloLayersToSong() { return N.syncSoloLayersToSong.apply(this, arguments); }
-    function updateLyricsEditBar() { return N.updateLyricsEditBar.apply(this, arguments); }
     function updateNoteCount() { return N.updateNoteCount.apply(this, arguments); }
     function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
     function updateTrackName() { return N.updateTrackName.apply(this, arguments); }
@@ -278,12 +284,34 @@
             };
             state.pianoRoll.onLyricClipSelect = function(id) {
                 state.activeLyricId = id;
-                updateLyricsEditBar();
+            };
+            // 歌词块右键菜单 (剪切 / 复制 / 删除 / 编辑)
+            state.pianoRoll.onLyricClipContextMenu = function(id, clientX, clientY) {
+                showLyricClipMenu(id, clientX, clientY);
+            };
+            // 歌词轨道空白区右键菜单 (粘贴 / 全选)
+            state.pianoRoll.onLyricLaneContextMenu = function(lane, tick, clientX, clientY) {
+                showLyricLaneMenu(lane, tick, clientX, clientY);
+            };
+            // 歌词轨道 (额外轨道) 的增删改与排序
+            state.pianoRoll.onAddLyricLane = function() {
+                addLyricLane();
+            };
+            state.pianoRoll.onDeleteLyricLane = function(laneIndex) {
+                removeLyricLane(laneIndex);
+            };
+            state.pianoRoll.onRenameLyricLane = function(laneIndex, newName) {
+                renameLyricLane(laneIndex, newName);
+            };
+            // after: 目标插入位置 (第几条 NBS 音轨下方, -1 = 最上方)
+            state.pianoRoll.onReorderLyricLane = function(fromLane, after) {
+                moveLyricLaneTo(fromLane, after);
             };
 
             // 同步初始状态
             state.pianoRoll.trackCount = (state.song && state.song.layers) ? state.song.layers.length : 1;
             state.pianoRoll.smoothScrollEnabled = state.smoothScroll;
+            state.pianoRoll.setLyricLanes(ensureLyricLanes());
 
             state.pianoRoll.setNotes([]);
 

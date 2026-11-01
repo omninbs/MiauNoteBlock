@@ -91,12 +91,14 @@
                     layers: state.song.layers || [],
                     solo_layers: Array.isArray(state.song.solo_layers) ? state.song.solo_layers.slice() : [],
                     lyrics: JSON.parse(JSON.stringify(state.lyrics || [])),
+                    lyricLanes: JSON.parse(JSON.stringify(state.lyricLanes || [])),
                     layer_channel_map: state.song.layer_channel_map || {},
                     layer_voice_map: state.song.layer_voice_map || {},
                     channel_names: state.song.channel_names || {},
                     _midi_meta: state.song._midi_meta || null
                 } : null,
                 lyrics: JSON.parse(JSON.stringify(state.lyrics || [])),
+                lyricLanes: JSON.parse(JSON.stringify(state.lyricLanes || [])),
                 segments: JSON.parse(JSON.stringify(state.segments || [])),
                 segmentLanes: JSON.parse(JSON.stringify(state.segmentLanes || [])),
                 segmentsEdited: !!state._segmentsEdited,
@@ -154,6 +156,7 @@
                     layers: data.song.layers || [],
                     solo_layers: Array.isArray(data.song.solo_layers) ? data.song.solo_layers.slice() : [],
                     lyrics: Array.isArray(data.song.lyrics) ? data.song.lyrics.slice() : [],
+                    lyricLanes: Array.isArray(data.song.lyricLanes) ? data.song.lyricLanes.slice() : [],
                     layer_channel_map: data.song.layer_channel_map || {},
                     layer_voice_map: data.song.layer_voice_map || {},
                     channel_names: data.song.channel_names || {},
@@ -202,6 +205,9 @@
             state.lyrics = Array.isArray(data.lyrics)
                 ? data.lyrics.slice()
                 : (data.song && Array.isArray(data.song.lyrics) ? data.song.lyrics.slice() : []);
+            state.lyricLanes = Array.isArray(data.lyricLanes)
+                ? JSON.parse(JSON.stringify(data.lyricLanes))
+                : (data.song && Array.isArray(data.song.lyricLanes) ? JSON.parse(JSON.stringify(data.song.lyricLanes)) : []);
             resetStreamingLyrics();
             lyricRebuildIndex();
             syncLyricsToRoll();
@@ -454,7 +460,7 @@
         if (openBtn) openBtn.addEventListener('click', function() {
             var input = $('file-input');
             if (input) {
-                input.accept = '.nbs,.mid,.midi,.zip';
+                input.accept = '.nbs,.mnb,.mid,.midi';
                 input.click();
             }
         });

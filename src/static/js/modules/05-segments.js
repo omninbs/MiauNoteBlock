@@ -11,7 +11,6 @@
     var SEG_DEFAULT_LANE_H = N.SEG_DEFAULT_LANE_H;
     function dlBlob() { return N.dlBlob.apply(this, arguments); }
     function escapeHtml() { return N.escapeHtml.apply(this, arguments); }
-    function exitLyricsEditMode() { return N.exitLyricsEditMode.apply(this, arguments); }
     function getSongLengthTicks() { return N.getSongLengthTicks.apply(this, arguments); }
     function i18nText() { return N.i18nText.apply(this, arguments); }
     function markDirty() { return N.markDirty.apply(this, arguments); }
@@ -872,7 +871,6 @@
             state.pianoRoll._smoothedPlayheadTick = pt;
             state.pianoRoll.redrawPlaybackOverlay();
         }
-        if (typeof state.lyricsEditMode !== 'undefined' && state.lyricsEditMode) exitLyricsEditMode();
         state.segmentsEditMode = true;
         if (state.pianoRoll) {
             state.pianoRoll.setSegments(state.segments);

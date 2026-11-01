@@ -8,7 +8,8 @@
 global.window = globalThis;
 window.addEventListener = window.addEventListener || function() {};
 var N = window.WebNBS = {};
-N.state = { tempo: 20, notes: [], lyrics: [], pianoRoll: null };
+// 3 条歌词轨道 (「额外轨道」模型: 数量由 state.lyricLanes 决定)
+N.state = { tempo: 20, notes: [], lyrics: [], lyricLanes: [{ id: 'll1', name: '歌词 1' }, { id: 'll2', name: '歌词 2' }, { id: 'll3', name: '歌词 3' }], pianoRoll: null };
 
 // 模块依赖的副作用函数 (算法本身不关心)
 var _idSeq = 0;
@@ -16,11 +17,11 @@ N.pushUndo = function() {};
 N.markDirty = function() {};
 N.lyricRebuildIndex = function() {};
 N.syncLyricsToRoll = function() {};
+N.lyricLaneCount = function() { return N.state.lyricLanes.length; };
 N.genLyricId = function() { _idSeq++; return 'ly' + _idSeq; };
 N.i18nText = function(t) { return t; };
 N.showSmallTip = function() {};
 N.showAppAlert = function() {};
-N.enterLyricsEditMode = function() {};
 N.findTrackByLayer = function() { return null; };
 N.getNbsKeyDisplayLabel = function(k) { return 'K' + k; };
 

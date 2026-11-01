@@ -303,7 +303,6 @@
         //   lane: 0..2 共 3 条歌词轨道 (允许不同轨道在同一 tick 重叠)
         //   duration: 固定时长(tick), 恒 >= 1; 新建默认为 DEFAULT_LYRIC_DURATION
         this.lyricTicks = [];
-        this.lyricsEditMode = false;
         // ---- 片段编辑模式 (多轨剪辑: 独立时间线视图) ----
         // segments: [{ id, lane, start, end, name, notes }] 由 main.js 注入的同一数组引用
         // segmentLanes: [{ id, muted, solo, volume, height }]
@@ -342,28 +341,33 @@
         this._tlHeight = gTimelineBarHeight + RULER_BAR_HEIGHT;
         // 底部预留高度 (px): 钢琴键盘展开时底部时间栏让位于键盘上方
         this._kbReserve = 0;
-        // ---- 歌词临时轨道 (剪映/AE 风格, 3 条平行轨道) ----
-        // 编辑模式下在时间轴下方、第一条音轨上方腾出临时轨道
-        //   实现方式: 把 _cfg.timelineHeight 临时抬高 (单轨高 x 轨道数), 编辑区原点随之整体下移,
-        //   因此所有以 cfg.timelineHeight 为内容起点的绘制/命中逻辑无需改动
-        this.LYRIC_LANE_COUNT = 3;
+        // ---- 歌词轨道 (「额外轨道」, 追加显示在所有 NBS 轨道之后) ----
+        //   不是 NBS 轨道: 不写入 .nbs, 只能承载歌词块, 行高与 NBS 轨道一致
+        this.lyricLanes = [];          // [{ id, name }] 由 main 侧 syncLyricsToRoll 注入
         this.DEFAULT_LYRIC_DURATION = 4;
         this._baseTimelineHeight = this._cfg.timelineHeight; // 时间轴标尺(真实高度)的底边
-        this._lyricLaneBase = this._cfg.timelineHeight;     // 未展开歌词轨道时的时间轴基础高度
-        this._lyricLanePerH = (this._cfg.cellH <= 24) ? 20 : 24; // 单条歌词轨道高度
         this._lyricDrag = null;        // { id, mode:'move'|'left'|'right', startX, startY, origTick, origLane, origDuration, origEnd, pxFrac }
-        this._lyricLaneClick = false;  // 本次按下是否落在歌词轨道内 (用于 mouseup 分支收口)
+        this._lyricLaneClick = false;  // 本次按下是否落在歌词行内 (用于 mouseup 分支收口)
         this._lyricTapTick = null;     // 触摸端空白处轻点待新建的 tick
         this._lyricTapLane = 0;        // 触摸端空白处轻点待新建的轨道
         this._lyricLongPressTimer = null; // 触摸端在轨道空白处长按新建
         this.lyricSelectedId = null;   // 当前选中的歌词片段 id
+        this.lyricSelectedIds = [];    // 批量选中的歌词片段 id (「全选」等)
         this._lyricHover = null;       // { id, zone } 悬停高亮
+        this._addLyricLaneBtnRect = null; // 「添加歌词轨道」按钮命中区
+        this._lyricLaneBtnLayout = null;  // 歌词行右侧按钮布局缓存
         // 回调 (由 main.js 注入)
         this.onLyricClipEdit = null;     // function(id, clientX, clientY) - 双击/轻点编辑文本
         this.onLyricClipCreate = null;   // function(tick, lane, clientX, clientY) - 空白处双击/长按新建
         this.onLyricClipCommit = null;   // function(id, origTick, origLane) - 拖动结束后提交(含交换位置)
         this.onLyricClipDragStart = null;// function() - 首次发生移动时回调, 用于 pushUndo
         this.onLyricClipSelect = null;   // function(id) - 选中变化
+        this.onLyricClipContextMenu = null; // function(id, clientX, clientY) - 右键菜单
+        this.onLyricLaneContextMenu = null; // function(lane, tick, clientX, clientY) - 右键歌词轨道空白区
+        this.onAddLyricLane = null;      // function() - 添加歌词轨道
+        this.onDeleteLyricLane = null;   // function(laneIndex) - 删除歌词轨道
+        this.onRenameLyricLane = null;   // function(laneIndex, newName) - 重命名歌词轨道
+        this.onReorderLyricLane = null;  // function(fromLane, after) - 拖拽排序歌词轨道 (after = 第几条 NBS 轨道下方)
 
         // 进度条
         this.currentTick = 0;
@@ -406,10 +410,11 @@
         this._panelAnimStartWidth = defaultPanelW;
         this._currentPanelWidth = defaultPanelW;
 
-        // 轨道拖拽排序
+        // 轨道拖拽排序 (NBS 轨道与歌词轨道共用同一套动画状态机, 键均为「行号」)
         this._isDraggingTrack = false;
-        this._draggedTrackLayer = -1;
-        this._dragTargetLayer = -1;
+        this._draggedTrackLayer = -1;   // 被拖行号 (NBS 轨道行号 = layer; 歌词 = trackCount + lane)
+        this._dragTargetLayer = -1;     // 落点行号
+        this._trackDragKind = 'track';  // 'track' = NBS 轨道, 'lyric' = 歌词轨道
         this._trackDragStartY = 0;
         this._trackDragGrabY = 0;    // 拖拽开始时鼠标/手指的 y (被拖轨道跟手的基准)
 
@@ -567,11 +572,8 @@
 
         this._cfg = getConfig();
         if (this.zoom < 0.5) this.zoom = this._cfg.defaultZoom;
-        // _cfg 被重建, 需重新套用歌词轨道占位 (否则编辑模式下轨道高度会丢失)
-        this._lyricLanePerH = (this._cfg.cellH <= 24) ? 20 : 24;
         // 高度档位/时间栏位置可能在本次重建前发生变化, 统一重算编辑区几何
         // (getConfig 会重置 timelineHeight, 必须重新套用顶部/底部布局)
-        this._lyricLaneBase = null;
         this.setTimelinePosition(this.timelineAtBottom ? 'bottom' : 'top');
         this._miniMapDirty = true;
 
@@ -781,13 +783,6 @@
         var rb = this._rulerRect();
         if (rb.height > 0 && y >= rb.top && y < rb.bottom) return 'ruler';
         return null;
-    };
-
-    // 歌词临时轨道区域 (编辑模式下紧贴时间栏内侧的一条操作轨)
-    PianoRoll.prototype._lyricLaneRect = function() {
-        var top = this._baseTimelineHeight;
-        var laneH = (this._laneH && this.lyricsEditMode) ? this._laneH() : 0;
-        return { top: top, bottom: top + laneH, height: laneH };
     };
 
     // 片段编辑区判定: 排除时间栏与顶部工具栏 (统一 mousedown/mousemove/触摸 的分派条件)
@@ -1108,80 +1103,223 @@
         return (screenX - this._editOriginX() + this.scrollX) / (this._cfg.cellW * this._zoomX());
     };
 
-    PianoRoll.prototype._screenToLyricLaneFloat = function(screenY) {
-        return (screenY - this._laneTop()) / this._lyricLanePerH;
-    };
+    // 注: 歌词行坐标换算见行模型区块 (_screenToLyricLaneFloat / _lyricLaneAtY)
 
+    // y → NBS 轨道 (layer); 落在歌词轨道行或空白处返回 -1 (歌词行不允许放音符)
     PianoRoll.prototype._screenToLayer = function(screenY) {
-        return Math.floor((screenY - this._editOriginY() + this.scrollY) / (this._cfg.cellH * this._zoomY()));
+        if (this.segmentsEditMode) {
+            return Math.floor((screenY - this._editOriginY() + this.scrollY) / (this._cfg.cellH * this._zoomY()));
+        }
+        var row = this._rowAt(screenY);
+        if (!isFinite(row) || row < 0) return -1;
+        var item = this._rowLayout().rows[row];
+        if (!item || item.type !== 'track') return -1;
+        return item.layer;
     };
 
     PianoRoll.prototype._tickToScreen = function(tick) {
         return tick * this._cfg.cellW * this._zoomX() - this.scrollX + this._editOriginX();
     };
 
-    // 轨道行的原始基准坐标 (不含轨道排序动画偏移, 用于命中判定/DOM 定位/落点指示)
-    PianoRoll.prototype._layerBaseY = function(layer) {
-        return layer * this._cfg.cellH * this._zoomY() - this.scrollY + this._editOriginY();
+    // NBS 轨道行号 (越界时落到首行 / 所有行之后, 便于绘制边界)
+    PianoRoll.prototype._trackRowOrEdge = function(layer) {
+        var row = this._rowIndexOfTrack(layer);
+        if (row >= 0) return row;
+        return (layer < 0) ? 0 : this._rowCount();
     };
 
-    // 轨道排序动画: 该 layer 当前的纵向动画偏移 (无动画时为 0)
+    // 轨道行的原始基准坐标 (不含轨道排序动画偏移, 用于命中判定/DOM 定位/落点指示)
+    PianoRoll.prototype._layerBaseY = function(layer) {
+        return this._rowY(this._trackRowOrEdge(layer));
+    };
+
+    // 轨道排序动画: 该 NBS 轨道当前的纵向动画偏移 (无动画时为 0)
     PianoRoll.prototype._trackOffsetOf = function(layer) {
-        if (!this._trackAnim || !this._trackAnim.off) return 0;
-        return this._trackAnim.off[layer] || 0;
+        return this._rowOffsetOf(this._trackRowOrEdge(layer));
     };
 
     PianoRoll.prototype._layerToScreen = function(layer) {
-        return this._layerBaseY(layer) + this._trackOffsetOf(layer);
+        var row = this._trackRowOrEdge(layer);
+        return this._rowY(row) + this._rowOffsetOf(row);
     };
 
-    // ============ 歌词临时轨道 (3 条平行轨道) ============
-    PianoRoll.prototype._laneCount = function() {
+    // ============ 行模型: NBS 轨道 + 歌词轨道 (交织显示) ============
+    // 歌词轨道带 after 字段: 显示在第 after 条 NBS 轨道下方 (-1 = 所有轨道之上);
+    // 同一 after 的多条歌词轨道按 lyricLanes 数组顺序依次堆叠。
+    // 因为歌词行可以插在任意两条 NBS 轨道之间, 行号不再等于 layer:
+    // 一切行号换算都必须走 _rowLayout() / _rowIndexOfTrack() / _rowIndexOfLyric()。
+    PianoRoll.prototype.setLyricLanes = function(lanes) {
+        // 复制成轻量对象: 入参是 state.lyricLanes 本体, 直接引用会让变化检测永远失效
+        var list = [];
+        if (Array.isArray(lanes)) {
+            for (var s = 0; s < lanes.length; s++) {
+                var src = lanes[s] || {};
+                list.push({ id: src.id, name: src.name, after: src.after });
+            }
+        }
+        // 只在真正变化时重绘, 避免 syncLyricsToRoll 每帧都触发全量重绘
+        var changed = list.length !== (this.lyricLanes ? this.lyricLanes.length : 0);
+        if (!changed && this.lyricLanes) {
+            for (var i = 0; i < list.length; i++) {
+                var a = list[i] || {}, b = this.lyricLanes[i] || {};
+                if (a.id !== b.id || a.name !== b.name || a.after !== b.after) { changed = true; break; }
+            }
+        }
+        this.lyricLanes = list;
+        this._rowLayoutSig = null;
+        if (changed) {
+            if (this.lyricSelectedId != null) {
+                var still = false;
+                for (var j = 0; j < (this.lyricTicks || []).length; j++) {
+                    if (this.lyricTicks[j].id === this.lyricSelectedId) { still = true; break; }
+                }
+                if (!still) this.lyricSelectedId = null;
+            }
+            this._fullRedrawNeeded = true;
+            this.requestRender();
+        }
+    };
+
+    PianoRoll.prototype._lyricLaneCount = function() {
+        return (this.lyricLanes && this.lyricLanes.length) ? this.lyricLanes.length : 0;
+    };
+
+    // 某条歌词轨道的插入位置 (第几条 NBS 轨道下方, -1 = 最上方), 已按当前轨道数钳制
+    PianoRoll.prototype._lyricAfterOf = function(lane) {
+        var tc = Math.max(0, this.trackCount | 0);
+        var src = this.lyricLanes ? this.lyricLanes[lane] : null;
+        var a = src ? parseInt(src.after, 10) : -1;
+        if (!isFinite(a) || a < -1) a = tc - 1;
+        if (a > tc - 1) a = tc - 1;
+        if (a < -1) a = -1;
+        return a;
+    };
+
+    // 行布局 (带签名缓存): rows = [{type:'track',layer} | {type:'lyric',lane}]
+    //   trackRow[layer] = 行号; lyricRow[lane] = 行号
+    PianoRoll.prototype._rowLayout = function() {
+        var tc = Math.max(0, this.trackCount | 0);
+        var lanes = this.lyricLanes || [];
+        var sig = tc + '|';
+        for (var s = 0; s < lanes.length; s++) {
+            sig += (lanes[s].id || '') + '@' + this._lyricAfterOf(s) + ',';
+        }
+        if (this._rowLayoutSig === sig && this._rowLayoutCache) return this._rowLayoutCache;
+
+        var buckets = {};
+        for (var i = 0; i < lanes.length; i++) {
+            var a = this._lyricAfterOf(i);
+            if (!buckets[a]) buckets[a] = [];
+            buckets[a].push(i);
+        }
+        var rows = [];
+        var trackRow = [];
+        var lyricRow = [];
+        var pushBucket = function(k) {
+            var arr = buckets[k];
+            if (!arr) return;
+            for (var j = 0; j < arr.length; j++) {
+                lyricRow[arr[j]] = rows.length;
+                rows.push({ type: 'lyric', lane: arr[j] });
+            }
+        };
+        pushBucket(-1);
+        for (var L = 0; L < tc; L++) {
+            trackRow[L] = rows.length;
+            rows.push({ type: 'track', layer: L });
+            pushBucket(L);
+        }
+        var layout = { rows: rows, trackRow: trackRow, lyricRow: lyricRow };
+        this._rowLayoutSig = sig;
+        this._rowLayoutCache = layout;
+        return layout;
+    };
+
+    PianoRoll.prototype._rowIndexOfTrack = function(layer) {
+        var r = this._rowLayout().trackRow[layer];
+        return isFinite(r) ? r : -1;
+    };
+
+    PianoRoll.prototype._rowIndexOfLyric = function(lane) {
+        var r = this._rowLayout().lyricRow[lane];
+        return isFinite(r) ? r : -1;
+    };
+
+    // 总行数 (片段编辑模式使用自己的 lane 数)
+    PianoRoll.prototype._rowCount = function() {
         if (this.segmentsEditMode) return this.SEGMENT_LANE_COUNT || 1;
-        return this.LYRIC_LANE_COUNT || 3;
+        return this._rowLayout().rows.length;
     };
-    // 附加轨道总高度 (歌词编辑 / 片段编辑模式占用, 其余为 0)
-    PianoRoll.prototype._laneH = function() {
-        if (this.lyricsEditMode) return this._lyricLanePerH * (this.LYRIC_LANE_COUNT || 3);
-        if (this.segmentsEditMode) return this._segLaneH();
-        return 0;
-    };
-    // 歌词轨道纵向范围 (夹在时间轴标尺底边与编辑区原点之间)
-    PianoRoll.prototype._laneTop = function() { return this._baseTimelineHeight; };
-    PianoRoll.prototype._laneBottom = function() { return this._baseTimelineHeight + this._laneH(); };
+
     // 片段轨道固定高度 (剪辑软件风格, 需要容纳音符缩略图)
     PianoRoll.prototype._segLaneH = function() { return 48; };
-    // 当前附加轨道的单轨高度
-    PianoRoll.prototype._perLaneH = function() {
-        return this.segmentsEditMode ? this._segLaneH() : this._lyricLanePerH;
-    };
-    // 某条轨道的顶边 y
-    PianoRoll.prototype._laneY = function(lane) { return this._laneTop() + lane * this._perLaneH(); };
-    // 命中 y 落在第几条轨道 (钳制到 0..count-1)
-    PianoRoll.prototype._laneIndexAt = function(y) {
-        var i = Math.floor((y - this._laneTop()) / this._lyricLanePerH);
-        if (!isFinite(i) || i < 0) i = 0;
-        var n = this._laneCount();
-        if (i > n - 1) i = n - 1;
-        return i;
-    };
-    // 单条轨道的纵向显示范围
-    PianoRoll.prototype._laneRect = function(lane) {
-        var perH = this._perLaneH();
-        var pad = Math.min(3, perH * 0.12);
-        var top = this._laneY(lane);
-        return { top: top + pad, h: Math.max(4, perH - pad * 2) };
+
+    // 某行的顶边 y (row 为 _rowLayout().rows 的索引, 不再等于 layer)
+    PianoRoll.prototype._rowY = function(row) {
+        return row * this._cfg.cellH * this._zoomY() - this.scrollY + this._editOriginY();
     };
 
-    // 进入/退出歌词编辑模式: 抬高/还原时间轴总高度, 使编辑区整体下移/上移
-    PianoRoll.prototype.setLyricsEditMode = function(on) {
-        on = !!on;
-        if (this.lyricsEditMode === on) return;
-        this.lyricsEditMode = on;
-        if (!on) { this._lyricDrag = null; this.lyricSelectedId = null; this._lyricHover = null; this._cancelLyricLongPress(); }
-        this._applyLyricsLaneHeight();
-        this._fullRedrawNeeded = true;
-        this.render();
+    // 轨道排序动画: 该行的纵向动画偏移 (键为行号; 无动画时为 0)
+    //   NBS 轨道行号与歌词轨道行号都来自 _rowLayout(), 两类轨道共用同一组偏移
+    PianoRoll.prototype._rowOffsetOf = function(row) {
+        if (!this._trackAnim || !this._trackAnim.off) return 0;
+        return this._trackAnim.off[row] || 0;
+    };
+
+    // 行在屏幕上的 y (含轨道排序动画偏移)
+    PianoRoll.prototype._rowScreenY = function(row) {
+        return this._rowY(row) + this._rowOffsetOf(row);
+    };
+
+    // 歌词轨道行的屏幕 y (含动画偏移)
+    PianoRoll.prototype._lyricRowScreenY = function(lane) {
+        var row = this._rowIndexOfLyric(lane);
+        if (row < 0) return this._rowY(this._rowCount());
+        return this._rowScreenY(row);
+    };
+
+    // 命中 y 落在哪一行 (可能越界, 调用方自行判断)
+    PianoRoll.prototype._rowAt = function(y) {
+        var cellH = this._cfg.cellH * this._zoomY();
+        if (!(cellH > 0)) return 0;
+        return Math.floor((y - this._editOriginY() + this.scrollY) / cellH);
+    };
+
+    // 歌词轨道所在行号 (未找到返回 -1)
+    PianoRoll.prototype._lyricRow = function(lane) {
+        return this._rowIndexOfLyric(lane);
+    };
+
+    // y 命中的歌词轨道索引; 不是歌词行返回 -1
+    PianoRoll.prototype._lyricLaneAtY = function(y) {
+        if (this.segmentsEditMode) return -1;
+        var row = this._rowAt(y);
+        var item = this._rowLayout().rows[row];
+        if (!item || item.type !== 'lyric') return -1;
+        return item.lane;
+    };
+
+    // y 最接近的歌词轨道索引 (浮动值 = 该轨道索引, 用于拖动歌词块时的纵向吸附)
+    PianoRoll.prototype._screenToLyricLaneFloat = function(y) {
+        if (this.segmentsEditMode || this._lyricLaneCount() <= 0) return 0;
+        var cellH = this._cfg.cellH * this._zoomY();
+        if (!(cellH > 0)) return 0;
+        var fRow = (y - this._editOriginY() + this.scrollY) / cellH;
+        var layout = this._rowLayout();
+        var bestLane = 0, bestDist = Infinity;
+        for (var i = 0; i < layout.rows.length; i++) {
+            if (layout.rows[i].type !== 'lyric') continue;
+            var d = Math.abs((i + 0.5) - fRow);
+            if (d < bestDist) { bestDist = d; bestLane = layout.rows[i].lane; }
+        }
+        return bestLane;
+    };
+
+    // 歌词轨道行的纵向显示范围 (与 NBS 轨道行同高, 块上下留少量内边距; 含动画偏移)
+    PianoRoll.prototype._lyricRowRect = function(lane) {
+        var cellH = this._cfg.cellH * this._zoomY();
+        var pad = Math.min(3, cellH * 0.12);
+        return { top: this._lyricRowScreenY(lane) + pad, h: Math.max(4, cellH - pad * 2) };
     };
 
     // ============ 片段编辑模式 (剪映/AE 风格的整曲片段剪辑) ============
@@ -2007,10 +2145,8 @@
     // 依据当前模式同步 _cfg.timelineHeight (_cfg 被 getConfig 重建后必须重新调用)
     PianoRoll.prototype._applyLyricsLaneHeight = function() {
         if (!this._cfg) return;
-        // 初次调用时锁定「未展开歌词轨道」的时间轴基础高度 (getConfig 的固定值)
-        if (this._lyricLaneBase == null) this._lyricLaneBase = this._cfg.timelineHeight;
-        this._baseTimelineHeight = this._lyricLaneBase;
-        this._cfg.timelineHeight = this._baseTimelineHeight + this._laneH();
+        // 歌词轨道改用普通行显示 (不再抬高时间栏), 时间栏高度恒为标尺本身
+        this._baseTimelineHeight = this._cfg.timelineHeight;
     };
 
     // 歌词片段的时长 (固定时长, 恒 >= 1 tick)
@@ -2042,11 +2178,12 @@
     };
 
     // 命中测试: 返回 { clip, zone, lane } ; zone = 'left' | 'right' | 'move'
+    //   只在歌词轨道行内命中; lane 为歌词轨道索引
     PianoRoll.prototype._hitLyricClip = function(x, y) {
-        if (!this.lyricsEditMode) return null;
-        if (y < this._laneTop() || y >= this._laneBottom()) return null;
-        var lane = this._laneIndexAt(y);
-        var edge = Math.min(7, this._lyricLanePerH / 3);
+        var lane = this._lyricLaneAtY(y);
+        if (lane < 0) return null;
+        var cellH = this._cfg.cellH * this._zoomY();
+        var edge = Math.min(7, cellH / 3);
         for (var i = this.lyricTicks.length - 1; i >= 0; i--) {
             var clip = this.lyricTicks[i];
             if ((clip.lane || 0) !== lane) continue;
@@ -2087,9 +2224,10 @@
             var pointerTick = this._screenToTickFloat(x);
             var pointerLane = this._screenToLyricLaneFloat(y);
             var fTick = Math.max(0, pointerTick - d.anchorTickOffset);
-            var fLane = Math.max(0, Math.min(this._laneCount() - 1, pointerLane - d.anchorLaneOffset));
+            var laneMax = Math.max(0, this._lyricLaneCount() - 1);
+            var fLane = Math.max(0, Math.min(laneMax, pointerLane - d.anchorLaneOffset));
             var tTick = Math.max(0, Math.floor(fTick));
-            var tLane = Math.max(0, Math.min(this._laneCount() - 1, Math.floor(fLane)));
+            var tLane = Math.max(0, Math.min(laneMax, Math.floor(fLane)));
             d.previewTick = fTick;
             d.previewLane = fLane;
             d.pxFrac = 0;
@@ -2205,6 +2343,7 @@
     };
 
     PianoRoll.prototype._setLyricSelected = function(id) {
+        this.lyricSelectedIds = (id == null) ? [] : [id];
         if (this.lyricSelectedId === id) return;
         this.lyricSelectedId = id;
         if (this.onLyricClipSelect) this.onLyricClipSelect(id);
@@ -2212,14 +2351,25 @@
         this.requestRender();
     };
 
-    // 歌词临时轨道: 双击片段 → 编辑文本; 双击空白 → 在该 tick 新建片段并编辑
+    // 批量选中歌词片段 (轨道空白区「全选」): 主选中为首个片段
+    PianoRoll.prototype.setLyricMultiSelection = function(ids) {
+        ids = (ids || []).slice();
+        this.lyricSelectedIds = ids;
+        this.lyricSelectedId = ids.length ? ids[0] : null;
+        this._fullRedrawNeeded = true;
+        this.render();
+        if (this.onLyricClipSelect) this.onLyricClipSelect(this.lyricSelectedId);
+    };
+
+    // 歌词轨道行: 双击片段 → 编辑文本; 双击空白 → 在该 tick 新建片段并编辑
     PianoRoll.prototype._onLyricLaneDblClick = function(e) {
-        if (!this.lyricsEditMode) return;
         var rect = this.canvas.getBoundingClientRect();
         var x = e.clientX - rect.left;
         var y = e.clientY - rect.top;
         var pw = this._currentPanelWidth;
-        if (y < this._baseTimelineHeight || y >= this._cfg.timelineHeight || x < pw) return;
+        if (x < pw) return;
+        var lane = this._lyricLaneAtY(y);
+        if (lane < 0) return;
         e.preventDefault();
         var hit = this._hitLyricClip(x, y);
         if (hit) {
@@ -2227,7 +2377,7 @@
             if (this.onLyricClipEdit) this.onLyricClipEdit(hit.clip.id, e.clientX, e.clientY);
         } else {
             var tick = this._screenToTickNearest(x);
-            if (tick >= 0 && this.onLyricClipCreate) this.onLyricClipCreate(tick, this._laneIndexAt(y), e.clientX, e.clientY);
+            if (tick >= 0 && this.onLyricClipCreate) this.onLyricClipCreate(tick, lane, e.clientX, e.clientY);
         }
     };
 
@@ -2526,16 +2676,25 @@
         if (this.onSelectionChanged) this.onSelectionChanged(this.getSelectedNotes());
     };
 
-    // 从屏幕坐标创建选择矩形: 网格坐标用于"实际选中哪些音符",
-    // 同时保存屏幕坐标 (sx1,sy1 按下点 / sx2,sy2 当前点) 用于"跟手"的选框绘制 (不吸附网格)
+    // 从屏幕坐标创建选择矩形: 只保存网格坐标 (tick/layer)。
+    // 绘制时再由网格坐标换算屏幕坐标, 因此滚动翻页时选择框始终锚定在网格上, 不会随视口漂移。
     PianoRoll.prototype._makeSelectionRect = function(x1, y1, x2, y2) {
         return {
             tick1: this._screenToTick(x1),
             layer1: this._screenToLayer(y1),
             tick2: this._screenToTick(x2),
-            layer2: this._screenToLayer(y2),
-            sx1: x1, sy1: y1,
-            sx2: x2, sy2: y2
+            layer2: this._screenToLayer(y2)
+        };
+    };
+
+    // 由固定的网格锚点 (_selectStartTick/_selectStartLayer) 与当前光标位置生成选择矩形,
+    // 锚点在滚动翻页后仍指向同一格, 选区不会错位。
+    PianoRoll.prototype._selectionRectTo = function(x2, y2) {
+        return {
+            tick1: this._selectStartTick,
+            layer1: this._selectStartLayer,
+            tick2: this._screenToTick(x2),
+            layer2: this._screenToLayer(y2)
         };
     };
 
@@ -2931,29 +3090,57 @@
     };
 
     // 拖动中统一处理 (桌面鼠标 + 触屏共用): 更新落点行 + 跟手/让位偏移动画
+    //   _trackDragKind: 'track' 在 NBS 轨道行内排序; 'lyric' 可落到任意行 (据此换算插入位置)
     PianoRoll.prototype._updateTrackDrag = function(screenYAbsolute) {
         if (!this._isDraggingTrack || this._draggedTrackLayer < 0) return;
         var cellH = this._cfg.cellH * this._zoomY();
-        var dragged = this._draggedTrackLayer;
+        var dragged = this._draggedTrackLayer;   // 行号
+        var isLyric = (this._trackDragKind === 'lyric');
+        var layout = this._rowLayout();
+        var lastRow = this._rowCount() - 1;
+        // 可落点行区间
+        var rangeFrom = 0;
+        var rangeTo = lastRow;
+        if (!isLyric) {
+            rangeTo = (this.trackCount > 0) ? this._rowIndexOfTrack(this.trackCount - 1) : -1;
+        }
+        if (rangeTo < rangeFrom) return;
         var target = Math.floor((screenYAbsolute - this._cfg.timelineHeight + this.scrollY) / cellH);
-        if (!isFinite(target) || target < 0) target = 0;
-        if (target >= this.trackCount) target = this.trackCount - 1;
+        if (!isFinite(target)) target = rangeFrom;
+        if (target < rangeFrom) target = rangeFrom;
+        if (target > rangeTo) target = rangeTo;
+        // NBS 轨道排序时, 落在歌词行的落点吸附到最近的 NBS 轨道行
+        if (!isLyric) {
+            var up = target, down = target, found = -1;
+            while (up >= rangeFrom || down <= rangeTo) {
+                var ru = (up >= rangeFrom) ? layout.rows[up] : null;
+                if (ru && ru.type === 'track') { found = up; break; }
+                var rd = (down <= rangeTo) ? layout.rows[down] : null;
+                if (rd && rd.type === 'track') { found = down; break; }
+                up--; down++;
+                if (up < rangeFrom && down > rangeTo) break;
+            }
+            if (found >= 0) target = found;
+        }
         this._dragTargetLayer = target;
 
         var off = this._trackAnim.off, tgt = this._trackAnim.target;
         // 被拖轨道: 精确跟随鼠标 (不缓动); 记下松手时将吸附到的位置差
         off[dragged] = screenYAbsolute - this._trackDragGrabY;
         tgt[dragged] = (target - dragged) * cellH;
-        // 其余轨道平滑让位
-        for (var l = 0; l < this.trackCount; l++) {
-            if (l === dragged) continue;
-            if (off[l] === undefined) off[l] = 0;
-            if (target > dragged && l > dragged && l <= target) {
-                tgt[l] = -cellH;
-            } else if (target < dragged && l >= target && l < dragged) {
-                tgt[l] = cellH;
+        // 其余同类轨道平滑让位 (只在自己那一段内让位, 不挤动另一类轨道)
+        for (var row = rangeFrom; row <= rangeTo; row++) {
+            if (row === dragged) continue;
+            var item = layout.rows[row];
+            if (!item) continue;
+            if (isLyric ? item.type !== 'lyric' : item.type !== 'track') continue;
+            if (off[row] === undefined) off[row] = 0;
+            if (target > dragged && row > dragged && row <= target) {
+                tgt[row] = -cellH;
+            } else if (target < dragged && row >= target && row < dragged) {
+                tgt[row] = cellH;
             } else {
-                tgt[l] = 0;
+                tgt[row] = 0;
             }
         }
         this._startTrackAnim();
@@ -2968,7 +3155,8 @@
         var cellH = this._cfg.cellH * this._zoomY();
         this._isDraggingTrack = false;
         if (from >= 0 && to >= 0 && from !== to) {
-            this._trackAnimPendingReorder = { from: from, to: to };
+            // 记录本次重排的类型 (行号 + NBS/歌词), 与提交时机无关
+            this._trackAnimPendingReorder = { from: from, to: to, kind: this._trackDragKind };
             this._trackAnim.target[from] = (to - from) * cellH;
         } else {
             this._trackAnimPendingReorder = null;
@@ -2992,13 +3180,35 @@
         this._trackAnim.target = {};
         this._trackAnim.active = false;
         if (pending) {
-            if (this.onReorderTrack) {
-                this.onReorderTrack(pending.from, pending.to);
+            if (pending.kind === 'lyric') {
+                // 歌词轨道: 行号 → 插入位置 after (第几条 NBS 轨道下方, -1 = 最上方)
+                var fromLane = this._rowLayout().rows[pending.from]
+                    ? this._rowLayout().rows[pending.from].lane : -1;
+                var after = -1;
+                var layout = this._rowLayout();
+                var limit = Math.min(pending.to, layout.rows.length - 1);
+                for (var r = 0; r <= limit; r++) {
+                    if (layout.rows[r] && layout.rows[r].type === 'track') after++;
+                }
+                if (this.onReorderLyricLane && fromLane >= 0) {
+                    this.onReorderLyricLane(fromLane, after);
+                }
+            } else if (this.onReorderTrack) {
+                var fromLayer = this._rowLayout().rows[pending.from]
+                    ? this._rowLayout().rows[pending.from].layer : -1;
+                var toLayer = this._rowLayout().rows[pending.to]
+                    ? this._rowLayout().rows[pending.to].layer : -1;
+                if (fromLayer >= 0 && toLayer >= 0) this.onReorderTrack(fromLayer, toLayer);
             } else if (this.onMoveTrack) {
-                var dir = (pending.to > pending.from) ? 1 : -1;
-                var steps = Math.abs(pending.to - pending.from);
-                for (var s = 0; s < steps; s++) {
-                    this.onMoveTrack(pending.from + s * dir, dir);
+                var movedFrom = this._rowLayout().rows[pending.from];
+                var movedTo = this._rowLayout().rows[pending.to];
+                if (!movedFrom || !movedTo) { /* 行已变化, 放弃本次重排 */ }
+                else {
+                    var dir = (movedTo.layer > movedFrom.layer) ? 1 : -1;
+                    var steps = Math.abs(movedTo.layer - movedFrom.layer);
+                    for (var s = 0; s < steps; s++) {
+                        this.onMoveTrack(movedFrom.layer + s * dir, dir);
+                    }
                 }
             }
         }
@@ -3173,6 +3383,25 @@
     PianoRoll.prototype._handleTrackPanelHit = function(hit, e) {
         if (hit.type === 'addtrack') {
             if (this.onAddTrack) this.onAddTrack();
+            return;
+        }
+        // ---- 歌词轨道行 ----
+        if (hit.type === 'addlyriclane') {
+            if (this.onAddLyricLane) this.onAddLyricLane();
+            return;
+        }
+        if (hit.type === 'lyric-delete') {
+            if (this.onDeleteLyricLane) this.onDeleteLyricLane(hit.lane);
+            return;
+        }
+        if (hit.type === 'lyric-name') {
+            var lyLayout = this._getLyricLaneButtonLayout(this._cfg.cellH * this._zoomY());
+            var lyY = this._rowY(this._lyricRow(hit.lane));
+            this._showLyricLaneNameEditor(hit.lane, lyLayout.nameStart, lyY, lyLayout.nameEnd - lyLayout.nameStart);
+            return;
+        }
+        if (hit.type === 'lyric-drag') {
+            // 拖动排序: 由 _onMouseDown / _onTouchStart 的长按拖动逻辑处理
             return;
         }
         if (hit.type === 'name') {
@@ -3413,6 +3642,39 @@
         });
     };
 
+    // 歌词轨道名称编辑浮层 (与 NBS 轨道重命名同一交互)
+    PianoRoll.prototype._showLyricLaneNameEditor = function(lane, x, y, width) {
+        var self = this;
+        if (this._trackNameInput) {
+            this._trackNameInput.remove();
+            this._trackNameInput = null;
+        }
+        var info = (this.lyricLanes && this.lyricLanes[lane]) || {};
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.value = info.name || '';
+        input.style.cssText = 'position:fixed;z-index:10000;background:#1a1a2e;color:#e6c9d5;border:1px solid #e94560;border-radius:3px;padding:2px 4px;font-size:11px;font-family:inherit;width:' + Math.max(60, width) + 'px;';
+        var rect = this.canvas.getBoundingClientRect();
+        input.style.left = (rect.left + x) + 'px';
+        input.style.top = (rect.top + y) + 'px';
+        document.body.appendChild(input);
+        this._trackNameInput = input;
+        input.focus();
+        input.select();
+
+        var commit = function() {
+            var newName = input.value.trim();
+            if (newName && self.onRenameLyricLane) self.onRenameLyricLane(lane, newName);
+            input.remove();
+            if (self._trackNameInput === input) self._trackNameInput = null;
+        };
+        input.addEventListener('blur', commit);
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+            if (e.key === 'Escape') { input.value = info.name || ''; input.blur(); }
+        });
+    };
+
     // ============ 鼠标事件 ============
     PianoRoll.prototype._onMouseDown = function(e) {
         // 全局标记: 刚刚有右键菜单/弹窗被关闭, 这次 mousedown 是"关闭残留", 不应触发放置音符
@@ -3461,15 +3723,17 @@
             return;
         }
 
-        // 歌词临时轨道: 片段选中/拖动 (必须在时间轴标尺分支之前判定, 否则会被标尺拖拽吞掉)
-        var lyricLane = this._lyricLaneRect();
-        if (e.button === 0 && lyricLane.height > 0 && y >= lyricLane.top && y < lyricLane.bottom && x >= pw) {
+        // 歌词轨道行: 片段选中/拖动 (必须在网格/标尺分支之前判定)
+        var lyricLane = this._lyricLaneAtY(y);
+        if (e.button === 0 && lyricLane >= 0 && x >= pw) {
             var lhit = this._hitLyricClip(x, y);
             if (lhit) {
                 this._beginLyricDrag(lhit, x, y);
             } else {
                 this._setLyricSelected(null);
             }
+            // 点击歌词行时清空音符选中, 避免 Delete 键误删音符
+            if (this._clearSelection) this._clearSelection();
             this._mouseDown = true;
             this._lyricLaneClick = true;
             this._pendingPlace = false;
@@ -3521,11 +3785,14 @@
         if (!this.segmentsEditMode && x < pw && y >= this._cfg.timelineHeight && e.button === 0) {
             var hit = this._hitTestTrackPanel(x, y);
             if (hit) {
-                // 拖动手柄: 桌面端直接进入拖拽模式
-                if (hit.type === 'drag') {
+                // 拖动手柄: 桌面端直接进入拖拽模式 (NBS 轨道与歌词轨道共用同一状态机)
+                if (hit.type === 'drag' || hit.type === 'lyric-drag') {
+                    this._trackDragKind = (hit.type === 'lyric-drag') ? 'lyric' : 'track';
+                    var dragRow = (hit.type === 'lyric-drag') ? this._lyricRow(hit.lane) : this._rowIndexOfTrack(hit.layer);
+                    if (!(dragRow >= 0)) dragRow = 0;
                     this._isDraggingTrack = true;
-                    this._draggedTrackLayer = hit.layer;
-                    this._dragTargetLayer = hit.layer;
+                    this._draggedTrackLayer = dragRow;
+                    this._dragTargetLayer = dragRow;
                     this._trackDragGrabY = y;
                     // 清空上一次残留的位移; 若上一次排序动画尚未提交, 先立即提交, 避免丢失
                     if (this._trackAnimPendingReorder) this._commitTrackReorderIfPending();
@@ -3538,7 +3805,7 @@
                     return;
                 }
                 // 按下视觉反馈 (名称区域除外)
-                if (hit.type !== 'name') {
+                if (hit.type !== 'name' && hit.type !== 'lyric-name') {
                     this._trackPanelPressed = { layer: hit.layer, type: hit.type };
                     this._fullRedrawNeeded = true;
                     this.render();
@@ -3661,12 +3928,7 @@
                 // 存储锚点网格坐标, 避免滚动时选择框偏移
                 this._selectStartTick = this._screenToTick(x);
                 this._selectStartLayer = this._screenToLayer(y);
-                this._selectionRect = {
-                    tick1: this._selectStartTick, layer1: this._selectStartLayer,
-                    tick2: this._selectStartTick, layer2: this._selectStartLayer,
-                    sx1: x, sy1: y,
-                    sx2: x, sy2: y
-                };
+                this._selectionRect = this._makeSelectionRect(x, y, x, y);
                 // 已有选中音符时, 本次点击是"取消选择", 不应在松手时放置新音符
                 this._pendingPlace = !e.shiftKey && !e.ctrlKey && !e.metaKey && !hadSelection;
                 if (!e.shiftKey && !e.ctrlKey && !e.metaKey) this._clearSelection();
@@ -3709,6 +3971,21 @@
                 this._handleTrackContextMenu(e, layerHit);
                 return;
             }
+        }
+
+        // 歌词轨道行: 右键歌词块 → 歌词块菜单; 右键轨道空白/名称区 → 轨道菜单
+        var lyricLaneHit = this._lyricLaneAtY(y);
+        if (lyricLaneHit >= 0) {
+            var lyricHit = (x >= pw) ? this._hitLyricClip(x, y) : null;
+            if (lyricHit) {
+                this._setLyricSelected(lyricHit.clip.id);
+                if (this.onLyricClipContextMenu) this.onLyricClipContextMenu(lyricHit.clip.id, e.clientX, e.clientY);
+            } else if (this.onLyricLaneContextMenu) {
+                // x < pw 时没有可换算的 tick, 传 -1 表示"按播放头位置"
+                var laneTick = (x >= pw) ? this._screenToTick(x) : -1;
+                this.onLyricLaneContextMenu(lyricLaneHit, laneTick, e.clientX, e.clientY);
+            }
+            return;
         }
 
         var ids = [];
@@ -3785,9 +4062,9 @@
             this._updateSustainPreview(x, y);
         }
 
-        // 歌词临时轨道: 悬停高亮 + 光标 (端点 ew-resize / 片段体 grab)
-        var lyricHoverLane = this._lyricLaneRect();
-        if (lyricHoverLane.height > 0 && y >= lyricHoverLane.top && y < lyricHoverLane.bottom && x >= pw) {
+        // 歌词轨道行: 悬停高亮 + 光标 (端点 ew-resize / 片段体 grab)
+        var lyricHoverLane = this._lyricLaneAtY(y);
+        if (lyricHoverLane >= 0 && x >= pw) {
             var lh = this._hitLyricClip(x, y);
             var newLyricHover = lh ? { id: lh.clip.id, zone: lh.zone } : null;
             var olh = this._lyricHover;
@@ -3905,23 +4182,12 @@
                 }
             } else if (this.currentTool === 'select' && this._isSelecting && this._selectionRect) {
                 // 选择框: 锚点固定为网格坐标, 当前角跟随鼠标 (网格坐标)
-                this._selectionRect = {
-                    tick1: this._selectStartTick, layer1: this._selectStartLayer,
-                    tick2: this._screenToTick(x), layer2: this._screenToLayer(y),
-                    sx1: this._selectionRect.sx1, sy1: this._selectionRect.sy1,
-                    sx2: x, sy2: y
-                };
-                // 选择工具: 框选默认增量添加 (相当于一直按住 Ctrl)
+                this._selectionRect = this._selectionRectTo(x, y);
                 this._updateEdgeAutoScroll(x, y, true);
                 this._fullRedrawNeeded = true;
                 this.requestRender();
             } else if (this._isSelecting) {
-                this._selectionRect = {
-                    tick1: this._selectStartTick, layer1: this._selectStartLayer,
-                    tick2: this._screenToTick(x), layer2: this._screenToLayer(y),
-                    sx1: this._selectionRect ? this._selectionRect.sx1 : this._dragStartX, sy1: this._selectionRect ? this._selectionRect.sy1 : this._dragStartY,
-                    sx2: x, sy2: y
-                };
+                this._selectionRect = this._selectionRectTo(x, y);
                 if (this._hasMoved) {
                     this._selectByRect(this._selectionRect.tick1, this._selectionRect.layer1, this._selectionRect.tick2, this._selectionRect.layer2, e.shiftKey || e.ctrlKey || e.metaKey);
                 }
@@ -3947,6 +4213,11 @@
             this._trackPanelPressed = null;
             this._fullRedrawNeeded = true;
             this.render();
+        }
+        // 轨道拖拽排序 (NBS / 歌词共用): 先播放归位动画, 收敛后再提交重排
+        if (this._isDraggingTrack) {
+            this._settleTrackDrag();
+            return;
         }
         // 若本次不是音符拖动, 清理拖动预览状态
         if (!this._isDraggingNote) this._dragPreview = null;
@@ -4019,12 +4290,6 @@
             this._selectStartTick = 0;
             this._selectStartLayer = 0;
             this.render();
-            return;
-        }
-
-        // 轨道拖拽排序结束: 先播放归位动画, 收敛后再提交重排 (避免直接跳变)
-        if (this._isDraggingTrack) {
-            this._settleTrackDrag();
             return;
         }
 
@@ -4209,9 +4474,9 @@
                 return;
             }
 
-            // 歌词临时轨道: 触摸选中/拖动 (必须在时间轴标尺分支之前判定)
-            var lyricTouchLane = this._lyricLaneRect();
-            if (lyricTouchLane.height > 0 && y >= lyricTouchLane.top && y < lyricTouchLane.bottom && x >= pw) {
+            // 歌词轨道行: 触摸选中/拖动 (必须在时间轴标尺分支之前判定)
+            var lyricTouchLane = this._lyricLaneAtY(y);
+            if (lyricTouchLane >= 0 && x >= pw) {
                 this._touchStartX = x;
                 this._touchStartY = y;
                 this._lastTouchX = x;
@@ -4225,8 +4490,9 @@
                     this._touchMode = 'lyric-drag';
                 } else {
                     this._setLyricSelected(null);
+                    if (this._clearSelection) this._clearSelection();
                     this._lyricTapTick = this._screenToTickNearest(x);
-                    this._lyricTapLane = this._laneIndexAt(y);
+                    this._lyricTapLane = lyricTouchLane;
                     // 手机端: 长按空白处直接新建片段 (无需双击)
                     this._startLyricLongPress(this._lyricTapTick, this._lyricTapLane, touch.clientX, touch.clientY);
                     this._touchMode = 'lyric-blank';
@@ -4274,15 +4540,19 @@
             if (!this.segmentsEditMode && x < pw && y >= this._cfg.timelineHeight) {
                 var hitResult = this._hitTestTrackPanel(x, y);
                 if (hitResult) {
-                    // 拖动手柄: 长按后进入拖拽模式
-                    if (hitResult.type === 'drag') {
+                    // 拖动手柄: 长按后进入拖拽模式 (NBS 轨道与歌词轨道同一套流程)
+                    if (hitResult.type === 'drag' || hitResult.type === 'lyric-drag') {
+                        this._trackDragKind = (hitResult.type === 'lyric-drag') ? 'lyric' : 'track';
+                        var touchDragRow = (hitResult.type === 'lyric-drag')
+                            ? this._lyricRow(hitResult.lane) : this._rowIndexOfTrack(hitResult.layer);
+                        if (!(touchDragRow >= 0)) touchDragRow = 0;
                         this._touchMode = 'track-drag-pending';
                         this._touchStartX = x;
                         this._touchStartY = y;
                         this._lastTouchX = x;
                         this._lastTouchY = y;
-                        this._draggedTrackLayer = hitResult.layer;
-                        this._dragTargetLayer = hitResult.layer;
+                        this._draggedTrackLayer = touchDragRow;
+                        this._dragTargetLayer = touchDragRow;
                         this._trackDragStartY = y;
                         // 长按 250ms 后进入拖拽模式
                         var dragSelf = this;
@@ -4385,11 +4655,7 @@
                 this._isSelecting = true;
                 this._selectStartTick = this._screenToTick(x);
                 this._selectStartLayer = this._screenToLayer(y);
-                this._selectionRect = {
-                    tick1: this._selectStartTick, layer1: this._selectStartLayer,
-                    tick2: this._selectStartTick, layer2: this._selectStartLayer,
-                    sx1: x, sy1: y, sx2: x, sy2: y
-                };
+                this._selectionRect = this._makeSelectionRect(x, y, x, y);
             } else {
                 // 移动端: 点击空白处不清除选区, 只能通过取消选择按钮清除
             }
@@ -4574,12 +4840,7 @@
                     this._isSelecting = true;
                     this._selectStartTick = this._screenToTick(this._dragStartX);
                     this._selectStartLayer = this._screenToLayer(this._dragStartY);
-                    this._selectionRect = {
-                        tick1: this._selectStartTick, layer1: this._selectStartLayer,
-                        tick2: this._screenToTick(x), layer2: this._screenToLayer(y),
-                        sx1: this._dragStartX, sy1: this._dragStartY,
-                        sx2: x, sy2: y
-                    };
+                    this._selectionRect = this._makeSelectionRect(this._dragStartX, this._dragStartY, x, y);
                 }
             }
 
@@ -4614,12 +4875,7 @@
                     this.requestRender();
                 }
             } else if (this._touchMode === 'drag-select') {
-                this._selectionRect = {
-                    tick1: this._selectStartTick, layer1: this._selectStartLayer,
-                    tick2: this._screenToTick(x), layer2: this._screenToLayer(y),
-                    sx1: this._selectionRect.sx1, sy1: this._selectionRect.sy1,
-                    sx2: x, sy2: y
-                };
+                this._selectionRect = this._selectionRectTo(x, y);
                 this._selectByRect(this._selectionRect.tick1, this._selectionRect.layer1, this._selectionRect.tick2, this._selectionRect.layer2, true);
                 this._updateEdgeAutoScroll(x, y, true);
                 this._fullRedrawNeeded = true;
@@ -4868,7 +5124,7 @@
         var btnSize = layout.btnSize;
 
         for (var layer = Math.max(0, layerStart); layer <= Math.min(this.trackCount - 1, layerEnd); layer++) {
-            var noteY = layer * cellH - this.scrollY + cfg.timelineHeight;
+            var noteY = this._rowY(this._trackRowOrEdge(layer));
             if (y >= noteY && y < noteY + cellH) {
                 var btnCenterY = noteY + cellH / 2;
                 var btnY1 = btnCenterY - btnSize / 2;
@@ -4919,11 +5175,43 @@
             }
         }
 
+        // ---- 歌词轨道行命中 (名称 / 删除 / 拖动) ----
+        var lyricCount = this._lyricLaneCount();
+        if (lyricCount > 0) {
+            var lyLayout = this._getLyricLaneButtonLayout(cellH);
+            for (var ll = 0; ll < lyricCount; ll++) {
+                var lyY = this._rowY(this._lyricRow(ll));
+                if (y < lyY || y >= lyY + cellH) continue;
+                var lyMid = lyY + cellH / 2;
+                var lyBtnTop = lyMid - lyLayout.btnSize / 2;
+                var lyBtnBottom = lyMid + lyLayout.btnSize / 2;
+                if (y >= lyBtnTop && y <= lyBtnBottom) {
+                    if (x >= lyLayout.deleteX && x <= lyLayout.deleteX + lyLayout.deleteW) {
+                        return { layer: -(100 + ll), lane: ll, type: 'lyric-delete' };
+                    }
+                    if (x >= lyLayout.dragX && x <= lyLayout.dragX + lyLayout.dragW) {
+                        return { layer: -(100 + ll), lane: ll, type: 'lyric-drag' };
+                    }
+                }
+                if (x >= lyLayout.nameStart && x <= lyLayout.nameEnd) {
+                    return { layer: -(100 + ll), lane: ll, type: 'lyric-name' };
+                }
+                return null;
+            }
+        }
+
         // 添加音轨按钮
         if (this._addTrackBtnRect) {
             var r = this._addTrackBtnRect;
             if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) {
                 return { layer: -1, type: 'addtrack' };
+            }
+        }
+        // 添加歌词轨道按钮
+        if (this._addLyricLaneBtnRect) {
+            var lr = this._addLyricLaneBtnRect;
+            if (x >= lr.x && x <= lr.x + lr.w && y >= lr.y && y <= lr.y + lr.h) {
+                return { layer: -2, type: 'addlyriclane' };
             }
         }
         return null;
@@ -5738,12 +6026,7 @@
                     self.scrollY = Math.max(0, self.scrollY + (self._edgeScrollDy || 0));
                     // 如果正在选择, 更新选择框: 锚点固定为网格坐标, 当前角跟随鼠标
                     if (self._isSelecting && self._selectionRect && self._edgeCurrentX != null) {
-                        self._selectionRect = {
-                            tick1: self._selectStartTick, layer1: self._selectStartLayer,
-                            tick2: self._screenToTick(self._edgeCurrentX), layer2: self._screenToLayer(self._edgeCurrentY),
-                            sx1: self._selectionRect.sx1, sy1: self._selectionRect.sy1,
-                            sx2: self._edgeCurrentX, sy2: self._edgeCurrentY
-                        };
+                        self._selectionRect = self._selectionRectTo(self._edgeCurrentX, self._edgeCurrentY);
                         self._selectByRect(self._selectionRect.tick1, self._selectionRect.layer1, self._selectionRect.tick2, self._selectionRect.layer2, self._edgeAdditive || false);
                     }
                     self._fullRedrawNeeded = true;
@@ -6233,12 +6516,14 @@
         if (!this._isSelecting || !this._selectionRect) return;
         var ctx = this.ctx;
         var rect = this._selectionRect;
-        // 直接使用屏幕坐标的"按下点 → 当前点"绘制, 完全跟手, 不吸附网格;
-        // 若旧状态没有屏幕坐标 (理论不会发生), 回退到网格坐标渲染
-        var x1 = (typeof rect.sx1 === 'number') ? rect.sx1 : this._tickToScreen(rect.tick1);
-        var y1 = (typeof rect.sy1 === 'number') ? rect.sy1 : this._layerToScreen(rect.layer1);
-        var x2 = (typeof rect.sx2 === 'number') ? rect.sx2 : this._tickToScreen(rect.tick2 + 1);
-        var y2 = (typeof rect.sy2 === 'number') ? rect.sy2 : this._layerToScreen(rect.layer2 + 1);
+        // 尚未拖出第一格时不绘制, 避免单击空白时闪出一格红框
+        if (rect.tick1 === rect.tick2 && rect.layer1 === rect.layer2) return;
+        // 完全由网格坐标换算屏幕坐标: 选择框始终锚定在网格上, 滚动/翻页后不会漂移
+        // (选择矩形只保存 tick/layer, 不再依赖屏幕坐标)
+        var x1 = this._tickToScreen(rect.tick1);
+        var y1 = this._layerToScreen(rect.layer1);
+        var x2 = this._tickToScreen(rect.tick2 + 1);
+        var y2 = this._layerToScreen(rect.layer2) + this._cfg.cellH * this._zoomY();
         var sx = Math.min(x1, x2);
         var sy = Math.min(y1, y2);
         var sw = Math.abs(x2 - x1);
@@ -6353,7 +6638,7 @@
         if (_selListForCanvas) {
             for (var li = 0; li < _selListForCanvas.length; li++) {
                 var selLayer = _selListForCanvas[li];
-                var layerY = this._cfg.timelineHeight + selLayer * cellH - this.scrollY;
+                var layerY = this._layerToScreen(selLayer);
                 if (layerY + cellH > this._cfg.timelineHeight && layerY < h) {
                     ctx.fillStyle = 'rgba(76, 194, 255, 0.08)';
                     ctx.fillRect(pw, layerY, w - pw, cellH);
@@ -6363,6 +6648,9 @@
 
         // 音符
         this._drawNotes();
+
+        // 歌词块 (歌词轨道行, 追加在 NBS 轨道下方, 行高与 NBS 轨道一致)
+        this._drawLyricRows(ctx, w, pw);
 
         // 动画中的音符 (删除/放置效果)
         this._drawAnimatedNotes();
@@ -6687,93 +6975,36 @@
             ctx.fillText(tk.toString(), x, rulerTop + 2);
         }
 
-        // ============ 歌词标记 ============
-        // 非编辑模式: 标尺上按持续时间绘制歌词条 (编辑模式下由歌词轨道呈现, 不重复绘制)
-        // 条宽 = 片段持续时间对应的像素宽度, 文字过长时省略显示。
-        if (!this.lyricsEditMode && this.lyricTicks && this.lyricTicks.length) {
-            var bandH = Math.min(11, Math.max(8, (rulerBottom - rulerTop) - 16));
-            // 歌词条贴在标尺内侧: 顶部布局靠下, 底部布局靠上 (镜像)
-            var bandTop = this.timelineAtBottom ? (rulerTop + 2) : (th - bandH - 2);
-            var lyr = this.lyricTicks;
-            ctx.font = '8px "Segoe UI", sans-serif';
-            ctx.textBaseline = 'middle';
-            for (var li = 0; li < lyr.length; li++) {
-                var ly = lyr[li];
-                if ((ly.lane || 0) !== 0) continue;  // 标尺提示只画第 1 条轨道, 避免同 tick 重叠
-                if (ly.tick < tickStart - 1 || ly.tick > tickEnd + 1) continue;
-                var lx = this._tickToScreen(ly.tick);
-                if (lx < pw - 2 || lx > w) continue;
-
-                // 方块长度与片段持续时间对应 (受屏幕右边界限制), 文字裁剪显示在方块内
-                var durW = Math.min(w, this._tickToScreen(this._lyricClipEndTick(ly))) - lx;
-                if (durW < 2) durW = 2;
-                var label = String(ly.text || '');
-                var chipW = durW;
-
-                ctx.textAlign = 'left';
-                ctx.fillStyle = 'rgba(233, 69, 96, 0.9)';
-                this._roundRect(ctx, lx, bandTop + 1, chipW, bandH - 2, 1.5);
-                ctx.fill();
-
-                var textAvail = chipW - 8;
-                if (textAvail >= 8 && label) {
-                    if (ctx.measureText(label).width > textAvail) {
-                        var cut = label;
-                        while (cut.length > 1 && ctx.measureText(cut + '…').width > textAvail) cut = cut.slice(0, -1);
-                        label = cut + '…';
-                    }
-                    ctx.fillStyle = '#fff';
-                    ctx.fillText(label, lx + 4, bandTop + bandH / 2 + 0.5);
-                }
-            }
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'alphabetic';
-        }
-
-        // 歌词临时轨道 (编辑模式): 时间轴标尺下方的一条操作轨
-        if (this.lyricsEditMode) this._drawLyricLane(ctx, w, pw);
+        // 歌词块由独立歌词轨道行呈现 (不再在标尺上重复绘制)
         // 片段编辑使用独立的多轨视图 (_renderSegmentEditor), 这里不再绘制旧片段轨道
     };
 
-    // ============ 歌词临时轨道绘制 (剪映 / AE 风格, 3 条平行轨道) ============
-    PianoRoll.prototype._drawLyricLane = function(ctx, w, pw) {
-        var top = this._laneTop();
-        var h = this._laneH();
-        var bottom = top + h;
-        if (h <= 0) return;
+    // ============ 歌词轨道行绘制 ============
+    // 歌词轨道行追加在所有 NBS 轨道之后, 行高与 NBS 轨道一致;
+    // 行内绘制「可调整长度的歌词块」(起始 tick + 长度), 视觉与 NBS 音符保持同一套语言。
+    PianoRoll.prototype._drawLyricRows = function(ctx, w, pw) {
+        if (this.segmentsEditMode) return;
+        var laneCount = this._lyricLaneCount();
+        if (laneCount <= 0) return;
         var self = this;
-        var laneCount = this._laneCount();
-        var perH = this._lyricLanePerH;
         var cellWpx = this._cfg.cellW * this._zoomX();
+        var cellH = this._cfg.cellH * this._zoomY();
+        var h = this.displayHeight;
+        var top = this._editOriginY();
 
-        // 轨道底 (整条): 与音轨区底色区分, 略带暖色
-        ctx.fillStyle = 'rgba(30, 22, 40, ' + this.panelAlpha + ')';
-        ctx.fillRect(0, top, w, h);
-        // 左侧标签区
-        ctx.fillStyle = 'rgba(14, 14, 34, ' + this.panelAlpha + ')';
-        ctx.fillRect(0, top, pw, h);
+        // 歌词行不画自己的背景: 与 NBS 轨道完全共用网格的行底色 (仅绘制歌词块本身)
 
-        // 轨道之间的分隔线
-        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-        ctx.lineWidth = 1;
-        for (var s = 1; s < laneCount; s++) {
-            var sy = top + s * perH;
-            ctx.beginPath();
-            ctx.moveTo(0, sy + 0.5);
-            ctx.lineTo(w, sy + 0.5);
-            ctx.stroke();
-        }
-
-        // 单个片段绘制 (scale/yOff/wFrac 用于拖动预览的「放大 + 像素级跟随鼠标」效果)
-        //   wFrac: 宽度的亚像素增量 (右端点拖拽时让右边缘在 tick 间跟随鼠标; 左端点拖拽时为负值)
+        // 单个歌词块绘制 (与音符同语言: 圆角块 + 内描边 + 文字)
+        //   scale / yOff / wFrac 用于拖动预览的「放大 + 像素级跟随鼠标」效果
         var drawClip = function(clip, x0px, scale, yOff, wFrac) {
-            var wpx = Math.max(2, cellWpx * self._lyricClipDuration(clip) + (wFrac || 0));
+            var wpx = Math.max(3, cellWpx * self._lyricClipDuration(clip) + (wFrac || 0));
             var x1px = x0px + wpx;
             if (x1px < pw || x0px > w) return;
-            var lane = Math.max(0, Math.min(laneCount - 1, clip.lane || 0));
-            var rect = self._laneRect(lane);
+            var laneIdx = Math.max(0, Math.min(laneCount - 1, clip.lane || 0));
+            var rect = self._lyricRowRect(laneIdx);
             var clipTop = rect.top + (yOff || 0), clipH = rect.h;
-            var selected = (clip.id === self.lyricSelectedId);
+            var selected = (clip.id === self.lyricSelectedId)
+                || (self.lyricSelectedIds && self.lyricSelectedIds.indexOf(clip.id) >= 0);
             var hovered = !!(self._lyricHover && self._lyricHover.id === clip.id);
             var hoverZone = hovered ? self._lyricHover.zone : null;
             // 拖动中的片段不显示悬停态
@@ -6791,7 +7022,7 @@
                 ctx.shadowOffsetY = 3;
             }
 
-            // 片段底色 (未选中深砖红, 选中/悬停提亮)
+            // 块底色 (未选中深砖红, 选中/悬停提亮)
             var base = selected ? '#c2503f' : (hovered ? '#a94a3b' : '#8f3d31');
             ctx.fillStyle = base;
             self._roundRect(ctx, x0px + 1, clipTop, Math.max(2, wpx - 2), clipH, 3);
@@ -6814,7 +7045,7 @@
             }
 
             // 左右端点手柄: 悬停该端点时高亮, 提示可拖动改变长度
-            var edgeW = Math.min(7, perH / 3);
+            var edgeW = Math.min(7, cellH / 3);
             if (wpx > edgeW * 2.2) {
                 var drawHandle = function(hx, hot) {
                     ctx.fillStyle = hot ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.35)';
@@ -6847,25 +7078,24 @@
             ctx.restore();
         };
 
-        // 片段统一裁剪到轨道内容区 (不覆盖左侧信息栏)
+        // 块统一裁剪到轨道内容区 (不覆盖左侧信息栏)
         ctx.save();
         ctx.beginPath();
-        ctx.rect(pw, top, Math.max(0, w - pw), h);
+        ctx.rect(pw, top, Math.max(0, w - pw), h - top);
         ctx.clip();
 
         var dragId = this._lyricDrag ? this._lyricDrag.id : null;
         var dragState = this._lyricDrag;
         var dragMode = dragState ? dragState.mode : null;
         var dragPxF = dragState ? (dragState.pxFrac || 0) : 0;
-        var dragPyF = dragState ? (dragState.pyFrac || 0) : 0;
-        for (var i = 0; i < this.lyricTicks.length; i++) {
+        for (var i = 0; i < (this.lyricTicks || []).length; i++) {
             var clip = this.lyricTicks[i];
             if (dragId && clip.id === dragId) continue;
             drawClip(clip, this._tickToScreen(clip.tick), 1, 0);
         }
-        if (dragId) {
+        if (dragId && dragState) {
             var dclip = this._findLyricById(dragId);
-            if (dclip && dragState) {
+            if (dclip) {
                 var previewClip = {
                     id: dclip.id,
                     text: dclip.text,
@@ -6874,11 +7104,11 @@
                     duration: dclip.duration
                 };
                 var dx0 = this._tickToScreen(dclip.tick);
-                var targetX, targetLane, targetW;
+                var targetX = null, targetLane = dclip.lane || 0, targetW = 0;
                 if (dragMode === 'move') {
                     previewClip.lane = dragState.targetLane;
                     var previewX = this._tickToScreen(dragState.previewTick);
-                    var previewYOff = (dragState.previewLane - dragState.targetLane) * this._lyricLanePerH;
+                    var previewYOff = (dragState.previewLane - dragState.targetLane) * cellH;
                     drawClip(previewClip, previewX, 1.15, previewYOff);
                     targetX = this._tickToScreen(dragState.targetTick);
                     targetLane = dragState.targetLane;
@@ -6886,16 +7116,14 @@
                 } else if (dragMode === 'right') {
                     drawClip(previewClip, dx0, 1, 0, dragPxF);
                     targetX = dx0;
-                    targetLane = dclip.lane || 0;
                     targetW = cellWpx * dragState.targetDuration;
                 } else if (dragMode === 'left') {
                     drawClip(previewClip, dx0 + dragPxF, 1, 0, -dragPxF);
                     targetX = this._tickToScreen(dragState.targetTick);
-                    targetLane = dclip.lane || 0;
                     targetW = cellWpx * dragState.targetDuration;
                 }
                 if (targetX != null && targetW > 1) {
-                    var targetRect = this._laneRect(targetLane);
+                    var targetRect = this._lyricRowRect(targetLane);
                     ctx.save();
                     ctx.strokeStyle = 'rgba(255,255,255,0.9)';
                     ctx.lineWidth = 1.5;
@@ -6906,34 +7134,6 @@
             }
         }
         ctx.restore();
-
-        // 左侧标签: 每轨一个音符符号 + 「歌词 N」
-        var laneLabel = (window.WebNBSI18n && WebNBSI18n.translate) ? WebNBSI18n.translate('歌词') : '歌词';
-        for (var li = 0; li < laneCount; li++) {
-            var ly = top + li * perH + perH / 2;
-            ctx.font = (this._isDesktop ? '11px' : '10px') + ' "Segoe UI", sans-serif';
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'middle';
-            ctx.fillStyle = 'rgba(233, 69, 96, 0.95)';
-            ctx.fillText('\u266A', 6, ly);
-            ctx.fillStyle = li === 0 ? '#d9d9e8' : 'rgba(217,217,232,0.6)';
-            ctx.fillText(laneLabel + ' ' + (li + 1), 18, ly);
-        }
-
-        // 上下边界线
-        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(0, top + 0.5);
-        ctx.lineTo(w, top + 0.5);
-        ctx.moveTo(0, bottom - 0.5);
-        ctx.lineTo(w, bottom - 0.5);
-        ctx.stroke();
-        // 左侧标签区与轨道内容的分隔
-        ctx.beginPath();
-        ctx.moveTo(pw - 0.5, top);
-        ctx.lineTo(pw - 0.5, bottom);
-        ctx.stroke();
 
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
@@ -7020,6 +7220,26 @@
         };
     };
 
+    // 歌词轨道行的按钮布局 (只有 删除 + 拖动柄, 没有 M/S/音量/全选)
+    PianoRoll.prototype._getLyricLaneButtonLayout = function(cellH) {
+        var pw = this._currentPanelWidth;
+        var btnH = Math.min(20, cellH * 0.7);
+        var btnW = 16;
+        var dragW = this._isDesktop ? 14 : Math.min(14, cellH * 0.55);
+        var rightMargin = this._isDesktop ? 4 : 2;
+        var gap = this._isDesktop ? 1 : 3;
+        var x = pw - rightMargin;
+        var dragX = x - dragW; x -= dragW + gap;
+        var deleteX = x - btnW; x -= btnW + gap;
+        return {
+            btnSize: btnH,
+            dragX: dragX, dragW: dragW,
+            deleteX: deleteX, deleteW: btnW,
+            nameStart: 6,
+            nameEnd: Math.max(42, x - 2)
+        };
+    };
+
     // 音轨信息栏按钮交互状态: 0=正常, 1=悬浮, 2=按下
     PianoRoll.prototype._trackBtnState = function(layer, type) {
         var p = this._trackPanelPressed;
@@ -7084,7 +7304,7 @@
             if (trackInfo.muted) {
                 ctx.fillStyle = 'rgba(255,255,255,0.02)';
             } else {
-                ctx.fillStyle = layer % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.01)';
+                ctx.fillStyle = (this._trackRowOrEdge(layer) % 2 === 0) ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.01)';
             }
             ctx.fillRect(0, y, pw, cellH);
 
@@ -7293,32 +7513,126 @@
             ctx.stroke();
         }
 
-        // 添加音轨按钮 (底部)
-        var addTrackY = this.trackCount * cellH - this.scrollY + cfg.timelineHeight;
+        // ---- 歌词轨道行 (额外轨道) ----
+        // 与 NBS 轨道行同高、同底色、同分隔线, 但没有 独奏/静音/音量, 只保留 名称 / 删除 / 拖动排序
+        var lyricCount = this._lyricLaneCount();
+        if (lyricCount > 0) {
+            var lyLayout = this._getLyricLaneButtonLayout(cellH);
+            var lyricWord = (window.WebNBSI18n && WebNBSI18n.translate) ? WebNBSI18n.translate('歌词') : '歌词';
+            for (var ll = 0; ll < lyricCount; ll++) {
+                var lyRow = this._lyricRow(ll);
+                var lyY = this._lyricRowScreenY(ll);   // 含轨道排序动画偏移
+                if (lyY + cellH < cfg.timelineHeight || lyY > h) continue;
+                var lyInfo = this.lyricLanes[ll] || {};
+
+                // 行背景: 与 NBS 轨道行完全相同的奇偶底色 (不额外加歌词色)
+                ctx.fillStyle = (lyRow % 2 === 0)
+                    ? 'rgba(255, 255, 255, 0.03)'
+                    : 'rgba(255, 255, 255, 0.01)';
+                ctx.fillRect(0, lyY, pw, cellH);
+
+                var lyTextY = lyY + cellH / 2;
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+                // 音符符号 + 轨道名 (中性配色, 与 NBS 轨道行一致)
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.38)';
+                ctx.font = 'bold 11px "Segoe UI", sans-serif';
+                ctx.fillText('\u266A', lyLayout.nameStart, lyTextY);
+                var lyName = lyInfo.name || (lyricWord + ' ' + (ll + 1));
+                var lyMaxW = Math.max(24, lyLayout.nameEnd - lyLayout.nameStart - 12);
+                ctx.font = '11px "Segoe UI", "Microsoft YaHei", sans-serif';
+                if (ctx.measureText(lyName).width > lyMaxW) {
+                    while (lyName.length > 1 && ctx.measureText(lyName + '..').width > lyMaxW) {
+                        lyName = lyName.slice(0, -1);
+                    }
+                    lyName += '..';
+                }
+                ctx.fillStyle = '#d0d0d0';
+                ctx.fillText(lyName, lyLayout.nameStart + 12, lyTextY);
+
+                // 删除按钮 (✕)
+                ctx.fillStyle = 'rgba(255,255,255,0.06)';
+                ctx.fillRect(lyLayout.deleteX, lyTextY - lyLayout.btnSize / 2, lyLayout.deleteW, lyLayout.btnSize);
+                btnOverlay(-(100 + ll), 'lyric-delete', lyLayout.deleteX, lyTextY - lyLayout.btnSize / 2, lyLayout.deleteW, lyLayout.btnSize);
+                ctx.strokeStyle = 'rgba(233,69,96,0.5)';
+                ctx.lineWidth = 0.5;
+                ctx.strokeRect(lyLayout.deleteX, lyTextY - lyLayout.btnSize / 2, lyLayout.deleteW, lyLayout.btnSize);
+                ctx.fillStyle = '#e94560';
+                ctx.font = 'bold ' + Math.max(8, Math.min(12, lyLayout.btnSize * 0.65)) + 'px "Segoe UI", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('✕', lyLayout.deleteX + lyLayout.deleteW / 2, lyTextY);
+
+                // 拖动手柄 (与 NBS 轨道行同一套 grip dots 图标)
+                ctx.fillStyle = 'rgba(255,255,255,0.08)';
+                ctx.fillRect(lyLayout.dragX, lyTextY - lyLayout.btnSize / 2, lyLayout.dragW, lyLayout.btnSize);
+                btnOverlay(-(100 + ll), 'lyric-drag', lyLayout.dragX, lyTextY - lyLayout.btnSize / 2, lyLayout.dragW, lyLayout.btnSize);
+                ctx.fillStyle = '#888';
+                var ldx = lyLayout.dragX + lyLayout.dragW / 2;
+                var ldy = lyLayout.btnSize * 0.3;
+                for (var ldr = 0; ldr < 3; ldr++) {
+                    var lgy = lyTextY + (ldr - 1) * ldy;
+                    ctx.beginPath();
+                    ctx.arc(ldx - 2.5, lgy, 1.1, 0, Math.PI * 2);
+                    ctx.arc(ldx + 2.5, lgy, 1.1, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // 行分隔线 (与 NBS 轨道行一致)
+                ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+                ctx.lineWidth = 0.5;
+                ctx.beginPath();
+                ctx.moveTo(0, lyY + cellH - 0.5);
+                ctx.lineTo(pw, lyY + cellH - 0.5);
+                ctx.stroke();
+            }
+        }
+
+        // 添加音轨 / 添加歌词轨道 按钮 (底部并排)
+        var addTrackY = this._rowCount() * cellH - this.scrollY + cfg.timelineHeight;
         var addBtnH = 24;
+        this._addTrackBtnRect = null;
+        this._addLyricLaneBtnRect = null;
         if (addTrackY + addBtnH < h && this.trackCount > 0) {
-            var addBtnW = Math.min(pw - 8, 100);
-            var addBtnX = (pw - addBtnW) / 2;
+            var addGap = 4;
+            var addBtnW = Math.max(56, Math.min((pw - 8 - addGap) / 2, 116));
+            var totalW = addBtnW * 2 + addGap;
+            var addBtnX = Math.max(4, (pw - totalW) / 2);
+            var btnY = addTrackY + 4;
+
+            // 添加音轨 (原有入口)
             ctx.fillStyle = 'rgba(78,205,196,0.15)';
-            ctx.fillRect(addBtnX, addTrackY + 4, addBtnW, addBtnH);
-            btnOverlay(-1, 'addtrack', addBtnX, addTrackY + 4, addBtnW, addBtnH);
+            ctx.fillRect(addBtnX, btnY, addBtnW, addBtnH);
+            btnOverlay(-1, 'addtrack', addBtnX, btnY, addBtnW, addBtnH);
             ctx.strokeStyle = 'rgba(78,205,196,0.4)';
             ctx.lineWidth = 1;
-            ctx.strokeRect(addBtnX, addTrackY + 4, addBtnW, addBtnH);
+            ctx.strokeRect(addBtnX, btnY, addBtnW, addBtnH);
             ctx.fillStyle = '#4ecdc4';
             ctx.font = '11px "Segoe UI", "Microsoft YaHei", sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText('+ 添加音轨', addBtnX + addBtnW/2, addTrackY + 4 + addBtnH/2);
-            this._addTrackBtnRect = { x: addBtnX, y: addTrackY + 4, w: addBtnW, h: addBtnH };
-        } else {
-            this._addTrackBtnRect = null;
+            var addTrackLabel = '+ ' + ((window.WebNBSI18n && WebNBSI18n.translate) ? WebNBSI18n.translate('添加音轨') : '添加音轨');
+            ctx.fillText(addTrackLabel, addBtnX + addBtnW / 2, btnY + addBtnH / 2);
+            this._addTrackBtnRect = { x: addBtnX, y: btnY, w: addBtnW, h: addBtnH };
+
+            // 添加歌词轨道 (额外轨道)
+            var lyBtnX = addBtnX + addBtnW + addGap;
+            ctx.fillStyle = 'rgba(233,69,96,0.14)';
+            ctx.fillRect(lyBtnX, btnY, addBtnW, addBtnH);
+            btnOverlay(-2, 'addlyriclane', lyBtnX, btnY, addBtnW, addBtnH);
+            ctx.strokeStyle = 'rgba(233,69,96,0.45)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(lyBtnX, btnY, addBtnW, addBtnH);
+            ctx.fillStyle = '#e94560';
+            var addLyricLabel = '+ ' + ((window.WebNBSI18n && WebNBSI18n.translate) ? WebNBSI18n.translate('添加歌词轨道') : '添加歌词轨道');
+            ctx.fillText(addLyricLabel, lyBtnX + addBtnW / 2, btnY + addBtnH / 2);
+            this._addLyricLaneBtnRect = { x: lyBtnX, y: btnY, w: addBtnW, h: addBtnH };
         }
 
-        // 拖拽排序视觉指示
+        // 拖拽排序视觉指示 (NBS 轨道与歌词轨道共用)
         if (this._isDraggingTrack && this._draggedTrackLayer >= 0) {
             // 高亮被拖拽的轨道 (跟随其动画偏移, 与移动中的行内容贴合)
-            var dragY = this._layerToScreen(this._draggedTrackLayer);
+            var dragY = this._rowScreenY(this._draggedTrackLayer);
             ctx.fillStyle = 'rgba(78,205,196,0.2)';
             ctx.fillRect(0, dragY, pw, cellH);
             ctx.strokeStyle = '#4ecdc4';
@@ -7328,7 +7642,7 @@
             // 落点提示: 目标行用不含动画偏移的基准坐标画虚线框 (标记轨道将落下的位置)
             if (this._dragTargetLayer >= 0 && this._dragTargetLayer !== this._draggedTrackLayer) {
                 var w = this.displayWidth;
-                var targetY = this._layerBaseY(this._dragTargetLayer);
+                var targetY = this._rowY(this._dragTargetLayer);
                 ctx.save();
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
                 ctx.fillRect(pw, targetY, w - pw, cellH);
@@ -7358,9 +7672,9 @@
         var tickEnd = Math.ceil((this.scrollX + w - pw) / cellW);
 
         // 计算有音轨的行范围 (垂直线只在此范围内绘制)
-        // 考虑 scrollY: 音轨区域在屏幕上的实际位置
+        // 考虑 scrollY: 音轨区域在屏幕上的实际位置 (含歌词轨道行)
         var trackAreaTop = cfg.timelineHeight;
-        var trackAreaBottom = cfg.timelineHeight + this.trackCount * cellH - this.scrollY;
+        var trackAreaBottom = cfg.timelineHeight + this._rowCount() * cellH - this.scrollY;
         if (trackAreaTop < cfg.timelineHeight) trackAreaTop = cfg.timelineHeight;
         if (trackAreaBottom > h) trackAreaBottom = h;
         if (trackAreaBottom < trackAreaTop) trackAreaBottom = trackAreaTop;
@@ -7370,8 +7684,9 @@
         var layerEnd = Math.ceil((this.scrollY + h - cfg.timelineHeight) / cellH);
 
         // 行交替背景: 一行暗一行亮 (在垂直线之前绘制作为底色)
-        for (var layerBg = Math.max(0, layerStart); layerBg <= Math.min(this.trackCount - 1, layerEnd); layerBg++) {
-            var yTop = this._layerToScreen(layerBg);
+        //   与 NBS 轨道共用同一套行底色; 拖拽排序时行跟随动画偏移 (含歌词轨道)
+        for (var layerBg = Math.max(0, layerStart); layerBg <= Math.min(this._rowCount() - 1, layerEnd); layerBg++) {
+            var yTop = this._rowScreenY(layerBg);
             if (yTop + cellH < cfg.timelineHeight || yTop > h) continue;
             // 偶数层 (0, 2, 4...) 较亮, 奇数层较暗; 应用网格透明度
             ctx.fillStyle = (layerBg % 2 === 0)
@@ -7382,7 +7697,7 @@
 
         // 垂直线 (tick 方向) - 仅在有音轨的行范围内绘制
         // 性能优化: 按 beat/non-beat 分组, 用 2 次 stroke 代替 N 次
-        if (this.trackCount > 0 && trackAreaBottom > trackAreaTop) {
+        if (this._rowCount() > 0 && trackAreaBottom > trackAreaTop) {
             ctx.lineWidth = 1;
             ctx.strokeStyle = 'rgba(255, 255, 255, ' + (0.06 * gridAlpha) + ')';
             ctx.beginPath();
@@ -7408,13 +7723,13 @@
             ctx.stroke();
         }
 
-        // 水平线 (layer 方向) - 按 octave/non-octave 分组
+        // 水平线 (layer 方向) - 按 octave/non-octave 分组 (含歌词行, 跟随排序动画偏移)
         ctx.lineWidth = 1;
         ctx.strokeStyle = 'rgba(255,255,255,' + (0.1 * gridAlpha) + ')';
         ctx.beginPath();
-        for (var layer = Math.max(0, layerStart); layer <= Math.min(this.trackCount - 1, layerEnd); layer++) {
+        for (var layer = Math.max(0, layerStart); layer <= Math.min(this._rowCount() - 1, layerEnd); layer++) {
             if (layer % 12 !== 0) continue;
-            var yo = this._layerToScreen(layer);
+            var yo = this._rowScreenY(layer);
             if (yo < cfg.timelineHeight || yo > h) continue;
             ctx.moveTo(pw, yo);
             ctx.lineTo(w, yo);
@@ -7424,9 +7739,9 @@
         ctx.lineWidth = 0.5;
         ctx.strokeStyle = 'rgba(255, 255, 255, ' + (0.03 * gridAlpha) + ')';
         ctx.beginPath();
-        for (var layer2 = Math.max(0, layerStart); layer2 <= Math.min(this.trackCount - 1, layerEnd); layer2++) {
+        for (var layer2 = Math.max(0, layerStart); layer2 <= Math.min(this._rowCount() - 1, layerEnd); layer2++) {
             if (layer2 % 12 === 0) continue;
-            var y2 = this._layerToScreen(layer2);
+            var y2 = this._rowScreenY(layer2);
             if (y2 < cfg.timelineHeight || y2 > h) continue;
             ctx.moveTo(pw, y2);
             ctx.lineTo(w, y2);

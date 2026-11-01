@@ -13,7 +13,6 @@
     function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
     function clearAutoSaveLocal() { return N.clearAutoSaveLocal.apply(this, arguments); }
     function deepCloneNotes() { return N.deepCloneNotes.apply(this, arguments); }
-    function exitLyricsEditMode() { return N.exitLyricsEditMode.apply(this, arguments); }
     function exitSegmentsEditMode() { return N.exitSegmentsEditMode.apply(this, arguments); }
     function getHistoryFiles() { return N.getHistoryFiles.apply(this, arguments); }
     function handleStop() { return N.handleStop.apply(this, arguments); }
@@ -57,10 +56,10 @@
         state.selectedPianoKey = 39;
         state.importedFileName = '';
         state.currentFileId = null;
-        // 新建文件: 清空歌词标注 (歌词为内存数据, 不随新文件保留)
+        // 新建文件: 清空歌词轨道与歌词块 (歌词为工程元数据, 不随新文件保留)
         state.lyrics = [];
+        state.lyricLanes = [];
         lyricRebuildIndex();
-        exitLyricsEditMode();
         syncLyricsToRoll();
         // 新建文件: 片段重置为整个工程一个片段
         exitSegmentsEditMode();
@@ -81,6 +80,7 @@
             tempo: 20,
             solo_layers: [],
             lyrics: [],
+            lyricLanes: [],
             notes: state.notes,
             layers: createDefaultLayers(8)
         };
@@ -171,6 +171,7 @@
             currentInstrument: state.currentInstrument,
             selectedPianoKey: state.selectedPianoKey,
             lyrics: JSON.parse(JSON.stringify(state.lyrics || [])),
+            lyricLanes: JSON.parse(JSON.stringify(state.lyricLanes || [])),
             segments: JSON.parse(JSON.stringify(state.segments || [])),
             segmentLanes: JSON.parse(JSON.stringify(state.segmentLanes || [])),
             segmentSeq: state._segmentIdSeq || 0,
@@ -198,6 +199,7 @@
         state.currentInstrument = s.currentInstrument;
         state.selectedPianoKey = s.selectedPianoKey;
         state.lyrics = JSON.parse(JSON.stringify(s.lyrics || []));
+        state.lyricLanes = JSON.parse(JSON.stringify(s.lyricLanes || []));
         state.segments = JSON.parse(JSON.stringify(s.segments || []));
         state.segmentLanes = JSON.parse(JSON.stringify(s.segmentLanes || []));
         state._segmentIdSeq = s.segmentSeq || 0;
@@ -466,6 +468,7 @@
                 layers: s.layers || [],
                 solo_layers: Array.isArray(meta.solo_layers) ? meta.solo_layers.slice() : [],
                 lyrics: JSON.parse(JSON.stringify(s.lyrics || [])),
+                lyricLanes: JSON.parse(JSON.stringify(s.lyricLanes || [])),
                 segments: JSON.parse(JSON.stringify(s.segments || []))
             },
             notes: s.notes || [],

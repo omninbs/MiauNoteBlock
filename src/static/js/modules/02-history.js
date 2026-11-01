@@ -15,7 +15,6 @@
     function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
     function showAppConfirm() { return N.showAppConfirm.apply(this, arguments); }
     function showAppPrompt() { return N.showAppPrompt.apply(this, arguments); }
-    function showExportDialog() { return N.showExportDialog.apply(this, arguments); }
     function syncLyricsToRoll() { return N.syncLyricsToRoll.apply(this, arguments); }
     function updateNoteCount() { return N.updateNoteCount.apply(this, arguments); }
     function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
@@ -26,7 +25,6 @@
     window.showAppAlert = showAppAlert;
     window.showAppConfirm = showAppConfirm;
     window.showAppPrompt = showAppPrompt;
-    window.showExportDialog = showExportDialog;
 
     // ============ 工具函数 ============
     function deepCloneNotes(notes) {
@@ -45,7 +43,8 @@
             layers: JSON.parse(JSON.stringify((state.song && state.song.layers) ? state.song.layers : [])),
             tempo: state.tempo,
             maxTick: state.maxTick,
-            // 歌词标注随快照一并记录, 使歌词编辑同样可撤销/重做
+            // 歌词轨道与歌词块随快照一并记录, 使歌词编辑同样可撤销/重做
+            lyricLanes: JSON.parse(JSON.stringify(state.lyricLanes || [])),
             lyrics: JSON.parse(JSON.stringify(state.lyrics || [])),
             // 片段数据随快照记录, 使片段编辑同样可撤销/重做
             segments: JSON.parse(JSON.stringify(state.segments || [])),
@@ -65,6 +64,10 @@
         state.tempo = snapshot.tempo;
         state.maxTick = snapshot.maxTick;
         state.lyrics = JSON.parse(JSON.stringify(snapshot.lyrics || []));
+        // 旧快照没有歌词轨道字段时按歌词 lane 自动补轨 (ensureLyricLanes)
+        state.lyricLanes = Array.isArray(snapshot.lyricLanes)
+            ? JSON.parse(JSON.stringify(snapshot.lyricLanes))
+            : [];
         state.segments = JSON.parse(JSON.stringify(snapshot.segments || []));
         state.segmentLanes = JSON.parse(JSON.stringify(snapshot.segmentLanes || []));
         // 旧快照没有这两个字段时保持当前映射, 避免把映射清空导致归位失配

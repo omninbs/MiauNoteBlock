@@ -143,7 +143,7 @@
         if (!state.pianoRoll) return;
         var selected = state.pianoRoll.getSelectedNotes();
         if (!selected || selected.length === 0) {
-            showSustainFillAlert('请先在钢琴卷帘上选择至少 1 个音符再使用清除延音。', '清除延音');
+            showSustainFillAlert(i18nText('请先框选至少 1 个音符，再使用清除延音。'), i18nText('清除延音'));
             return;
         }
 
@@ -158,14 +158,9 @@
             + '<button class="settings-close-btn" id="clear-sustain-close-x" title="关闭">&times;</button>'
             + '</div>'
             + '<div class="settings-body">'
-            + '<p style="margin:0 0 8px;font-size:13px;color:var(--text-secondary);line-height:1.5;">'
-            + '<b>功能说明：</b>按音轨处理选中的音符，把同一音轨里连续重复的音符截短，并在每组音符之间保留固定的空 tick 数。'
-            + '</p>'
-            + '<p style="margin:8px 0;font-size:12px;color:var(--text-tertiary, #888);line-height:1.5;">'
-            + '例子 (留空长度 = 2)：<br>'
-            + '11111O2222OOO333444666 &rarr; 1111OO2222OOO3OO4OO6OO<br>'
-            + '11OOO2223333 &rarr; 11OOO2OO33OO'
-            + '</p>'
+            + '<div class="dlg-hint" title="按音轨处理选中的音符：把同一音轨里连续重复的音符截短，并在每组音符之间保留固定空 tick。'
+            + '&#10;例子 (留空长度 = 2)：&#10;11111O2222OOO333444666 → 1111OO2222OOO3OO4OO6OO&#10;11OOO2223333 → 11OOO2OO33OO">'
+            + '<i class="fa-solid fa-circle-info"></i><span>截短同轨连续重复的音符，每组之间保留固定空位</span></div>'
             + '<div class="settings-row" style="flex-direction:column;align-items:stretch;margin-top:14px;">'
             + '<label class="settings-label">留空长度 (空 tick 数)：</label>'
             + '<input type="number" id="clear-sustain-gap" min="0" max="16" value="2" class="timbre-select" style="padding:8px 12px;margin-top:6px;">'
@@ -309,17 +304,13 @@
             + '<button class="settings-close-btn" id="arpeggio-tracks-close-x" title="关闭">&times;</button>'
             + '</div>'
             + '<div class="settings-body">'
-            + '<p style="margin:0 0 8px;font-size:13px;color:var(--text-secondary);line-height:1.5;">'
-            + '<b>功能说明：</b>将选中的音符按时间顺序依次分配到不同音轨，形成跨音轨的起伏规律。'
-            + '</p>'
-            + '<p style="margin:8px 0;font-size:12px;color:var(--text-tertiary, #888);line-height:1.5;">'
-            + '规律使用“|”分隔，数字代表相对于选择区域的第几条音轨。<br>'
-            + '例如 <b>1|2|1|3</b>：第1个音符放到第1轨，第2个放到第2轨，第3个回到第1轨，第4个放到第3轨，然后循环。'
-            + '</p>'
+            + '<div class="dlg-hint" title="按时间顺序把选中的音符依次分配到不同音轨；规律用「|」分隔，数字代表相对于选择区域的第几条音轨。'
+            + '&#10;例如 1|2|1|3：第 1 个音符放到第 1 轨，第 2 个放到第 2 轨，第 3 个回到第 1 轨，第 4 个放到第 3 轨，然后循环。">'
+            + '<i class="fa-solid fa-circle-info"></i><span>按规律把音符轮流分配到不同音轨</span></div>'
             + '<div class="settings-row" style="flex-direction:column;align-items:stretch;margin-top:14px;">'
             + '<label class="settings-label">规律：</label>'
             + '<input type="text" id="arpeggio-tracks-pattern" value="1|2|1|3" class="timbre-select" style="padding:8px 12px;margin-top:6px;">'
-            + '<span style="font-size:11px;color:var(--text-tertiary, #888);margin-top:4px;">用“|”分隔正整数，如 1|2|1|3</span>'
+            + '<span style="font-size:11px;color:var(--text-tertiary, #888);margin-top:4px;">用「|」分隔正整数，如 1|2|1|3</span>'
             + '</div>'
             + '</div>'
             + '<div class="popup-actions">'
@@ -505,7 +496,8 @@
         var body = box.querySelector('.settings-body');
         body.textContent = '';
         body.style.whiteSpace = 'normal';
-        body.innerHTML = '<p style="margin:0 0 8px;color:var(--text-secondary);font-size:12px;">' + t('目标为 Minecraft 原版音符盒标准音域 F#3-F#5。先应用偏移，再尝试音色替代，最后可选择强制归位。') + '</p>'
+        body.innerHTML = '<div class="dlg-hint" title="目标为 Minecraft 原版音符盒标准音域 F#3-F#5。处理顺序：先应用偏移，再尝试音色替代，最后可选择强制归位。">'
+            + '<i class="fa-solid fa-circle-info"></i><span>' + t('把音符收进 Minecraft 标准音域 F#3–F#5') + '</span></div>'
             + '<label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' + t('偏移转换') + ' <select id="range-mode" class="settings-control"><option value="0">' + t('不启用') + '</option><option value="1">' + t('单独音符归一法') + '</option><option value="2">' + t('整体八度偏移法') + '</option><option value="3">' + t('整体音调偏移法') + '</option></select></label>'
             + '<label id="range-key-bias-row" style="display:none;align-items:center;gap:8px;margin-bottom:8px;">' + t('同分偏移') + ' <select id="range-key-bias" class="settings-control"><option value="major">' + t('优先大调') + '</option><option value="minor">' + t('优先小调') + '</option></select></label>'
             + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">'

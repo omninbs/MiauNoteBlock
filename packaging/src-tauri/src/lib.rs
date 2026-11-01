@@ -42,10 +42,79 @@ fn open_external(url: String) -> Result<(), String> {
     Ok(())
 }
 
+// ---------------- 桌面端文件对话框 / 读写 ----------------
+// 全部为自定义命令，不引入 tauri-plugin-dialog / tauri-plugin-fs，
+// 因此无需新增 capabilities ACL 配置（避免插件版本与 Tauri 不匹配）。
+
+#[tauri::command]
+async fn pick_file(extensions: Vec<String>) -> Option<String> {
+    let filters: Vec<&str> = extensions.iter().map(|s| s.as_str()).collect();
+    let mut dialog = rfd::AsyncFileDialog::new();
+    if !filters.is_empty() {
+        dialog = dialog.add_filter("支持的文件", filters.as_slice());
+    }
+    dialog
+        .pick_file()
+        .await
+        .map(|f| f.path().to_string_lossy().to_string())
+}
+
+#[tauri::command]
+async fn pick_save_path(default_name: String, extensions: Vec<String>) -> Option<String> {
+    let filters: Vec<&str> = extensions.iter().map(|s| s.as_str()).collect();
+    let mut dialog = rfd::AsyncFileDialog::new().set_file_name(&default_name);
+    if !filters.is_empty() {
+        dialog = dialog.add_filter("支持的文件", filters.as_slice());
+    }
+    dialog
+        .save_file()
+        .await
+        .map(|f| f.path().to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn read_file_bytes(path: String) -> Result<Vec<u8>, String> {
+    std::fs::read(&path).map_err(|e| format!("读取失败: {e}"))
+}
+
+// 大文件（音频导出可达数十 MB）若整块走 JSON IPC 会长时间阻塞，
+// 因此前端按块传 base64，这里逐块解码追加写入。
+#[tauri::command]
+fn write_file_begin(path: String) -> Result<(), String> {
+    std::fs::write(&path, b"").map_err(|e| format!("创建文件失败: {e}"))
+}
+
+#[tauri::command]
+fn write_file_chunk(path: String, base64: String) -> Result<(), String> {
+    use base64::Engine;
+    use std::io::Write;
+    let data = base64::engine::general_purpose::STANDARD
+        .decode(base64.as_bytes())
+        .map_err(|e| format!("数据解码失败: {e}"))?;
+    let mut f = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&path)
+        .map_err(|e| format!("打开文件失败: {e}"))?;
+    f.write_all(&data).map_err(|e| format!("写入失败: {e}"))
+}
+
+#[tauri::command]
+fn set_app_title(window: tauri::WebviewWindow, title: String) -> Result<(), String> {
+    window.set_title(&title).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![open_external])
+        .invoke_handler(tauri::generate_handler![
+            open_external,
+            pick_file,
+            pick_save_path,
+            read_file_bytes,
+            write_file_begin,
+            write_file_chunk,
+            set_app_title
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

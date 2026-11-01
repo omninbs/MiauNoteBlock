@@ -32,17 +32,28 @@
     function segmentSorted() { return N.segmentSorted.apply(this, arguments); }
     function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
     function showAppPrompt() { return N.showAppPrompt.apply(this, arguments); }
-    function showExportDialog() { return N.showExportDialog.apply(this, arguments); }
+    function showExportMetaDialog() { return N.showExportMetaDialog.apply(this, arguments); }
     function showTaskProgress() { return N.showTaskProgress.apply(this, arguments); }
+    function showToast() { return N.showToast.apply(this, arguments); }
     function tabStash() { return N.tabStash.apply(this, arguments); }
     function updateSongInfo() { return N.updateSongInfo.apply(this, arguments); }
     function updateTaskProgress() { return N.updateTaskProgress.apply(this, arguments); }
 
 
-    function exportNBS() {
+    // 文件菜单「导出」子菜单入口: NBS/MNB 先弹元数据弹窗, 确认后再导出
+    function exportNBS(format) {
+        // format: 'nbs' (默认) | 'mnb' (工程压缩包, 后缀 .mnb) | 'lyrics' (歌词元数据 JSON)
+        format = (format === 'mnb' || format === 'lyrics') ? format : 'nbs';
         // 导出锁: 防止重复导出
         if (N.shared._isExporting) return;
         if (!state.song || !state.notes) { showAppAlert('没有可导出的歌曲', {title: '导出', icon: 'fa-solid fa-triangle-exclamation'}); return; }
+
+        var exportName = safeFileName(state.importedFileName || state.song.name || state.song.song_name || 'Untitled')
+            .replace(/\.(nbs|mnb|mid|midi)$/i, '');
+        if (format === 'lyrics') {
+            exportLyricsMetaFile(exportName);
+            return;
+        }
 
         // 收集作品使用到的自定义音色 (instrument >= 20)
         var usedNos = [];
@@ -53,40 +64,40 @@
         }
         usedNos.sort(function(a, b) { return a - b; });
 
-        // 弹窗获取文件名 / 作者 / 介绍
-        // 使用自定义音色时, 弹窗内会警告并提供「作品包(zip)」选项统一下发处理
-        var defaultName = state.importedFileName || (state.song.name || state.song.song_name || 'Untitled');
-        var defaultAuthor = state.song.author || state.song.original_author || '';
-        var defaultDesc = state.song.description || '';
-        var dialogOpts = {};
-        if (usedNos.length) dialogOpts.customInstruments = usedNos;
-        if (state.lyrics && state.lyrics.length) dialogOpts.hasLyrics = true;
-        if (state.segments && state.segments.length
-                && (state.segments.length > 1
-                    || (state.segmentLanes && state.segmentLanes.length > 1))) {
-            dialogOpts.segmentCount = state.segments.length;
-        }
-        // 铜号角 (16~19) 与自定义音色 (>=20) 只有 V6 能完整保存 → 弹窗内锁定版本
-        var hasCopper = false;
-        for (var pi = 0; pi < state.notes.length; pi++) {
-            var insNo = state.notes[pi].instrument;
-            if (insNo >= 16 && insNo <= 19) { hasCopper = true; break; }
-        }
-        if (hasCopper || usedNos.length) dialogOpts.lockV6 = true;
-        showExportDialog(defaultName, defaultAuthor, defaultDesc, dialogOpts).then(function(input) {
-            if (!input) return; // 用户取消
-            // 应用本次选择导出的 NBS 版本 (设置项已移入弹窗)
-            if (input.nbsVersion) {
-                window.NBS_EXPORT_VERSION = input.nbsVersion;
-                try { localStorage.setItem('nbs_export_version', String(input.nbsVersion)); } catch (e) {}
-            }
-            // 勾选「歌词导出」/「保留片段」时也走 zip 打包 (歌曲 + lyrics.json / segments.json [+ 音色音频])
-            if (input.packageZip || input.lyricsZip || input.segmentsZip) {
+        showExportMetaDialog({
+            name: exportName,
+            author: state.song.author || state.song.original_author || '',
+            description: state.song.description || ''
+        }, format).then(function(meta) {
+            if (!meta) return;
+            var input = {
+                name: safeFileName(meta.name).replace(/\.(nbs|mnb|zip)$/i, '') || exportName,
+                author: meta.author || '',
+                description: meta.description || ''
+            };
+            if (format === 'mnb') {
+                // MNB 工程 = 压缩包易名: 歌曲 + 歌词 + 片段 + 自定义音色音频 全部打包
+                input.mode = 'mnb';
+                input.packageZip = true;
+                input.lyricsZip = true;
+                input.segmentsZip = true;
                 _performZipExport(input, usedNos);
-            } else {
-                _performExport(input);
+                return;
             }
+            _performExport(input);
         });
+    }
+
+    // 导出歌词元数据 (lyrics.json): 歌词轨道 + 歌词块, 可被「导入歌词」重新载入
+    function exportLyricsMetaFile(name) {
+        if (!state.lyrics || !state.lyrics.length) {
+            showAppAlert(i18nText('当前没有歌词可导出'), { title: i18nText('导出歌词元数据'), icon: 'fa-solid fa-circle-info' });
+            return;
+        }
+        var data = buildLyricsJson();
+        var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        dlBlob(blob, safeFileName(name || 'lyrics') + '.json');
+        showToast(i18nText('已导出歌词元数据') + ': ' + state.lyrics.length, { icon: 'fa-solid fa-microphone-lines' });
     }
 
     // ============ 批量导出 (多标签页) ============
@@ -155,7 +166,9 @@
         return n || 'Untitled';
     }
 
-    // 基于标签页快照生成 segments.json (v2: 轨道 + 全局轨道映射)
+    // 基于标签页快照生成 segments.json (v2: 轨道 + 真实全局层映射)
+    // lanes[].layers 必须写「真实全局 NBS 层号」: 包内 song.nbs 音符 layer 即真实层号,
+    // 导入时按层号精确切回片段。(旧版连续重编号会导致导入后所有片段为空)
     function buildSegmentsJsonFromSnapshot(snap) {
         var segs = (snap.segments || []).slice().sort(function(a, b) {
             if (a.start !== b.start) return a.start - b.start;
@@ -163,7 +176,6 @@
         });
         var lanesSrc = snap.segmentLanes || [];
         var lanes = [];
-        var base = 0;
         for (var li = 0; li < lanesSrc.length; li++) {
             var ln = lanesSrc[li] || {};
             var used = {};
@@ -172,16 +184,21 @@
                 var sn = segs[si].notes || [];
                 for (var ni = 0; ni < sn.length; ni++) used[sn[ni].layer || 0] = true;
             }
-            var rels = Object.keys(used).map(Number).sort(function(a, b) { return a - b; });
-            var layers = [];
-            for (var r = 0; r < rels.length; r++) layers.push(base + r);
+            // 优先用快照 lane 上的真实层映射; 否则从片段音符收集
+            var layers;
+            if (Array.isArray(ln.layerKeys) && ln.layerKeys.length) {
+                layers = ln.layerKeys.slice().sort(function(a, b) { return a - b; });
+            } else if (ln.layerKey !== undefined && ln.layerKey !== null) {
+                layers = [ln.layerKey];
+            } else {
+                layers = Object.keys(used).map(Number).sort(function(a, b) { return a - b; });
+            }
             lanes.push({
                 muted: !!ln.muted, solo: !!ln.solo,
                 volume: isFinite(ln.volume) ? ln.volume : 100,
                 height: isFinite(ln.height) ? ln.height : SEG_DEFAULT_LANE_H,
                 layers: layers
             });
-            base += rels.length;
         }
         return {
             type: 'noteblock-web-segments',
@@ -584,6 +601,7 @@
                     URL.revokeObjectURL(result.downloadUrl);
                 }, 5000);
                 clearAutoSaveLocal();
+                showToast(i18nText('已导出') + ': ' + filename, { icon: 'fa-solid fa-file-export' });
             }).catch(function(err) {
                 hideTaskProgress();
                 showAppAlert('导出失败: ' + formatError(err, '无法导出文件'), {title: '导出失败', icon: 'fa-solid fa-triangle-exclamation'});
@@ -605,7 +623,7 @@
             return;
         }
         N.shared._isExporting = true;
-        showTaskProgress(input.name + '.zip', '打包作品包…');
+        showTaskProgress(input.name + (input.mode === 'mnb' ? '.mnb' : '.zip'), '打包工程…');
         try {
             var song = buildExportSongData(input);
             NBSClient.saveNBS(song).then(function(nbsBlob) {
@@ -661,19 +679,10 @@
                     });
                 }).then(function(blob) {
                     hideTaskProgress();
-                    dlBlob(blob, input.name + '.zip');
-                    var segMsg = hasSegments ? '\n已同时打包片段分割信息 (segments.json)。' : '';
-                    if (metaInstruments.length) {
-                        showAppAlert('作品包已导出，包含 ' + metaInstruments.length + ' 个自定义音色音频。'
-                            + (hasLyrics ? '\n已同时打包歌词数据 (lyrics.json)。' : '')
-                            + segMsg
-                            + '\n把 zip 分享给他人，导入后即可完整还原音色与歌曲。', { title: '导出完成', icon: 'fa-solid fa-circle-check' });
-                    } else {
-                        showAppAlert('作品包已导出，包含歌曲'
-                            + (hasLyrics ? '与歌词数据 (lyrics.json)' : '')
-                            + (hasSegments ? '与片段分割信息 (segments.json)' : '')
-                            + '。', { title: '导出完成', icon: 'fa-solid fa-circle-check' });
-                    }
+                    // MNB 工程沿用同一压缩包内容, 仅换后缀 (.zip → .mnb)
+                    var outExt = (input.mode === 'mnb') ? '.mnb' : '.zip';
+                    dlBlob(blob, input.name + outExt);
+                    showToast(i18nText('已导出') + ': ' + input.name + outExt, { icon: 'fa-solid fa-box-archive' });
                 }).catch(function(err) {
                     hideTaskProgress();
                     showAppAlert('作品包导出失败: ' + (err && err.message ? err.message : '未知错误'), {title: '导出失败', icon: 'fa-solid fa-triangle-exclamation'});
@@ -926,7 +935,7 @@
                             // 歌词还原: 作品包内含 lyrics.json 时自动载入
                             // 注意必须在 applyParsedSong 之后 (载入歌曲会清空歌词)
                             return importLyricsFromZip(ctx.zipFile, ctx.meta).then(function(lyrCount) {
-                                return importSegmentsFromZip(ctx.zipFile, ctx.meta).then(function(segCount) {
+                                return importSegmentsFromZip(ctx.zipFile, ctx.meta, song.notes).then(function(segCount) {
                                     var msg = changed
                                         ? '作品包导入完成，自定义音色已装载并重映射。'
                                         : '作品包导入完成，歌曲已载入。';

@@ -146,8 +146,8 @@
                     + '<h4>' + (kind === 'lighten' ? i18nText('选择减轻处理的轨道') : i18nText('选择不被处理的轨道')) + '</h4>'
                     + '</div>'
                     + '<div class="settings-body">'
-                    + '<p style="margin:0;font-size:12px;color:var(--text-secondary);">'
-                    + i18nText('在画布中点击音轨行进行选择/取消，可多选。') + '</p>'
+                    + '<div class="dlg-hint"><i class="fa-solid fa-circle-info"></i><span>'
+                    + i18nText('在画布中点击音轨行进行选择/取消，可多选。') + '</span></div>'
                     + '<div class="cs-pick-list" style="font-size:12px;color:var(--text-primary);line-height:1.6;word-break:break-all;"></div>'
                     + '</div>'
                     + '<div class="popup-actions">'
@@ -212,7 +212,10 @@
                 segCompress.title = i18nText('在去重的基础上按「压缩等级」进一步删除存在感低的音符，压缩率更高。');
                 modeSeg.appendChild(segDedupe); modeSeg.appendChild(segCompress);
                 var modeHint = document.createElement('div');
-                modeHint.style.cssText = 'margin-top:6px;font-size:12px;line-height:1.45;color:var(--text-secondary,#a0a0a0);';
+                modeHint.className = 'dlg-hint';
+                modeHint.innerHTML = '<i class="fa-solid fa-circle-info"></i><span></span>';
+                modeHint._textEl = modeHint.querySelector('span');
+                modeHint.title = i18nText('去重只删除完全重复的音符；压缩按等级删除存在感低的音符。');
                 modeWrap.appendChild(modeLabel); modeWrap.appendChild(modeSeg); modeWrap.appendChild(modeHint);
                 body.appendChild(modeWrap);
                 // 以下控件仅「使用压缩算法」模式下有意义, 去重模式下整块隐藏
@@ -313,8 +316,10 @@
                 mSel.value = cfg.model;
                 mSel.title = hDesc + '\n' + pDesc + '\n' + prDesc + '\n' + modelHint;
                 var mHint = document.createElement('div');
-                mHint.style.cssText = 'margin-top:4px;font-size:12px;line-height:1.45;color:var(--text-secondary,#a0a0a0);';
-                mHint.textContent = modelHint;
+                mHint.className = 'dlg-hint';
+                mHint.title = modelHint + '\n' + hDesc + '\n' + pDesc + '\n' + prDesc;
+                mHint.innerHTML = '<i class="fa-solid fa-circle-info"></i><span>'
+                    + i18nText('按物理可闻性判断；切换模型只影响删除策略。') + '</span>';
                 mWrap.appendChild(mLabel);
                 mWrap.appendChild(mSel);
                 mWrap.appendChild(mHint);
@@ -332,8 +337,10 @@
                 pCb.title = pTitle;
                 pWrap.appendChild(pCb); pWrap.appendChild(pSpan);
                 var pHint = document.createElement('div');
-                pHint.style.cssText = 'margin-bottom:16px;font-size:12px;line-height:1.45;color:var(--text-secondary,#a0a0a0);';
-                pHint.textContent = i18nText('该开关针对每个引擎分别保存，当前仅作用于所选引擎。');
+                pHint.className = 'dlg-hint';
+                pHint.title = i18nText('该开关针对每个引擎分别保存，当前仅作用于所选引擎。');
+                pHint.innerHTML = '<i class="fa-solid fa-circle-info"></i><span>'
+                    + i18nText('每个引擎独立保存。') + '</span>';
                 function syncPseudo() {
                     pCb.checked = cfg.pseudoSustain[cfg.model] === true;
                 }
@@ -394,13 +401,14 @@
                 // ---- 压缩方式切换 (去重模式隐藏全部有损控件, 避免无关选项造成误解) ----
                 var modeHintText = {
                     dedupe: i18nText('只删除完全重复的音符，几乎不影响质量。'),
-                    compress: i18nText('按所选「压缩等级」删除存在感低的音符，压缩率更高，质量损失随等级增加。')
+                    compress: i18nText('按等级删除存在感低的音符；等级越高，删除越多。')
                 };
                 function syncMode() {
                     var isDedupe = cfg.mode === 'dedupe';
                     segDedupe.classList.toggle('active', isDedupe);
                     segCompress.classList.toggle('active', !isDedupe);
-                    modeHint.textContent = modeHintText[cfg.mode] || '';
+                    var mt = modeHintText[cfg.mode] || '';
+                    if (modeHint._textEl) modeHint._textEl.textContent = mt; else modeHint.textContent = mt;
                     lossyWrap.style.display = isDedupe ? 'none' : 'block';
                     estCfg.priorityQ = isDedupe ? COMPRESS_DEDUPE_Q : COMPRESS_LEVELS[cfg.qualityIdx].q;
                     // 去重模式仍可显示预估 (q=0.99 → 即去重数量), 故一律刷新
@@ -652,7 +660,7 @@
         var selected = state.pianoRoll.getSelectedNotes();
         if (!selected || selected.length < 2) {
             // 没有选够多音符, 提示
-            showSustainFillAlert('请先在钢琴卷帘上选择至少 2 个音符再使用延音填充。\n\n使用方法:\n1. 框选一段范围的音符\n2. 点击"延音填充"\n3. 选择间隔参数');
+            showSustainFillAlert(i18nText('请先框选至少 2 个音符，再使用延音填充。'));
             return;
         }
         if (selected.length === 1) {
@@ -672,16 +680,9 @@
             + '<button class="settings-close-btn" id="sustain-fill-close-x" title="关闭">&times;</button>'
             + '</div>'
             + '<div class="settings-body">'
-            + '<p style="margin:0 0 8px;font-size:13px;color:var(--text-secondary);line-height:1.5;">'
-            + '<b>功能说明：</b>按行处理选中的多个音符，在每行中从选择区间的开始点往后填充。'
-            + '填充的音符使用<b>上一个</b>原音符的音调和音色；最后一个音符会延长 4 个 tick 位置。'
-            + '</p>'
-            + '<p style="margin:8px 0;font-size:12px;color:var(--text-tertiary, #888);line-height:1.5;">'
-            + '例子 (1XXX2X3XXXXX1XX6):<br>'
-            + '• 间隔 0：<b>1111223333331116XXXX</b> (无空位)<br>'
-            + '• 间隔 1：<b>111X2X33333X11X666</b> (1 个空位)<br>'
-            + '• 间隔 2：<b>11XX2X3333XX1XX66</b> (2 个空位)'
-            + '</p>'
+            + '<div class="dlg-hint" title="按行处理选中的多个音符，在每行中从选择区间开始点往后填充；填充的音符使用上一个原音符的音调与音色，最后一个音符延长 4 个 tick。'
+            + '&#10;例子 (1XXX2X3XXXXX1XX6)：&#10;间隔 0 → 1111223333331116XXXX&#10;间隔 1 → 111X2X33333X11X666&#10;间隔 2 → 11XX2X3333XX1XX66">'
+            + '<i class="fa-solid fa-circle-info"></i><span>按行补齐选中区间，用上一个音符的音调与音色填充空位</span></div>'
             + '<div class="settings-row" style="flex-direction:column;align-items:stretch;margin-top:14px;">'
             + '<label class="settings-label">间隔 (空位数量)：</label>'
             + '<input type="number" id="sustain-fill-interval" min="0" max="16" value="0" class="timbre-select" style="padding:8px 12px;margin-top:6px;">'

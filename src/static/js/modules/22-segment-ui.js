@@ -9,7 +9,6 @@
     var state = N.state;
     function $() { return N.$.apply(this, arguments); }
     var LYRIC_DEFAULT_DURATION = N.LYRIC_DEFAULT_DURATION;
-    var LYRIC_LANE_COUNT = N.LYRIC_LANE_COUNT;
     function enterSegmentsEditMode() { return N.enterSegmentsEditMode.apply(this, arguments); }
     function exitSegmentsEditMode() { return N.exitSegmentsEditMode.apply(this, arguments); }
     function getLyricsAt() { return N.getLyricsAt.apply(this, arguments); }
@@ -316,8 +315,29 @@
     }
 
     function resetStreamingLyrics() {
-        state._streamingLyricLanes = ['', '', ''];
-        state._streamingLyricEndTick = [null, null, null];
+        var laneCount = lyricLaneCount();
+        var lanes = [];
+        var ends = [];
+        for (var i = 0; i < laneCount; i++) { lanes.push(''); ends.push(null); }
+        state._streamingLyricLanes = lanes;
+        state._streamingLyricEndTick = ends;
+    }
+
+    // 歌词轨道数量 (动态: 由「额外轨道」决定)
+    function lyricLaneCount() {
+        if (typeof N.lyricLaneCount === 'function') return N.lyricLaneCount();
+        return (state.lyricLanes && state.lyricLanes.length) ? state.lyricLanes.length : 0;
+    }
+
+    // 流式歌词累积数组按当前轨道数补齐/裁剪
+    function ensureStreamingLyricArrays() {
+        var n = lyricLaneCount();
+        if (!Array.isArray(state._streamingLyricLanes)) state._streamingLyricLanes = [];
+        if (!Array.isArray(state._streamingLyricEndTick)) state._streamingLyricEndTick = [];
+        while (state._streamingLyricLanes.length < n) state._streamingLyricLanes.push('');
+        while (state._streamingLyricEndTick.length < n) state._streamingLyricEndTick.push(null);
+        if (state._streamingLyricLanes.length > n) state._streamingLyricLanes.length = n;
+        if (state._streamingLyricEndTick.length > n) state._streamingLyricEndTick.length = n;
     }
 
     // 拼接流式歌词: 中文等非 ASCII 字符直接相连, 拉丁字母/数字之间补空格, 避免单词粘连
@@ -341,19 +361,23 @@
     }
 
     function processStreamingLyricsAtTick(tick) {
+        ensureStreamingLyricArrays();
+        var laneCount = lyricLaneCount();
+        if (laneCount <= 0) { hideLyricsOverlay(); return; }
         var incoming = getLyricsAt(tick);
-        var incomingLanes = [false, false, false];
+        var incomingLanes = [];
+        for (var z = 0; z < laneCount; z++) incomingLanes.push(false);
         for (var i = 0; i < incoming.length; i++) {
             var clip = incoming[i];
             var text = String(clip && clip.text ? clip.text : '');
             if (!text) continue;
-            var lane = Math.max(0, Math.min(LYRIC_LANE_COUNT - 1, parseInt(clip.lane, 10) || 0));
+            var lane = Math.max(0, Math.min(laneCount - 1, parseInt(clip.lane, 10) || 0));
             incomingLanes[lane] = true;
             var prevEnd = state._streamingLyricEndTick[lane];
             // lineStart: 快速添加 (LRC / 逐字对齐) 标记的句首, 强制从新的一句开始累积
             if (clip.lineStart) {
                 state._streamingLyricLanes[lane] = '';
-            } else if (prevEnd !== null && clip.tick !== prevEnd) {
+            } else if (prevEnd !== null && prevEnd !== undefined && clip.tick !== prevEnd) {
                 state._streamingLyricLanes[lane] = '';
             }
             var merged = joinStreamingText(state._streamingLyricLanes[lane], text);
@@ -361,15 +385,15 @@
             state._streamingLyricLanes[lane] = merged;
             state._streamingLyricEndTick[lane] = streamingLyricEndTick(clip);
         }
-        for (var li = 0; li < LYRIC_LANE_COUNT; li++) {
+        for (var li = 0; li < laneCount; li++) {
             var endTick = state._streamingLyricEndTick[li];
-            if (!incomingLanes[li] && endTick !== null && tick >= endTick) {
+            if (!incomingLanes[li] && endTick !== null && endTick !== undefined && tick >= endTick) {
                 state._streamingLyricLanes[li] = '';
                 state._streamingLyricEndTick[li] = null;
             }
         }
         var lines = [];
-        for (var lineIndex = 0; lineIndex < LYRIC_LANE_COUNT; lineIndex++) {
+        for (var lineIndex = 0; lineIndex < laneCount; lineIndex++) {
             if (state._streamingLyricLanes[lineIndex]) lines.push(state._streamingLyricLanes[lineIndex]);
         }
         if (lines.length) showLyricsOverlay(lines);
@@ -428,8 +452,10 @@
         }
         return {
             type: 'noteblock-web-lyrics',
-            formatVersion: 2,
-            laneCount: LYRIC_LANE_COUNT,
+            formatVersion: 3,
+            laneCount: lyricLaneCount(),
+            // 歌词轨道 (额外轨道) 定义: 数量/名称/顺序都随 JSON 一起保存
+            lyricLanes: JSON.parse(JSON.stringify(state.lyricLanes || [])),
             tempo: state.tempo,
             lyrics: arr
         };

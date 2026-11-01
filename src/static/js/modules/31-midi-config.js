@@ -17,6 +17,7 @@
     function collectMidiSettings() { return N.collectMidiSettings.apply(this, arguments); }
     function createNewFile() { return N.createNewFile.apply(this, arguments); }
     function emptyTimbreFittingSaved() { return N.emptyTimbreFittingSaved.apply(this, arguments); }
+    function ensureLyricLanes() { return N.ensureLyricLanes.apply(this, arguments); }
     function escapeHTML() { return N.escapeHTML.apply(this, arguments); }
     function exportNBS() { return N.exportNBS.apply(this, arguments); }
     function formatError() { return N.formatError.apply(this, arguments); }
@@ -28,7 +29,9 @@
     function i18nText() { return N.i18nText.apply(this, arguments); }
     function loadFileFromLocalStorage() { return N.loadFileFromLocalStorage.apply(this, arguments); }
     function loadFittingLevel() { return N.loadFittingLevel.apply(this, arguments); }
+    function lyricRebuildIndex() { return N.lyricRebuildIndex.apply(this, arguments); }
     function markDirty() { return N.markDirty.apply(this, arguments); }
+    function resetStreamingLyrics() { return N.resetStreamingLyrics.apply(this, arguments); }
     function saveFileToLocalStorage() { return N.saveFileToLocalStorage.apply(this, arguments); }
     function segmentBuildChannelSplit() { return N.segmentBuildChannelSplit.apply(this, arguments); }
     function segmentEnsure() { return N.segmentEnsure.apply(this, arguments); }
@@ -37,8 +40,10 @@
     function showBatchExportDialog() { return N.showBatchExportDialog.apply(this, arguments); }
     function showHistoryDialog() { return N.showHistoryDialog.apply(this, arguments); }
     function showTaskProgress() { return N.showTaskProgress.apply(this, arguments); }
+    function syncLyricsToRoll() { return N.syncLyricsToRoll.apply(this, arguments); }
     function syncNbsLayerGroups() { return N.syncNbsLayerGroups.apply(this, arguments); }
     function tabSaveAll() { return N.tabSaveAll.apply(this, arguments); }
+    function tabStash() { return N.tabStash.apply(this, arguments); }
     function tabSyncMeta() { return N.tabSyncMeta.apply(this, arguments); }
     function toggleSegmentsEditMode() { return N.toggleSegmentsEditMode.apply(this, arguments); }
     function updateInstrumentSelectorUI() { return N.updateInstrumentSelectorUI.apply(this, arguments); }
@@ -196,6 +201,13 @@
             hideTaskProgress();
             state.song = data.song;
             state.notes = data.song.notes || [];
+            // MIDI 不含歌词: 清空歌词轨道与歌词块, 否则会沿用上一首歌的歌词
+            state.lyrics = [];
+            state.lyricLanes = [];
+            resetStreamingLyrics();
+            lyricRebuildIndex();
+            ensureLyricLanes();
+            syncLyricsToRoll();
             // 恢复音轨状态（用于 NBS 播放时过滤静音/排除的音轨）
             N.shared._midiTrackStates = savedTrackStates;
             state._channelTracks = savedChannelTracks;
@@ -249,6 +261,8 @@
             $('file-input').value = '';
             state._midiFile = null;
             state._midiInfo = null;
+            // 把新载入的歌曲写入当前标签页快照, 避免切回标签页时还原成上一首(含旧歌词)
+            tabStash();
         }).catch(function(err) {
             hideTaskProgress();
             // 弹窗已关闭, showMidiNotice 会写入隐藏的弹窗导致用户看不到错误
@@ -367,6 +381,17 @@
         itemOpen.addEventListener('click', function() { hideFileMenu(); $('file-input').click(); });
         menu.appendChild(itemOpen);
 
+        // 导入 MIDI (独立入口: 打开文件只接受 .nbs/.mnb)
+        var itemMidi = document.createElement('div');
+        itemMidi.className = 'file-menu-item';
+        itemMidi.innerHTML = '<i class="fa-solid fa-file-audio"></i><span>' + t('导入 MIDI') + '</span>';
+        itemMidi.addEventListener('click', function() {
+            hideFileMenu();
+            var mi = $('midi-file-input');
+            if (mi) mi.click();
+        });
+        menu.appendChild(itemMidi);
+
         // 新建
         var item0 = document.createElement('div');
         item0.className = 'file-menu-item';
@@ -407,11 +432,16 @@
         itemSegMode.addEventListener('click', function() { hideFileMenu(); toggleSegmentsEditMode(); });
         menu.appendChild(itemSegMode);
 
-        // 导出 NBS
+        // 导出 (子菜单: NBS / MNB 工程 / 歌词元数据, 展开在主菜单右侧, 与历史文件子菜单同一套样式)
         var item2 = document.createElement('div');
-        item2.className = 'file-menu-item';
-        item2.innerHTML = '<i class="fa-solid fa-file-export"></i><span>' + t('导出 NBS') + '</span>';
-        item2.addEventListener('click', function() { hideFileMenu(); exportNBS(); });
+        item2.className = 'file-menu-item file-menu-has-sub';
+        item2.id = 'file-menu-export';
+        item2.innerHTML = '<i class="fa-solid fa-file-export"></i><span>' + t('导出') + '</span><i class="fa-solid fa-chevron-right file-menu-arrow"></i>';
+        item2.addEventListener('mouseenter', function() { showExportSubmenu(item2); });
+        item2.addEventListener('click', function(e) {
+            e.stopPropagation();
+            showExportSubmenu(item2);
+        });
         menu.appendChild(item2);
 
         // 导入歌词
@@ -460,6 +490,47 @@
         var menu = document.getElementById('file-menu');
         if (menu) menu.remove();
         hideHistorySubmenu();
+        hideExportSubmenu();
+    }
+
+    // ---- 导出子菜单: 在主菜单右侧展开 (与历史文件子菜单同一套浮层样式) ----
+    function hideExportSubmenu() {
+        var sub = document.getElementById('export-submenu');
+        if (sub && sub.parentNode) sub.parentNode.removeChild(sub);
+    }
+
+    function showExportSubmenu(parentItem) {
+        hideHistorySubmenu();
+        hideExportSubmenu();
+        var t = i18nText;
+        var sub = document.createElement('div');
+        sub.id = 'export-submenu';
+        sub.className = 'file-menu';
+        sub.style.cssText = 'position:fixed;z-index:10001;background:rgba(22,33,62,0.98);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:4px 0;min-width:210px;box-shadow:0 8px 32px rgba(0,0,0,0.5);color:#eaeaea;font-size:13px;';
+
+        var entries = [
+            { fmt: 'nbs', icon: 'fa-solid fa-file-code', label: t('导出为 NBS'), tip: t('标准 NBS 歌曲文件, 不含歌词') },
+            { fmt: 'mnb', icon: 'fa-solid fa-box-archive', label: t('导出为 MNB 工程'), tip: t('工程压缩包, 可携带歌词与自定义音色') },
+            { fmt: 'lyrics', icon: 'fa-solid fa-microphone-lines', label: t('导出歌词元数据'), tip: t('仅导出歌词轨道与歌词块 (JSON)') }
+        ];
+        for (var i = 0; i < entries.length; i++) {
+            (function(entry) {
+                var item = document.createElement('div');
+                item.className = 'file-menu-item';
+                item.setAttribute('data-export', entry.fmt);
+                item.title = entry.tip;
+                item.innerHTML = '<i class="' + entry.icon + '"></i><span>' + entry.label + '</span>';
+                item.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    hideFileMenu();
+                    exportNBS(entry.fmt);
+                });
+                sub.appendChild(item);
+            })(entries[i]);
+        }
+
+        document.body.appendChild(sub);
+        window.WebNBSPositionFlyout(sub, parentItem.getBoundingClientRect(), { placement: 'right-start' });
     }
 
     function showHistorySubmenu(parentItem, parentMenu) {

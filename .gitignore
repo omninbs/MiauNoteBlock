@@ -11,3 +11,4 @@ blbl-toy/
 packaging/src-tauri/target/
 packaging/dist/
 packaging/*.log
+.codegraph

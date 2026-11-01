@@ -9,19 +9,19 @@
     var state = N.state;
     function $() { return N.$.apply(this, arguments); }
     var LYRIC_DEFAULT_DURATION = N.LYRIC_DEFAULT_DURATION;
-    var LYRIC_LANE_COUNT = N.LYRIC_LANE_COUNT;
     var SEG_DEFAULT_LANE_H = N.SEG_DEFAULT_LANE_H;
     function applyTransposeToOctaveRange() { return N.applyTransposeToOctaveRange.apply(this, arguments); }
     function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
     function closeFindPanel() { return N.closeFindPanel.apply(this, arguments); }
     function doCompressSong() { return N.doCompressSong.apply(this, arguments); }
-    function enterLyricsEditMode() { return N.enterLyricsEditMode.apply(this, arguments); }
+    function ensureLyricLanes() { return N.ensureLyricLanes.apply(this, arguments); }
     function findPanelVisible() { return N.findPanelVisible.apply(this, arguments); }
     function genLyricId() { return N.genLyricId.apply(this, arguments); }
     function hideTaskProgress() { return N.hideTaskProgress.apply(this, arguments); }
     function i18nText() { return N.i18nText.apply(this, arguments); }
     function lyricRebuildIndex() { return N.lyricRebuildIndex.apply(this, arguments); }
     function markDirty() { return N.markDirty.apply(this, arguments); }
+    function normalizeLyricLane() { return N.normalizeLyricLane.apply(this, arguments); }
     function normalizeLyricClip() { return N.normalizeLyricClip.apply(this, arguments); }
     function openFindPanel() { return N.openFindPanel.apply(this, arguments); }
     function openSegSplitPopup() { return N.openSegSplitPopup.apply(this, arguments); }
@@ -29,6 +29,7 @@
     function removeEmptyTracks() { return N.removeEmptyTracks.apply(this, arguments); }
     function segmentEnsure() { return N.segmentEnsure.apply(this, arguments); }
     function segmentSorted() { return N.segmentSorted.apply(this, arguments); }
+    function setLyricLanes() { return N.setLyricLanes.apply(this, arguments); }
     function segmentSync() { return N.segmentSync.apply(this, arguments); }
     function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
     function showAppConfirm() { return N.showAppConfirm.apply(this, arguments); }
@@ -46,11 +47,12 @@
 
 
     // 导出片段分组信息 (segments.json): 记录每条轨道与每个片段的 lane / 时间范围 / 名称
-    // 同时记录每条 lane 对应的全局 NBS 轨道号, 导入时可据此从缝合 NBS 精确切回片段
+    // lanes[].layers 记录该轨对应的「真实全局 NBS 层号」: 包内 song.nbs 的音符 layer 即真实层号,
+    // 导入时按层号精确切回片段。(旧版本导出的是 base 起的连续重编号, 与 song.nbs 对不上,
+    // 会导致导入后所有片段为空 —— 已修复, 导入侧对旧格式保留宽松兜底)
     function buildSegmentsJson() {
         var sorted = segmentSorted();
         var lanes = [];
-        var base = 0;
         for (var li = 0; li < (state.segmentLanes || []).length; li++) {
             var ln = state.segmentLanes[li];
             var used = {};
@@ -59,16 +61,22 @@
                 var sn = sorted[si].notes || [];
                 for (var ni = 0; ni < sn.length; ni++) used[sn[ni].layer || 0] = true;
             }
-            var rels = Object.keys(used).map(Number).sort(function(a, b) { return a - b; });
-            var layers = [];
-            for (var r = 0; r < rels.length; r++) layers.push(base + r);
+            // 优先用 lane 上的真实层映射 (缝合重排后由 segmentCompose 同步维护);
+            // 否则从片段音符收集 (capture 路径的片段音符 layer 即真实全局层)
+            var layers;
+            if (Array.isArray(ln.layerKeys) && ln.layerKeys.length) {
+                layers = ln.layerKeys.slice().sort(function(a, b) { return a - b; });
+            } else if (ln.layerKey !== undefined && ln.layerKey !== null) {
+                layers = [ln.layerKey];
+            } else {
+                layers = Object.keys(used).map(Number).sort(function(a, b) { return a - b; });
+            }
             lanes.push({
                 muted: !!ln.muted, solo: !!ln.solo,
                 volume: isFinite(ln.volume) ? ln.volume : 100,
                 height: isFinite(ln.height) ? ln.height : SEG_DEFAULT_LANE_H,
                 layers: layers
             });
-            base += rels.length;
         }
         var segs = [];
         var total = 0;
@@ -87,8 +95,10 @@
     }
 
     // 从作品包还原片段分组; 包内没有该文件时静默跳过 (-1)
-    function importSegmentsFromZip(zipFile, meta) {
+    // notesOverride: 优先使用调用方传入的原始解析音符 (避免被片段缝合流程改写)
+    function importSegmentsFromZip(zipFile, meta, notesOverride) {
         var name = (meta && meta.segments) ? meta.segments : 'segments.json';
+        var srcNotes = (Array.isArray(notesOverride) && notesOverride.length) ? notesOverride : state.notes;
         var f = zipFile.file(name);
         if (!f) return Promise.resolve(-1);
         return f.async('string').then(function(text) {
@@ -97,20 +107,22 @@
             var arr = (data && Array.isArray(data.segments)) ? data.segments
                 : (Array.isArray(data) ? data : null);
             if (!arr) return -1;
-            // 恢复 lane 定义 (含全局轨道映射)
+            // 恢复 lane 定义 (含真实全局层映射 layerKeys, 供再次 capture / 再导出使用)
             state.segmentLanes = [];
             var laneLayers = [];
             if (data && Array.isArray(data.lanes)) {
                 for (var li = 0; li < data.lanes.length; li++) {
                     var ld = data.lanes[li] || {};
+                    var laneKeys = Array.isArray(ld.layers) ? ld.layers.filter(isFinite).map(Number) : [];
                     state.segmentLanes.push({
                         id: li + 1,
                         muted: !!ld.muted, solo: !!ld.solo,
                         // 导出时音量已烘焙进音符, 导入后重置为 100 避免二次衰减
                         volume: 100,
-                        height: isFinite(ld.height) ? ld.height : SEG_DEFAULT_LANE_H
+                        height: isFinite(ld.height) ? ld.height : SEG_DEFAULT_LANE_H,
+                        layerKeys: laneKeys.length ? laneKeys : undefined
                     });
-                    laneLayers.push(Array.isArray(ld.layers) ? ld.layers.slice() : []);
+                    laneLayers.push(laneKeys);
                 }
             }
             if (!state.segmentLanes.length) {
@@ -122,32 +134,47 @@
             state.segments = [];
             state._segmentIdSeq = 0;
             var maxLane = laneLayers.length - 1;
-            for (var i = 0; i < arr.length; i++) {
-                var s = arr[i];
-                if (!s || !isFinite(s.start) || !isFinite(s.end)) continue;
-                var st = Math.max(0, Math.floor(s.start));
-                var en = Math.max(st + 1, Math.floor(s.end));
-                var lane = isFinite(s.lane) ? Math.max(0, Math.min(maxLane, s.lane)) : 0;
-                var gl = laneLayers[lane] || [];
-                var notes = [];
-                for (var k = 0; k < state.notes.length; k++) {
-                    var nt = state.notes[k];
-                    if (nt.tick < st || nt.tick >= en) continue;
-                    var relLayer = gl.indexOf(nt.layer);
-                    if (gl.length && relLayer < 0) continue;
-                    if (!gl.length) relLayer = isFinite(nt.layer) ? nt.layer : 0;
-                    notes.push({
-                        rel: nt.tick - st, layer: relLayer,
-                        instrument: nt.instrument, key: nt.key,
-                        velocity: isFinite(nt.velocity) ? nt.velocity : 100,
-                        pan: isFinite(nt.pan) ? nt.pan : 100, pitch: nt.pitch || 0
+
+            // 按层号把音符切进片段; allStrict=false 时忽略层过滤只按时间窗归位 (旧格式兜底)
+            function buildSegments(strict) {
+                var segs = [];
+                var placed = 0;
+                for (var i = 0; i < arr.length; i++) {
+                    var s = arr[i];
+                    if (!s || !isFinite(s.start) || !isFinite(s.end)) continue;
+                    var st = Math.max(0, Math.floor(s.start));
+                    var en = Math.max(st + 1, Math.floor(s.end));
+                    var lane = isFinite(s.lane) ? Math.max(0, Math.min(maxLane, s.lane)) : 0;
+                    var gl = laneLayers[lane] || [];
+                    var notes = [];
+                    for (var k = 0; k < srcNotes.length; k++) {
+                        var nt = srcNotes[k];
+                        if (nt.tick < st || nt.tick >= en) continue;
+                        var ntLayer = isFinite(nt.layer) ? nt.layer : 0;
+                        // 片段音符 layer 统一存「真实全局层」(与 segmentCaptureFromSong 语义一致,
+                        // 缝合 segmentCompose 会自动重排); 不在本轨层集合内则跳过
+                        if (strict && gl.length && gl.indexOf(ntLayer) < 0) continue;
+                        notes.push({
+                            rel: nt.tick - st, layer: ntLayer,
+                            instrument: nt.instrument, key: nt.key,
+                            velocity: isFinite(nt.velocity) ? nt.velocity : 100,
+                            pan: isFinite(nt.pan) ? nt.pan : 100, pitch: nt.pitch || 0
+                        });
+                    }
+                    placed += notes.length;
+                    segs.push({
+                        id: ++state._segmentIdSeq, lane: lane, start: st, end: en,
+                        name: s.name || ('片段 ' + (i + 1)), notes: notes
                     });
                 }
-                state.segments.push({
-                    id: ++state._segmentIdSeq, lane: lane, start: st, end: en,
-                    name: s.name || ('片段 ' + (i + 1)), notes: notes
-                });
+                return { segs: segs, placed: placed };
             }
+
+            var built = buildSegments(true);
+            // 严格按层归位一个音符都没进片段 (旧格式 layers 是连续重编号, 与真实层对不上):
+            // 退化为只按时间窗归位, 宁可粗略也不能让所有片段全空
+            if (!built.placed && srcNotes.length) built = buildSegments(false);
+            state.segments = built.segs;
             segmentEnsure();
             segmentSync();
             return state.segments.length;
@@ -198,7 +225,8 @@
             var n = list[j];
             if (!isFinite(n.tick) || n.tick < 0) continue;
             if (!n.text || !n.text.trim()) continue;
-            var lane = (isFinite(n.lane) && n.lane >= 0) ? Math.min(LYRIC_LANE_COUNT - 1, n.lane) : 0;
+            // 轨道索引不在这里 clamp: 由 applyLyricsData 先按 lyricLanes 归一化
+            var lane = (isFinite(n.lane) && n.lane >= 0) ? n.lane : 0;
             var dur = (isFinite(n.duration) && n.duration >= 1) ? n.duration : LYRIC_DEFAULT_DURATION;
             var key = lane + ':' + n.tick;
             if (byKey[key] === undefined) order.push(key);
@@ -212,7 +240,7 @@
                 noteLayer: n.noteLayer,
                 noteTick: n.noteTick,
                 charIndex: n.charIndex
-            });
+            }, -1);
         }
         var out = [];
         for (var t = 0; t < order.length; t++) out.push(byKey[order[t]]);
@@ -223,11 +251,31 @@
         return out;
     }
 
-    // 将解析好的歌词列表写入编辑器 (替换当前全部歌词)
-    function applyLyricsData(list) {
+    // 从 lyrics.json 数据里取出歌词轨道定义 (缺失时返回 null, 由 applyLyricsData 自动补轨)
+    function normalizeLyricLaneList(data) {
+        if (!data || typeof data !== 'object') return null;
+        var raw = data.lyricLanes;
+        if (!Array.isArray(raw) || !raw.length) return null;
+        var out = [];
+        for (var i = 0; i < raw.length; i++) {
+            var ln = normalizeLyricLane(raw[i], out.length);
+            if (ln) out.push(ln);
+        }
+        return out.length ? out : null;
+    }
+
+    // 将解析好的歌词列表写入编辑器 (替换当前全部歌词与歌词轨道)
+    //   lanes: 可选, lyrics.json 里的 lyricLanes 定义 (旧文件为空 → 按 lane 索引自动补轨)
+    function applyLyricsData(list, lanes) {
         pushUndo();
-        state.lyrics = list || [];
-        if (state.song) state.song.lyrics = JSON.parse(JSON.stringify(state.lyrics));
+        // 先归一化轨道定义, 再落歌词: 否则 normalizLyricClip 会按旧轨道数 clamp
+        setLyricLanes(lanes || []);
+        state.lyrics = Array.isArray(list) ? list.slice() : [];
+        ensureLyricLanes();
+        if (state.song) {
+            state.song.lyrics = JSON.parse(JSON.stringify(state.lyrics));
+            state.song.lyricLanes = JSON.parse(JSON.stringify(state.lyricLanes));
+        }
         lyricRebuildIndex();
         syncLyricsToRoll();
         markDirty();
@@ -240,9 +288,11 @@
         var reader = new FileReader();
         reader.onload = function() {
             hideTaskProgress();
-            var list;
+            var list, lanes = null;
             try {
-                list = normalizeLyricsList(JSON.parse(String(reader.result || '')));
+                var parsedLyrics = JSON.parse(String(reader.result || ''));
+                list = normalizeLyricsList(parsedLyrics);
+                lanes = normalizeLyricLaneList(parsedLyrics);
             } catch (err) {
                 showAppAlert(i18nText('歌词导入失败') + ': ' + (err && err.message ? err.message : '格式错误'),
                     { title: i18nText('导入歌词'), icon: 'fa-solid fa-triangle-exclamation' });
@@ -254,9 +304,8 @@
                 return;
             }
             var apply = function() {
-                applyLyricsData(list);
-                enterLyricsEditMode();
-                showAppAlert(i18nText('已导入歌词标注') + ': ' + list.length,
+                applyLyricsData(list, lanes);
+                showAppAlert(i18nText('已导入歌词') + ': ' + list.length,
                     { title: i18nText('导入歌词'), icon: 'fa-solid fa-circle-check' });
             };
             if (state.lyrics && state.lyrics.length) {
@@ -283,8 +332,9 @@
         if (!lyrFile) return Promise.resolve(0);
         return lyrFile.async('string').then(function(txt) {
             try {
-                var list = normalizeLyricsList(JSON.parse(txt));
-                applyLyricsData(list);
+                var data = JSON.parse(txt);
+                var list = normalizeLyricsList(data);
+                applyLyricsData(list, normalizeLyricLaneList(data));
                 return list.length;
             } catch (e) {
                 return -1;
@@ -297,9 +347,6 @@
         var btn = $('btn-functions');
         var menu = $('functions-menu');
         if (!btn || !menu) return;
-        var duplicateExport = menu.querySelector('.functions-menu-item[data-action="export"]');
-        if (duplicateExport) duplicateExport.remove();
-
         btn.addEventListener('click', function(e) {
             e.stopPropagation();
             var isVisible = menu.style.display === 'block';
@@ -348,8 +395,6 @@
                     } else if (action === 'find-notes') {
                         if (findPanelVisible()) closeFindPanel();
                         else openFindPanel();
-                    } else if (action === 'lyrics-edit') {
-                        enterLyricsEditMode();
                     } else if (action === 'lyrics-quick-add') {
                         showLyricsQuickDialog('lrc');
                     }
@@ -409,7 +454,8 @@
             + '<button class="settings-close-btn" id="pitch-shift-close-x" title="关闭">&times;</button>'
             + '</div>'
             + '<div class="settings-body">'
-            + '<p style="font-size:12px;color:var(--text-secondary);margin:0 0 10px;">已选择 ' + selectedNotes.length + ' 个音符</p>'
+            + '<div class="dlg-hint" title="只改变选中音符的音高，不改变时间位置；正数升高，负数降低。">'
+            + '<i class="fa-solid fa-circle-info"></i><span>已选择 ' + selectedNotes.length + ' 个音符</span></div>'
             + '<div class="settings-row" style="flex-direction:column;gap:8px;">'
             + '<div style="display:flex;align-items:center;gap:8px;">'
             + '<label style="font-size:12px;min-width:60px;">偏移方式:</label>'
@@ -446,7 +492,9 @@
             applyPitchShift(mode, value);
             close();
         });
-        wrapper.addEventListener('click', function(e) { if (e.target === wrapper) close(); });
+        wrapper.addEventListener('click', function(e) {
+            if (e.target === wrapper || e.target === wrapper.firstElementChild) close();
+        });
     }
 
     function showScalePrecisionDialog() {
@@ -461,7 +509,8 @@
             + '<button class="settings-close-btn" id="scale-precision-close-x" title="关闭">&times;</button>'
             + '</div>'
             + '<div class="settings-body">'
-            + '<p style="margin:0 0 10px;font-size:12px;color:var(--text-secondary);">将所有音符的时间位置 (tick) 按比例缩放：</p>'
+            + '<div class="dlg-hint" title="把所有音符的时间位置按比例缩放：x2 让歌曲变长一倍，1/2x 让歌曲变短一半；只改时间，不改音高。">'
+            + '<i class="fa-solid fa-circle-info"></i><span>按比例缩放所有音符的时间位置</span></div>'
             + '<div class="settings-row" style="flex-direction:column;align-items:stretch;gap:4px;border:none;">'
             + '<label class="settings-label" style="font-size:12px;">选择缩放倍数：</label>'
             + '<div style="display:flex;gap:4px;flex-wrap:wrap;">'
@@ -562,7 +611,8 @@
             + '<button class="settings-close-btn" id="snap-close-x" title="关闭">&times;</button>'
             + '</div>'
             + '<div class="settings-body">'
-            + '<p style="margin:0 0 10px;font-size:12px;color:var(--text-secondary);">将音符吸附到最近的网格线上。</p>'
+            + '<div class="dlg-hint" title="网格间隔由拍子决定：1/4 表示对齐到每个四分音符，数值越大对齐越密。">'
+            + '<i class="fa-solid fa-circle-info"></i><span>把音符吸附到最近的网格线</span></div>'
             + '<div class="settings-row" style="flex-direction:column;align-items:stretch;gap:8px;border:none;">'
             + '<label class="settings-label" style="font-size:12px;">选择范围：</label>'
             + '<div style="display:flex;gap:4px;flex-wrap:wrap;">'

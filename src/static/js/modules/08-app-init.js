@@ -35,6 +35,7 @@
     function findPickPop() { return N.findPickPop.apply(this, arguments); }
     function getInstrumentNames() { return N.getInstrumentNames.apply(this, arguments); }
     function handleFileOpen() { return N.handleFileOpen.apply(this, arguments); }
+    function handleMidiFilePick() { return N.handleMidiFilePick.apply(this, arguments); }
     function handlePlayToggle() { return N.handlePlayToggle.apply(this, arguments); }
     function handleStop() { return N.handleStop.apply(this, arguments); }
     function hideContextMenu() { return N.hideContextMenu.apply(this, arguments); }
@@ -174,6 +175,8 @@
             }
         });
         $('file-input').addEventListener('change', handleFileOpen);
+        var midiInput = $('midi-file-input');
+        if (midiInput) midiInput.addEventListener('change', handleMidiFilePick);
 
         // 撤销重做
         $('btn-undo').addEventListener('click', performUndo);

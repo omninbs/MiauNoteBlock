@@ -315,7 +315,7 @@
                 e.stopPropagation();
                 var selected = state.pianoRoll ? state.pianoRoll.getSelectedNotes() : [];
                 if (!selected || selected.length < 2) {
-                    showSustainFillAlert('请先在钢琴卷帘上选择至少 2 个音符再使用延音填充。', '延音填充');
+                    showSustainFillAlert(i18nText('请先框选至少 2 个音符，再使用延音填充。'), i18nText('延音填充'));
                     return;
                 }
                 var interval = parseInt($('assist-sustain-interval').value);
@@ -332,7 +332,7 @@
                 e.stopPropagation();
                 var selected = state.pianoRoll ? state.pianoRoll.getSelectedNotes() : [];
                 if (!selected || selected.length === 0) {
-                    showSustainFillAlert('请先在钢琴卷帘上选择至少 1 个音符再使用清除延音。', '清除延音');
+                    showSustainFillAlert(i18nText('请先框选至少 1 个音符，再使用清除延音。'), i18nText('清除延音'));
                     return;
                 }
                 var gap = parseInt($('assist-clear-sustain-gap').value);

@@ -38,13 +38,16 @@
         // 歌曲
         song: null,
 
-        // 歌词标注: [{ id, tick, text, duration, lane }]
-        //   lane: 0..2 三条歌词轨道 (允许不同轨道在同一 tick 重叠)
-        //   duration: 固定时长(tick), 恒 >= 1; 新建默认 LYRIC_DEFAULT_DURATION
+        // 歌词轨道 (「额外轨道」): [{ id, name }]
+        //   不是 NBS 轨道: 不写入 .nbs, 只随工程元数据 (lyrics.json / 自动保存) 持久化;
+        //   在钢琴卷帘中追加显示在所有 NBS 轨道之后, 行内只能放歌词块。
+        lyricLanes: [],
+        // 歌词块: [{ id, lane, tick, text, duration, lineStart?, noteLayer?, noteTick?, charIndex? }]
+        //   lane: state.lyricLanes 的索引; duration 为块长度(tick), 恒 >= 1
         lyrics: [],
-        lyricsEditMode: false,
         _lyricIndex: null,
         _lyricIdSeq: 0,
+        _lyricLaneIdSeq: 0,
         activeLyricId: null,
         _activeLyric: null,
         lyricClipboard: [],   // 歌词片段剪贴板: [{ text, duration, lane, relTick }]

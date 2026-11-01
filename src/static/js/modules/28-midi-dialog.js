@@ -1895,7 +1895,9 @@
             updateSustainTracksUI();
             close();
         });
-        wrapper.addEventListener('click', function(e) { if (e.target === wrapper) close(); });
+        wrapper.addEventListener('click', function(e) {
+            if (e.target === wrapper || e.target === wrapper.firstElementChild) close();
+        });
 
         // 解析 MIDI 文件，为每行初始化迷你音符图
         if (state._midiFile) {

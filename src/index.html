@@ -135,10 +135,6 @@
             <i class="fa-solid fa-magnifying-glass"></i>
             <span>查找音符</span>
         </div>
-        <div class="functions-menu-item" data-action="lyrics-edit">
-            <i class="fa-solid fa-microphone-lines"></i>
-            <span>歌词标注</span>
-        </div>
         <div class="functions-menu-item" data-action="lyrics-quick-add">
             <i class="fa-solid fa-wand-magic-sparkles"></i>
             <span>快速添加歌词</span>
@@ -150,10 +146,6 @@
         <div class="functions-menu-item" data-action="remove-empty-tracks">
             <i class="fa-solid fa-trash-can"></i>
             <span>清除空轨道</span>
-        </div>
-        <div class="functions-menu-item" data-action="export">
-            <i class="fa-solid fa-file-export"></i>
-            <span>导出 NBS</span>
         </div>
     </div>
 
@@ -249,28 +241,7 @@
     <!-- ========== 歌词播放浮层 (屏幕中间偏下) ========== -->
     <div class="lyrics-overlay" id="lyrics-overlay" style="display:none;"><span class="lyrics-overlay-text" id="lyrics-overlay-text"></span></div>
 
-    <!-- ========== 歌词编辑模式提示条 ========== -->
-    <div class="lyrics-edit-bar" id="lyrics-edit-bar" style="display:none;">
-        <i class="fa-solid fa-microphone-lines"></i>
-        <span class="lyrics-edit-bar-text">歌词编辑模式：双击空白处新建歌词片段，双击片段编辑文字，拖动片段可移动或拉伸</span>
-        <div class="lyrics-edit-bar-lanes">
-            <button class="lyrics-lane-add" id="lyrics-add-0" type="button" data-lane="0" title="在播放头位置新建歌词片段">＋轨1</button>
-            <button class="lyrics-lane-add" id="lyrics-add-1" type="button" data-lane="1" title="在播放头位置新建歌词片段">＋轨2</button>
-            <button class="lyrics-lane-add" id="lyrics-add-2" type="button" data-lane="2" title="在播放头位置新建歌词片段">＋轨3</button>
-        </div>
-        <div class="lyrics-edit-bar-ops">
-            <button class="lyrics-op-btn" id="lyrics-cut" type="button">剪切</button>
-            <button class="lyrics-op-btn" id="lyrics-copy" type="button">复制</button>
-            <button class="lyrics-op-btn" id="lyrics-paste" type="button">粘贴</button>
-        </div>
-        <!-- 快速添加 / 按音符重排: 桌面端也显示 (ops 里的按钮在桌面端隐藏) -->
-        <div class="lyrics-edit-bar-quick">
-            <button class="lyrics-op-btn" id="lyrics-quick-add" type="button" title="快速添加歌词：导入 LRC，或把歌词逐字对齐到人声轨道">快速添加</button>
-            <button class="lyrics-op-btn" id="lyrics-note-anchor" type="button" title="选中逐字对齐的歌词片段后，点击卷帘中的音符重新对齐" disabled>对齐音符</button>
-        </div>
-        <span class="lyrics-edit-bar-count"><span id="lyrics-edit-bar-count">0</span> 条歌词</span>
-        <button class="lyrics-edit-bar-exit" id="lyrics-edit-bar-exit" type="button">退出</button>
-    </div>
+    <!-- 歌词不再有独立编辑模式: 歌词轨道作为「额外轨道」显示在音轨栏中 -->
 
     <!-- ========== 片段编辑模式提示条 ========== -->
     <div class="lyrics-edit-bar segment-edit-bar" id="segment-edit-bar" style="display:none;">
@@ -290,7 +261,8 @@
     </div>
 
     <!-- ========== 隐藏的文件输入 ========== -->
-    <input type="file" id="file-input" accept=".nbs,.mid,.midi,.zip" style="display:none;">
+    <input type="file" id="file-input" accept=".nbs,.mnb,.mid,.midi" style="display:none;">
+    <input type="file" id="midi-file-input" accept=".mid,.midi,audio/midi" style="display:none;">
     <input type="file" id="lyrics-file-input" accept=".json,application/json" style="display:none;">
 
     <!-- ========== 移动端 FAB (竖屏) ========== -->
@@ -1773,6 +1745,8 @@
 <script src="static/js/modules/33-export.js?v=20261030c"></script>
 <script src="static/js/modules/34-autosave.js?v=20261031f"></script>
 <script src="static/js/modules/35-lyrics-quick.js?v=20261101a"></script>
+<!-- 桌面外壳桥接: 仅在 Tauri/MSIX 环境生效, 浏览器与服务器部署下自动空转 -->
+<script src="static/js/modules/40-desktop-bridge.js?v=20261101b"></script>
 <script src="static/js/main.js?v=20261030c"></script>
 
 <script>
@@ -1808,6 +1782,8 @@
             <button class="seg-split-close" id="seg-split-close" title="关闭"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="seg-split-body">
+            <p class="seg-split-warning" title="基于当前 NBS 工程（先自动清除延音）把每条轨道切成循环块；效果不如 MIDI 导入时的后处理分割。"
+               style="font-weight:400;color:var(--text-secondary);"><i class="fa-solid fa-circle-info"></i><span>按小节重复规律把轨道切成循环片段</span></p>
             <label class="seg-split-check">
                 <input type="checkbox" id="seg-split-enabled" checked>
                 <span>分割重复片段</span>

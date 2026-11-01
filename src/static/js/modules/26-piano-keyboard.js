@@ -14,7 +14,7 @@
     function autoSaveLocal() { return N.autoSaveLocal.apply(this, arguments); }
     function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
     function checkOctaveRange() { return N.checkOctaveRange.apply(this, arguments); }
-    function exitLyricsEditMode() { return N.exitLyricsEditMode.apply(this, arguments); }
+    function ensureLyricLanes() { return N.ensureLyricLanes.apply(this, arguments); }
     function exitSegmentsEditMode() { return N.exitSegmentsEditMode.apply(this, arguments); }
     function findTrackByLayer() { return N.findTrackByLayer.apply(this, arguments); }
     function formatError() { return N.formatError.apply(this, arguments); }
@@ -227,21 +227,29 @@
     function handleFileOpen(e) {
         // 从欢迎引导层打开文件: 隐藏引导层并复位文件类型过滤
         hideWelcomeScreen();
-        e.target.accept = '.nbs,.mid,.midi,.zip';
+        e.target.accept = '.nbs,.mnb,.mid,.midi';
         var file = e.target.files[0];
         if (!file) return;
 
-        // 检查文件扩展名，MIDI 文件显示导入弹窗
         var fileName = file.name.toLowerCase();
-        // zip 作品包 / 音色备份 → 走 zip 解析流程
-        if (fileName.endsWith('.zip')) {
+        // MIDI: 打开文件时直接进入 MIDI 导入流程
+        if (fileName.endsWith('.mid') || fileName.endsWith('.midi')) {
+            handleMidiOpen(e);
+            e.target.value = '';
+            return;
+        }
+        // MNB 工程 = 工程压缩包 (zip 内容, 仅后缀不同) → 走 zip 解析流程
+        if (fileName.endsWith('.mnb')) {
             e.target.value = '';
             handleZipFile(file);
             return;
         }
-        if (fileName.endsWith('.mid') || fileName.endsWith('.midi')) {
-            handleMidiOpen(e);
+        // 其它类型给出明确提示
+        if (!fileName.endsWith('.nbs')) {
             e.target.value = '';
+            showAppAlert(i18nText('只能打开 .nbs、.mnb 或 MIDI 文件'), {
+                title: i18nText('打开文件'), icon: 'fa-solid fa-triangle-exclamation'
+            });
             return;
         }
 
@@ -265,6 +273,13 @@
         });
     }
 
+    // MIDI 导入使用独立的文件输入 (打开文件的 accept 只允许 .nbs/.mnb)
+    function handleMidiFilePick(e) {
+        var file = e.target.files && e.target.files[0];
+        e.target.value = '';
+        if (file) handleMidiOpen({ target: { files: [file] } });
+    }
+
     // 应用解析出的 NBS 歌曲数据到编辑器 (resolveMissingCustomInstruments 通过后调用)
     function applyLoadedSongData(data, file, inputEl) {
         if (!data || !data.song) return;
@@ -275,13 +290,18 @@
         state.notes = song.notes || [];
         // 保存导入文件名（去掉扩展名）
         state.importedFileName = file.name.replace(/\.[^.]+$/, '');
-        // 切换歌曲: 清空上一首的歌词标注 (NBS 不含歌词字段, 歌词为内存数据)
+        // 切换歌曲: 歌词轨道与歌词块来自工程元数据 (NBS 本身不含歌词字段)
         state.lyrics = Array.isArray(song.lyrics) ? song.lyrics.slice() : [];
+        state.lyricLanes = Array.isArray(song.lyricLanes) ? JSON.parse(JSON.stringify(song.lyricLanes)) : [];
         lyricRebuildIndex();
         resetStreamingLyrics();
-        exitLyricsEditMode();
+        ensureLyricLanes();
         syncLyricsToRoll();
         // 切换歌曲: 片段分割信息优先从作品包恢复, 否则重置为整首一个片段
+        // 必须先清掉上一首歌的 MIDI 映射, 否则 segmentCaptureFromSong 会按旧通道归位, 导致片段全部为空
+        state.layerChannelMap = {};
+        N.shared._midiTrackStates = {};
+        state._channelTracks = {};
         exitSegmentsEditMode();
         state._segmentIdSeq = 0;
         state._segmentsTouched = false;
@@ -340,10 +360,6 @@
             segmentCaptureFromSong();
         }
         segmentSync();
-        // NBS 文件没有 MIDI 映射，清除残留的 MIDI 音轨状态
-        state.layerChannelMap = {};
-        N.shared._midiTrackStates = {};
-        state._channelTracks = {};
 
         var loadedTempo = parseFloat(song.tempo);
         if (!isFinite(loadedTempo) || loadedTempo <= 0) loadedTempo = 10;
@@ -435,6 +451,7 @@
     N.applyTaskProgress = applyTaskProgress;
     N.formatBytes = formatBytes;
     N.handleFileOpen = handleFileOpen;
+    N.handleMidiFilePick = handleMidiFilePick;
     N.applyLoadedSongData = applyLoadedSongData;
     N.handleSave = handleSave;
     N.getInstName = getInstName;

@@ -12,7 +12,6 @@
     function _appDialogBtn() { return N._appDialogBtn.apply(this, arguments); }
     function _appDialogOverlay() { return N._appDialogOverlay.apply(this, arguments); }
     function _closeAppDialog() { return N._closeAppDialog.apply(this, arguments); }
-    function enterLyricsEditMode() { return N.enterLyricsEditMode.apply(this, arguments); }
     function findTrackByLayer() { return N.findTrackByLayer.apply(this, arguments); }
     function genLyricId() { return N.genLyricId.apply(this, arguments); }
     function getNbsKeyDisplayLabel() { return N.getNbsKeyDisplayLabel.apply(this, arguments); }
@@ -28,8 +27,8 @@
     var DEFAULT_TAIL_DURATION = 4;
 
     function lyricLaneCount() {
-        var n = parseInt(N.LYRIC_LANE_COUNT, 10);
-        return (isFinite(n) && n > 0) ? n : 3;
+        if (typeof N.lyricLaneCount === 'function') return N.lyricLaneCount();
+        return (state.lyricLanes && state.lyricLanes.length) ? state.lyricLanes.length : 0;
     }
 
     function defaultLyricDuration() {
@@ -41,6 +40,7 @@
         var v = parseInt(lane, 10);
         if (!isFinite(v) || v < 0) v = 0;
         var max = lyricLaneCount() - 1;
+        if (max < 0) return 0;
         return v > max ? max : v;
     }
 
@@ -642,6 +642,8 @@
             return;
         }
         var doWrite = function(mode) {
+            // 还没有歌词轨道时自动建一条, 让「快速添加」一步到位
+            if (lyricLaneCount() <= 0 && typeof N.addLyricLane === 'function') N.addLyricLane();
             pushUndo();
             if (mode === 'append') state.lyrics = dropOverlappingLyrics(state.lyrics || [], incoming);
             else state.lyrics = [];
@@ -649,7 +651,6 @@
             lyricRebuildIndex();
             syncLyricsToRoll();
             markDirty();
-            enterLyricsEditMode();
             if (state.pianoRoll && state.pianoRoll._setLyricSelected) {
                 state.pianoRoll._setLyricSelected(incoming[0].id);
             }
@@ -686,11 +687,15 @@
     }
 
     function laneSelectHtml(selected) {
-        var count = lyricLaneCount();
+        var lanes = (state.lyricLanes || []);
+        if (!lanes.length) {
+            return '<option value="0">' + escapeHtml(i18nText('请先添加歌词轨道')) + '</option>';
+        }
         var html = '';
-        for (var i = 0; i < count; i++) {
+        for (var i = 0; i < lanes.length; i++) {
+            var name = (lanes[i] && lanes[i].name) ? lanes[i].name : (i18nText('歌词') + ' ' + (i + 1));
             html += '<option value="' + i + '"' + (i === selected ? ' selected' : '') + '>'
-                + (i + 1) + '</option>';
+                + escapeHtml(name) + '</option>';
         }
         return html;
     }

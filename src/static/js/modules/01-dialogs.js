@@ -11,6 +11,7 @@
     function i18nText() { return N.i18nText.apply(this, arguments); }
     function renderSongToBlob() { return N.renderSongToBlob.apply(this, arguments); }
     function setPlayButtonIcon() { return N.setPlayButtonIcon.apply(this, arguments); }
+    function showToast() { return N.showToast.apply(this, arguments); }
     function startPlaybackLoop() { return N.startPlaybackLoop.apply(this, arguments); }
     function stopPlaybackLoop() { return N.stopPlaybackLoop.apply(this, arguments); }
     function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
@@ -166,250 +167,6 @@
             actions.appendChild(okBtn);
             overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
             setTimeout(function() { input.focus(); input.select(); }, 50);
-        });
-    }
-
-    // showExportDialog(defaultName, defaultAuthor, defaultDesc, options) -> Promise<{name, author, description}|null>
-    // 导出弹窗: 文件名(必填) + 折叠的作者/介绍输入
-    function showExportDialog(defaultName, defaultAuthor, defaultDesc, options) {
-        options = options || {};
-        // options.customInstruments: 作品使用到的自定义音色编号数组(>=20), 非空时在弹窗内警告并提供「作品包(zip)」选项
-        var customNos = (options.customInstruments && options.customInstruments.length) ? options.customInstruments.slice() : null;
-        var hasLyrics = !!options.hasLyrics;
-        var segCount = options.segmentCount || 0;
-        return new Promise(function(resolve) {
-            var overlay = _appDialogOverlay();
-            var box = _appDialogBox(i18nText(options.title || '导出 NBS'), '', options.icon || 'fa-solid fa-file-export', { maxWidth: (customNos || hasLyrics || segCount > 1) ? 480 : 420 });
-            var body = box.querySelector('.settings-body');
-            // 清空默认 message 内容
-            body.textContent = '';
-
-            // 文件名输入
-            var nameLabel = document.createElement('label');
-            nameLabel.textContent = i18nText('文件名:');
-            nameLabel.style.cssText = 'display:block;font-size:13px;color:var(--text-primary,#fff);margin-bottom:6px;font-weight:500;';
-            body.appendChild(nameLabel);
-
-            var nameInputWrap = document.createElement('div');
-            nameInputWrap.style.cssText = 'display:flex;align-items:center;gap:6px;';
-            var nameInput = document.createElement('input');
-            nameInput.type = 'text';
-            nameInput.value = defaultName || '';
-            nameInput.placeholder = i18nText('请输入文件名');
-            nameInput.style.cssText = 'flex:1;padding:8px 10px;font-size:13px;border:1px solid var(--ctrl-stroke-default,#444);border-radius:var(--radius-sm,6px);background:var(--ctrl-fill-default,#1c1c1c);color:var(--text-primary,#fff);box-sizing:border-box;';
-            var extSpan = document.createElement('span');
-            extSpan.textContent = '.nbs';
-            extSpan.style.cssText = 'font-size:12px;color:var(--text-tertiary,#888);flex-shrink:0;';
-            nameInputWrap.appendChild(nameInput);
-            nameInputWrap.appendChild(extSpan);
-            body.appendChild(nameInputWrap);
-
-            // 折叠栏: 作者和介绍
-            var collapseWrap = document.createElement('div');
-            collapseWrap.style.cssText = 'margin-top:12px;border:1px solid var(--ctrl-stroke-default,#444);border-radius:var(--radius-sm,6px);overflow:hidden;';
-            var collapseHeader = document.createElement('div');
-            collapseHeader.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:8px 12px;cursor:pointer;background:var(--ctrl-fill-default,#1c1c1c);user-select:none;font-size:12px;color:var(--text-secondary,#aaa);';
-            collapseHeader.innerHTML = '<span><i class="fa-solid fa-chevron-right" style="margin-right:6px;transition:transform 0.15s;font-size:10px;"></i>' + i18nText('作者和介绍 (可选)') + '</span>';
-            var collapseBody = document.createElement('div');
-            collapseBody.style.cssText = 'padding:10px 12px;display:none;border-top:1px solid var(--ctrl-stroke-default,#444);';
-            collapseWrap.appendChild(collapseHeader);
-            collapseWrap.appendChild(collapseBody);
-            body.appendChild(collapseWrap);
-
-            var collapsed = true;
-            var chevron = collapseHeader.querySelector('i');
-            collapseHeader.addEventListener('click', function(e) {
-                e.stopPropagation();
-                collapsed = !collapsed;
-                collapseBody.style.display = collapsed ? 'none' : 'block';
-                chevron.style.transform = collapsed ? 'rotate(0deg)' : 'rotate(90deg)';
-            });
-
-            // 作者输入
-            var authorLabel = document.createElement('label');
-            authorLabel.textContent = i18nText('作者:');
-            authorLabel.style.cssText = 'display:block;font-size:12px;color:var(--text-primary,#fff);margin-bottom:4px;';
-            collapseBody.appendChild(authorLabel);
-            var authorInput = document.createElement('input');
-            authorInput.type = 'text';
-            authorInput.value = defaultAuthor || '';
-            authorInput.placeholder = i18nText('作者名 (可选)');
-            authorInput.style.cssText = 'width:100%;padding:6px 8px;font-size:12px;border:1px solid var(--ctrl-stroke-default,#444);border-radius:var(--radius-sm,6px);background:var(--ctrl-fill-default,#1c1c1c);color:var(--text-primary,#fff);box-sizing:border-box;margin-bottom:10px;';
-            collapseBody.appendChild(authorInput);
-
-            // 介绍输入
-            var descLabel = document.createElement('label');
-            descLabel.textContent = i18nText('介绍:');
-            descLabel.style.cssText = 'display:block;font-size:12px;color:var(--text-primary,#fff);margin-bottom:4px;';
-            collapseBody.appendChild(descLabel);
-            var descInput = document.createElement('textarea');
-            descInput.value = defaultDesc || '';
-            descInput.placeholder = i18nText('歌曲介绍 (可选)');
-            descInput.rows = 3;
-            descInput.style.cssText = 'width:100%;padding:6px 8px;font-size:12px;border:1px solid var(--ctrl-stroke-default,#444);border-radius:var(--radius-sm,6px);background:var(--ctrl-fill-default,#1c1c1c);color:var(--text-primary,#fff);box-sizing:border-box;resize:vertical;font-family:inherit;';
-            collapseBody.appendChild(descInput);
-
-            // ---------- 自定义音色警告 + 作品包选项 ----------
-            var packageChk = null;
-            if (customNos && customNos.length) {
-                var warnWrap = document.createElement('div');
-                warnWrap.style.cssText = 'margin-top:12px;border:1px solid rgba(255,255,255,0.10);border-left:2px solid rgba(230,168,74,0.75);border-radius:var(--radius-sm,6px);padding:10px 12px;background:rgba(255,255,255,0.035);';
-                var warnTitle = document.createElement('div');
-                warnTitle.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:var(--accent-orange,#ffb43c);margin-bottom:6px;';
-                warnTitle.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i><span>本作品使用了 ' + customNos.length + ' 个自定义音色</span>';
-                warnWrap.appendChild(warnTitle);
-                var warnText = document.createElement('div');
-                warnText.style.cssText = 'font-size:12px;color:var(--text-secondary,#aaa);line-height:1.7;margin-bottom:8px;';
-                warnText.textContent = '标准 .nbs 只保存音色引用（不含音频），在其它设备/播放器上这些音色会静音。';
-                warnWrap.appendChild(warnText);
-                var packageLbl = document.createElement('label');
-                packageLbl.style.cssText = 'display:flex;align-items:flex-start;gap:6px;font-size:12px;color:var(--text-primary,#fff);cursor:pointer;user-select:none;line-height:1.6;';
-                packageChk = document.createElement('input');
-                packageChk.type = 'checkbox';
-                packageChk.style.cssText = 'accent-color:var(--accent-primary,#4aa3ff);width:14px;height:14px;margin-top:2px;flex-shrink:0;';
-                packageLbl.appendChild(packageChk);
-                packageLbl.appendChild(document.createTextNode('导出自定义音色作品包 (zip)：歌曲 + 使用到的音色音频一起打包，完整携带音色'));
-                warnWrap.appendChild(packageLbl);
-                body.appendChild(warnWrap);
-            }
-
-            // ---------- 歌词导出选项 ----------
-            var lyricsChk = null;
-            if (hasLyrics) {
-                var lyWrap = document.createElement('div');
-                lyWrap.style.cssText = 'margin-top:12px;border:1px solid rgba(255,255,255,0.10);border-left:2px solid rgba(74,144,217,0.75);border-radius:var(--radius-sm,6px);padding:10px 12px;background:rgba(255,255,255,0.035);';
-                var lyTitle = document.createElement('div');
-                lyTitle.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text-primary,#e4e8ec);margin-bottom:6px;';
-                lyTitle.innerHTML = '<i class="fa-solid fa-microphone-lines"></i><span>' + i18nText('本作品包含歌词标注') + '</span>';
-                lyWrap.appendChild(lyTitle);
-                var lyLbl = document.createElement('label');
-                lyLbl.style.cssText = 'display:flex;align-items:flex-start;gap:6px;font-size:12px;color:var(--text-primary,#fff);cursor:pointer;user-select:none;line-height:1.6;';
-                lyricsChk = document.createElement('input');
-                lyricsChk.type = 'checkbox';
-                lyricsChk.checked = true;
-                lyricsChk.style.cssText = 'accent-color:var(--accent-primary,#4aa3ff);width:14px;height:14px;margin-top:2px;flex-shrink:0;';
-                lyLbl.appendChild(lyricsChk);
-                lyLbl.appendChild(document.createTextNode(i18nText('同时导出歌词 (打包为 zip：歌曲 + lyrics.json)')));
-                lyWrap.appendChild(lyLbl);
-                body.appendChild(lyWrap);
-            }
-
-            // ---------- 片段导出选项 (存在多个片段时) ----------
-            var segmentsZipRadio = null;
-            var mergeSegRadio = null;
-            if (segCount > 1) {
-                var segWrap = document.createElement('div');
-                segWrap.style.cssText = 'margin-top:12px;border:1px solid rgba(255,255,255,0.10);border-left:2px solid rgba(74,144,217,0.75);border-radius:var(--radius-sm,6px);padding:10px 12px;background:rgba(255,255,255,0.035);';
-                var segTitle = document.createElement('div');
-                segTitle.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text-primary,#e4e8ec);margin-bottom:6px;';
-                segTitle.innerHTML = '<i class="fa-solid fa-film"></i><span>' + i18nText('本作品包含') + ' ' + segCount + ' ' + i18nText('个片段') + '</span>';
-                segWrap.appendChild(segTitle);
-
-                var mkRow = function(value, labelText, checked) {
-                    var lbl = document.createElement('label');
-                    lbl.style.cssText = 'display:flex;align-items:flex-start;gap:6px;font-size:12px;color:var(--text-primary,#fff);cursor:pointer;user-select:none;line-height:1.6;margin-top:4px;';
-                    var r = document.createElement('input');
-                    r.type = 'radio';
-                    r.name = 'nbs-export-segment-mode';
-                    r.value = value;
-                    r.checked = !!checked;
-                    r.style.cssText = 'accent-color:var(--accent,#4a90d9);width:14px;height:14px;margin-top:2px;flex-shrink:0;';
-                    lbl.appendChild(r);
-                    lbl.appendChild(document.createTextNode(labelText));
-                    segWrap.appendChild(lbl);
-                    return r;
-                };
-                mergeSegRadio = mkRow('merge', i18nText('合并后导出：把片段首尾相接，消除空隙'), true);
-                segmentsZipRadio = mkRow('keep', i18nText('保留片段：导出为 ZIP（歌曲 + segments.json 分割信息）'), false);
-                var segHint = document.createElement('div');
-                segHint.style.cssText = 'font-size:11px;color:var(--text-tertiary,#888);line-height:1.6;margin-top:6px;';
-                segHint.textContent = i18nText('「保留片段」会同时保留片段之间的空隙；ZIP 内记录每段的分割位置，重新导入可还原。');
-                segWrap.appendChild(segHint);
-                body.appendChild(segWrap);
-            }
-
-            overlay.appendChild(box);
-            document.body.appendChild(overlay);
-            _appDialogStack.push(overlay);
-
-            // ---------- NBS 版本 (从设置移到导出弹窗, 导出时决定) ----------
-            var versionSel = document.createElement('select');
-            var vWrap = document.createElement('div');
-            vWrap.style.cssText = 'margin-top:12px;display:flex;align-items:center;gap:8px;';
-            var vLabel = document.createElement('label');
-            vLabel.textContent = i18nText('NBS 版本');
-            vLabel.style.cssText = 'font-size:12px;color:var(--text-secondary);white-space:nowrap;flex-shrink:0;';
-            versionSel.style.cssText = 'flex:1;height:28px;padding:0 8px;font-size:12px;border:1px solid var(--ctrl-stroke-default,#444);border-radius:var(--radius-sm,6px);background:var(--ctrl-fill-default,#1c1c1c);color:var(--text-primary,#fff);';
-            var vOptions = [['4', 'V4'], ['5', 'V5'], ['6', 'V6']];
-            for (var vi = 0; vi < vOptions.length; vi++) {
-                var opt = document.createElement('option');
-                opt.value = vOptions[vi][0];
-                opt.textContent = vOptions[vi][1];
-                versionSel.appendChild(opt);
-            }
-            var vDefault = 5;
-            try {
-                var savedVer = parseInt(localStorage.getItem('nbs_export_version'), 10);
-                if (savedVer === 4 || savedVer === 5 || savedVer === 6) vDefault = savedVer;
-            } catch (e) {}
-            // 含铜号角 (16~19) 或自定义音色 (>=20) 时只有 V6 能完整保存, 版本被锁定
-            if (options.lockV6) {
-                vDefault = 6;
-                versionSel.disabled = true;
-                versionSel.style.opacity = '0.6';
-                versionSel.style.cursor = 'not-allowed';
-            }
-            versionSel.value = String(vDefault);
-            vWrap.appendChild(vLabel);
-            vWrap.appendChild(versionSel);
-            body.appendChild(vWrap);
-            if (options.lockV6) {
-                var vHint = document.createElement('div');
-                vHint.style.cssText = 'font-size:11px;color:var(--text-tertiary,#888);line-height:1.6;margin-top:4px;';
-                vHint.textContent = i18nText('作品使用了铜号角或自定义音色，仅 V6 可以完整保存，版本已锁定为 V6。');
-                body.appendChild(vHint);
-            }
-
-            var result = null;
-            var close = function() { _closeAppDialog(overlay, resolve, result); };
-            var submit = function() {
-                var name = (nameInput.value || '').trim();
-                if (!name) {
-                    nameInput.style.borderColor = 'var(--accent-orange,#ff8c42)';
-                    nameInput.focus();
-                    return;
-                }
-                // 移除末尾的 .nbs 后缀 (保存时会自动添加)
-                if (name.toLowerCase().endsWith('.nbs')) {
-                    name = name.slice(0, -4);
-                }
-                result = {
-                    name: name,
-                    author: (authorInput.value || '').trim(),
-                    description: (descInput.value || '').trim(),
-                    packageZip: !!(packageChk && packageChk.checked),
-                    lyricsZip: !!(lyricsChk && lyricsChk.checked),
-                    segmentsZip: !!(segmentsZipRadio && segmentsZipRadio.checked),
-                    mergeSegments: !!(mergeSegRadio && mergeSegRadio.checked),
-                    nbsVersion: parseInt(versionSel.value, 10) || 5
-                };
-                close();
-            };
-
-            box.querySelector('#app-dialog-x').addEventListener('click', close);
-            nameInput.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') { e.preventDefault(); submit(); }
-                if (e.key === 'Escape') { close(); }
-            });
-            var cancelBtn = _appDialogBtn(i18nText(options.cancelText || '取消'), false);
-            cancelBtn.addEventListener('click', close);
-            var okBtn = _appDialogBtn(i18nText(options.okText || '导出'), true);
-            okBtn.addEventListener('click', submit);
-            var actions = box.querySelector('.popup-actions');
-            actions.appendChild(cancelBtn);
-            actions.appendChild(okBtn);
-            overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
-            setTimeout(function() { nameInput.focus(); nameInput.select(); }, 50);
         });
     }
 
@@ -607,7 +364,7 @@
                     hideAeProgress();
                     exportBtn.disabled = false;
                     AudioRender.downloadBlob(res.blob, res.filename);
-                    showAppAlert('音频已导出：' + res.filename, { title: '导出完成', icon: 'fa-solid fa-circle-check' });
+                    showToast(i18nText('音频已导出') + ': ' + res.filename, { icon: 'fa-solid fa-music' });
                 }).catch(function(err) {
                     hideAeProgress();
                     exportBtn.disabled = false;
@@ -624,6 +381,87 @@
         });
     }
 
+    // 导出 NBS / MNB 前的元数据弹窗 (文件名 / 作者 / 描述)
+    // resolve(null) = 取消; resolve({name, author, description}) = 确认导出
+    function showExportMetaDialog(defaults, format) {
+        defaults = defaults || {};
+        var isMNB = (format === 'mnb');
+        return new Promise(function(resolve) {
+            var overlay = _appDialogOverlay();
+            var title = isMNB ? '导出为 MNB 工程' : '导出为 NBS';
+            var box = _appDialogBox(i18nText(title), '',
+                isMNB ? 'fa-solid fa-box-archive' : 'fa-solid fa-file-export', { maxWidth: 440 });
+            var body = box.querySelector('.settings-body');
+            body.textContent = '';
+            body.style.whiteSpace = 'normal';
+
+            var tip = document.createElement('div');
+            tip.className = 'dlg-hint';
+            var tipText = isMNB ? i18nText('工程包') : i18nText('歌曲文件');
+            tip.innerHTML = '<i class="fa-solid fa-circle-info"></i><span></span>';
+            tip.querySelector('span').textContent = tipText;
+            tip.title = isMNB
+                ? i18nText('压缩包格式, 内含歌曲、歌词、片段与自定义音色, 可用「打开文件」重新导入')
+                : i18nText('标准 NBS 歌曲文件, 不含歌词与片段信息');
+            body.appendChild(tip);
+
+            var fields = {};
+            function addField(key, label, value, placeholder, multiline) {
+                var wrap = document.createElement('div');
+                wrap.className = 'dlg-field';
+                var lab = document.createElement('label');
+                lab.className = 'dlg-label';
+                lab.textContent = i18nText(label);
+                wrap.appendChild(lab);
+                var el = multiline ? document.createElement('textarea') : document.createElement('input');
+                if (multiline) { el.rows = 3; }
+                else { el.type = 'text'; }
+                el.className = 'dlg-input';
+                el.value = value || '';
+                el.placeholder = i18nText(placeholder || '');
+                wrap.appendChild(el);
+                body.appendChild(wrap);
+                fields[key] = el;
+            }
+
+            addField('name', '文件名', defaults.name || '', '不含扩展名');
+            addField('author', '作者', defaults.author || '', '可选');
+            addField('description', '描述', defaults.description || '', '可选', true);
+
+            var done = false;
+            var close = function() {
+                if (done) return;
+                done = true;
+                _closeAppDialog(overlay, resolve, null);
+            };
+            var submit = function() {
+                if (done) return;
+                done = true;
+                _closeAppDialog(overlay, resolve, {
+                    name: fields.name.value.trim() || defaults.name || 'Untitled',
+                    author: fields.author.value.trim(),
+                    description: fields.description.value.trim()
+                });
+            };
+            box.querySelector('#app-dialog-x').addEventListener('click', close);
+            var cancelBtn = _appDialogBtn(i18nText('取消'), false);
+            cancelBtn.addEventListener('click', close);
+            var okBtn = _appDialogBtn(i18nText('导出'), true);
+            okBtn.addEventListener('click', submit);
+            var actions = box.querySelector('.popup-actions');
+            actions.appendChild(cancelBtn);
+            actions.appendChild(okBtn);
+            overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
+            box.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && e.target && e.target.tagName !== 'TEXTAREA') {
+                    e.preventDefault(); submit();
+                }
+                if (e.key === 'Escape') close();
+            });
+            setTimeout(function() { fields.name.focus(); fields.name.select(); }, 50);
+        });
+    }
+
     // ---- 导出 ----
     N._appDialogOverlay = _appDialogOverlay;
     N._appDialogBox = _appDialogBox;
@@ -632,7 +470,7 @@
     N.showAppAlert = showAppAlert;
     N.showAppConfirm = showAppConfirm;
     N.showAppPrompt = showAppPrompt;
-    N.showExportDialog = showExportDialog;
     N.showAudioExportDialog = showAudioExportDialog;
+    N.showExportMetaDialog = showExportMetaDialog;
     N._appDialogStack = _appDialogStack;
 })(window.WebNBS);

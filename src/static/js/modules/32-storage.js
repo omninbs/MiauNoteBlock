@@ -133,6 +133,7 @@
                 layers: songMeta.layers || [],
                 solo_layers: Array.isArray(songMeta.solo_layers) ? songMeta.solo_layers.slice() : [],
                 lyrics: JSON.parse(JSON.stringify(state.lyrics || [])),
+                lyricLanes: JSON.parse(JSON.stringify(state.lyricLanes || [])),
                 // 片段轨道 / 声部分离依赖的映射信息, 必须随工程一起保存
                 layer_channel_map: songMeta.layer_channel_map || {},
                 layer_voice_map: songMeta.layer_voice_map || {},
@@ -142,6 +143,9 @@
             notes: state.notes,
             tempo: state.tempo,
             tracks: JSON.parse(JSON.stringify(state.tracks || [])),
+            // 歌词轨道 (额外轨道) 定义: 与 song.lyrics 配套, 顶层存一份便于增量读取
+            lyricLanes: JSON.parse(JSON.stringify(state.lyricLanes || [])),
+            lyrics: JSON.parse(JSON.stringify(state.lyrics || [])),
             solo_layers: Array.isArray(songMeta.solo_layers) ? songMeta.solo_layers.slice() : []
         };
         var history = getHistoryFiles();
@@ -442,6 +446,9 @@
         state.lyrics = Array.isArray(data.lyrics)
             ? data.lyrics.slice()
             : (Array.isArray(song.lyrics) ? song.lyrics.slice() : []);
+        state.lyricLanes = Array.isArray(data.lyricLanes)
+            ? JSON.parse(JSON.stringify(data.lyricLanes))
+            : (Array.isArray(song.lyricLanes) ? JSON.parse(JSON.stringify(song.lyricLanes)) : []);
         resetStreamingLyrics();
         lyricRebuildIndex();
         syncLyricsToRoll();

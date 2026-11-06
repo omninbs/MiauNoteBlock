@@ -16,7 +16,6 @@
     function markDirty() { return N.markDirty.apply(this, arguments); }
     function pushUndo() { return N.pushUndo.apply(this, arguments); }
     function rebuildFromNotes() { return N.rebuildFromNotes.apply(this, arguments); }
-    function segmentEnsureEmptyLane() { return N.segmentEnsureEmptyLane.apply(this, arguments); }
     function segmentEnsureLanes() { return N.segmentEnsureLanes.apply(this, arguments); }
     function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
     function syncTrackPanelToggleButton() { return N.syncTrackPanelToggleButton.apply(this, arguments); }
@@ -264,7 +263,6 @@
             }
             state.segments.push(ns);
         }
-        segmentEnsureEmptyLane();
     }
 
     // 缝合: 片段 -> state.notes (绝对 tick + 全局 layer)
@@ -465,9 +463,29 @@
         return segmentFollowSongEnd();
     }
 
+    // 手动添加一条片段轨道 (工具栏「添加轨道」按钮):
+    // 不再自动补空轨, 新轨道统一由用户显式添加
+    function segmentAddLane() {
+        segmentEnsureLanes();
+        var N3 = window.WebNBS;
+        var colors = (N3 && N3.SEG_LANE_COLORS) || ['#4fc3f7'];
+        var ln = {
+            id: state.segmentLanes.length + 1,
+            name: i18nText('轨道') + ' ' + (state.segmentLanes.length + 1),
+            muted: false, solo: false, volume: 100,
+            height: N.SEG_DEFAULT_LANE_H,
+            color: colors[state.segmentLanes.length % colors.length]
+        };
+        state.segmentLanes.push(ln);
+        state._segmentsEdited = true;
+        if (state.pianoRoll) state.pianoRoll.setSegmentLanes(state.segmentLanes);
+        renderSegmentSidePanel();
+        if (state.pianoRoll) state.pianoRoll.render();
+        markDirty();
+        return state.segmentLanes.length - 1;
+    }
+
     function segmentAfterEdit() {
-        // 保证始终有一条空轨道可拖入
-        segmentEnsureEmptyLane();
         // 片段是权威数据: 先缝合回 NBS 音符, 再刷新索引与界面
         segmentCompose();
         if (state.pianoRoll) state.pianoRoll.clearSelection();
@@ -747,7 +765,11 @@
     }
 
     // 侧边板 (轨道头): 每行 = 一条片段轨道 lane
+    // 布局: [色点 + 名称 ..... M S] / [音量旋钮 + 数值]
     var _sidePanelRetry = 0;
+    // 旋钮角度范围: -135° ~ +135° (共 270°) 映射音量 0~100
+    function knobAngle(v) { return -135 + 270 * Math.max(0, Math.min(100, v)) / 100; }
+
     function renderSegmentSidePanel() {
         var panel = $('segment-side-panel');
         var pr = state.pianoRoll;
@@ -760,6 +782,7 @@
         panel.style.top = top + 'px';
         panel.style.height = availH + 'px';
         panel.style.width = (pr.getSegmentPanelWidth ? pr.getSegmentPanelWidth() : 120) + 'px';
+        var colors = (N.SEG_LANE_COLORS) || ['#4fc3f7'];
         var html = '';
         var renderedRows = 0;
         for (var i = 0; i < state.segmentLanes.length; i++) {
@@ -768,15 +791,22 @@
             var rh = ln.height;
             if (relY + rh < 0 || relY > availH) continue;
             renderedRows++;
+            var lc = (typeof ln.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(ln.color))
+                ? ln.color : colors[i % colors.length];
+            var vol = Math.round(isFinite(ln.volume) ? ln.volume : 100);
             html += '<div class="seg-lane-row" data-lane="' + i + '" style="top:' + relY + 'px;height:' + rh + 'px;">'
-                + '<div class="seg-lane-title"><span class="seg-lane-name" title="' + escapeHtml(ln.name || '') + '">'
-                + escapeHtml(ln.name || (i18nText('轨道') + ' ' + (i + 1)))
-                + '</span>'
+                + '<div class="seg-lane-title">'
+                + '<span class="seg-lane-head"><span class="seg-lane-color" data-act="color" title="' + i18nText('轨道颜色') + '" style="background:' + lc + '"></span>'
+                + '<span class="seg-lane-name" title="' + escapeHtml(ln.name || '') + '">' + escapeHtml(ln.name || (i18nText('轨道') + ' ' + (i + 1))) + '</span></span>'
                 + '<span>'
                 + '<button class="seg-lane-btn' + (ln.muted ? ' active' : '') + '" data-act="mute" title="' + i18nText('静音') + '">M</button>'
                 + '<button class="seg-lane-btn' + (ln.solo ? ' active' : '') + '" data-act="solo" title="' + i18nText('独奏') + '">S</button>'
                 + '</span></div>'
-                + '<input type="range" class="seg-lane-vol" data-lane="' + i + '" min="0" max="100" step="1" value="' + Math.round(ln.volume) + '">'
+                + '<div class="seg-lane-volrow">'
+                + '<div class="seg-lane-knob' + (vol <= 0 ? ' zero' : '') + '" data-lane="' + i + '" style="--seg-v:' + vol + '" title="' + i18nText('音量') + '">'
+                + '<div class="seg-lane-knob-dial" style="transform:rotate(' + knobAngle(vol) + 'deg)"></div></div>'
+                + '<span class="seg-lane-knob-val" data-lane="' + i + '">' + vol + '</span>'
+                + '</div>'
                 + '<div class="seg-lane-resize" data-lane="' + i + '"></div>'
                 + '</div>';
         }
@@ -793,12 +823,84 @@
         }
     }
 
+    // 轨道颜色弹层: 原生调色盘 (任意 RGB) + HEX 手动输入
+    var _laneColorPop = null;
+    function closeLaneColorPop() {
+        if (_laneColorPop) {
+            _laneColorPop.remove();
+            _laneColorPop = null;
+            document.removeEventListener('mousedown', _laneColorPopOutside, true);
+        }
+    }
+    function _laneColorPopOutside(e) {
+        if (_laneColorPop && !_laneColorPop.contains(e.target)) closeLaneColorPop();
+    }
+    function openLaneColorPop(idx, anchorEl) {
+        closeLaneColorPop();
+        var ln = state.segmentLanes[idx];
+        if (!ln) return;
+        var cur = (/^#[0-9a-fA-F]{6}$/.test(ln.color || '') ? ln.color : '#4fc3f7');
+        var pop = document.createElement('div');
+        pop.className = 'seg-lane-color-pop';
+        pop.innerHTML =
+            '<label class="seg-lane-color-wheel" title="' + i18nText('点击打开调色盘') + '" style="background:' + cur + '">'
+            + '<input type="color" value="' + cur + '"></label>'
+            + '<div class="seg-lane-color-hexrow">'
+            + '<span class="seg-lane-color-hash">#</span>'
+            + '<input type="text" class="seg-lane-color-hex" maxlength="6" spellcheck="false" value="' + cur.slice(1) + '">'
+            + '</div>';
+        document.body.appendChild(pop);
+        var r = anchorEl.getBoundingClientRect();
+        var pw2 = pop.offsetWidth || 116;
+        pop.style.left = Math.max(4, Math.min(window.innerWidth - pw2 - 4, r.left)) + 'px';
+        pop.style.top = Math.min(window.innerHeight - 110, r.bottom + 4) + 'px';
+        _laneColorPop = pop;
+        setTimeout(function() {
+            document.addEventListener('mousedown', _laneColorPopOutside, true);
+        }, 0);
+        var wheel = pop.querySelector('.seg-lane-color-wheel');
+        var hexInput = pop.querySelector('.seg-lane-color-hex');
+        var apply = function(hex, syncHex) {
+            ln.color = hex;
+            wheel.style.background = hex;
+            if (syncHex) hexInput.value = hex.slice(1);
+            renderSegmentSidePanel();
+            if (state.pianoRoll) state.pianoRoll.render();
+            markDirty();
+        };
+        var colorInput = pop.querySelector('input[type="color"]');
+        colorInput.addEventListener('input', function() { apply(colorInput.value, true); });
+        hexInput.addEventListener('input', function() {
+            var v = hexInput.value.replace(/[^0-9a-fA-F]/g, '').slice(0, 6);
+            hexInput.value = v;
+            if (v.length === 6) apply('#' + v, false);
+        });
+    }
+
     var _segLaneResize = null;
+    // 应用轨道音量: 缝合 + 刷新 (音量烘焙进 velocity)
+    function applyLaneVolume(idx, v) {
+        var ln = state.segmentLanes[idx];
+        if (!ln) return;
+        ln.volume = Math.max(0, Math.min(100, Math.round(v)));
+        segmentCompose();
+        if (state.pianoRoll) state.pianoRoll.setNotes(state.notes);
+        rebuildFromNotes();
+        markDirty();
+    }
+
     function bindSegmentSidePanel() {
         var panel = $('segment-side-panel');
         if (!panel || panel._bound) return;
         panel._bound = true;
         panel.addEventListener('click', function(e) {
+            // 颜色点: 打开色板弹层
+            var cd = e.target.closest ? e.target.closest('.seg-lane-color') : null;
+            if (cd) {
+                var cRow = cd.closest('.seg-lane-row');
+                if (cRow) openLaneColorPop(parseInt(cRow.getAttribute('data-lane'), 10), cd);
+                return;
+            }
             var btn = e.target.closest ? e.target.closest('.seg-lane-btn') : null;
             if (!btn) return;
             var row = btn.closest('.seg-lane-row');
@@ -811,16 +913,51 @@
             else if (act === 'solo') ln.solo = !ln.solo;
             segmentAfterEdit();
         });
-        panel.addEventListener('input', function(e) {
-            if (!e.target || !e.target.classList || !e.target.classList.contains('seg-lane-vol')) return;
-            var idx = parseInt(e.target.getAttribute('data-lane'), 10);
+        // 音量旋钮: 按住上下拖动调节 (向上增大), 双击恢复 100
+        // 拖动中直接改 DOM (不整体重绘侧边板, 否则拖拽元素会被销毁)
+        panel.addEventListener('mousedown', function(e) {
+            var knob = e.target.closest ? e.target.closest('.seg-lane-knob') : null;
+            if (!knob) return;
+            e.preventDefault();
+            var idx = parseInt(knob.getAttribute('data-lane'), 10);
             var ln = state.segmentLanes[idx];
             if (!ln) return;
-            ln.volume = parseFloat(e.target.value);
-            segmentCompose();
-            if (state.pianoRoll) state.pianoRoll.setNotes(state.notes);
-            rebuildFromNotes();
-            markDirty();
+            var startY = e.clientY;
+            var startV = isFinite(ln.volume) ? ln.volume : 100;
+            var dial = knob.querySelector('.seg-lane-knob-dial');
+            var valEl = panel.querySelector('.seg-lane-knob-val[data-lane="' + idx + '"]');
+            var move = function(ev) {
+                var v = startV + (startY - ev.clientY) * 1.2;
+                v = Math.max(0, Math.min(100, Math.round(v)));
+                if (v === ln.volume) return;
+                ln.volume = v;
+                knob.style.setProperty('--seg-v', v);
+                if (dial) dial.style.transform = 'rotate(' + knobAngle(v) + 'deg)';
+                if (valEl) valEl.textContent = v;
+                knob.classList.toggle('zero', v <= 0);
+                applyLaneVolume(idx, v);
+            };
+            var up = function() {
+                document.removeEventListener('mousemove', move);
+                document.removeEventListener('mouseup', up);
+            };
+            document.addEventListener('mousemove', move);
+            document.addEventListener('mouseup', up);
+        });
+        panel.addEventListener('dblclick', function(e) {
+            var knob = e.target.closest ? e.target.closest('.seg-lane-knob') : null;
+            if (!knob) return;
+            var idx = parseInt(knob.getAttribute('data-lane'), 10);
+            var ln = state.segmentLanes[idx];
+            if (!ln) return;
+            ln.volume = 100;
+            knob.style.setProperty('--seg-v', 100);
+            var dial = knob.querySelector('.seg-lane-knob-dial');
+            var valEl = panel.querySelector('.seg-lane-knob-val[data-lane="' + idx + '"]');
+            if (dial) dial.style.transform = 'rotate(' + knobAngle(100) + 'deg)';
+            if (valEl) valEl.textContent = '100';
+            knob.classList.remove('zero');
+            applyLaneVolume(idx, 100);
         });
         panel.addEventListener('mousedown', function(e) {
             var rz = e.target.closest ? e.target.closest('.seg-lane-resize') : null;
@@ -970,6 +1107,7 @@
     N.syncNbsLayerGroups = syncNbsLayerGroups;
     N.segmentAdoptTick = segmentAdoptTick;
     N.segmentAfterEdit = segmentAfterEdit;
+    N.segmentAddLane = segmentAddLane;
     N.segmentCommitDrag = segmentCommitDrag;
     N.segmentSplit = segmentSplit;
     N.segmentTrimLeft = segmentTrimLeft;

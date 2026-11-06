@@ -11,6 +11,19 @@
     function splitSegmentByRanges() { return N.splitSegmentByRanges.apply(this, arguments); }
 
 
+    // 片段轨道预设色板 (FL Studio 风格: 高饱和、彼此区分度高)
+    var SEG_LANE_COLORS = [
+        '#e94b5a', '#f0a03c', '#e8d44d', '#7ac74f', '#38c9b0',
+        '#4fc3f7', '#5b8def', '#a06be0', '#e06bd2', '#8d9aa5'
+    ];
+
+    // 取有效轨道颜色: 非法/缺失时按轨道序号循环分配预设色
+    function laneColorAt(ln, idx) {
+        var c = ln && ln.color;
+        if (typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c)) return c;
+        return SEG_LANE_COLORS[idx % SEG_LANE_COLORS.length];
+    }
+
     function segmentEnsureLanes() {
         if (!Array.isArray(state.segmentLanes)) state.segmentLanes = [];
         if (state.segmentLanes.length === 0) {
@@ -25,6 +38,7 @@
             if (typeof ln.solo !== 'boolean') ln.solo = false;
             if (!isFinite(ln.volume)) ln.volume = 100;
             if (!isFinite(ln.height) || ln.height < 24) ln.height = SEG_DEFAULT_LANE_H;
+            ln.color = laneColorAt(ln, i);
         }
     }
 
@@ -40,7 +54,8 @@
         if (!used[lastIdx]) return false;
         lanes.push({
             id: lanes.length + 1, muted: false, solo: false,
-            volume: 100, height: SEG_DEFAULT_LANE_H
+            volume: 100, height: SEG_DEFAULT_LANE_H,
+            color: SEG_LANE_COLORS[lanes.length % SEG_LANE_COLORS.length]
         });
         return true;
     }
@@ -67,6 +82,7 @@
             var lane = {
                 id: lanes.length + 1, muted: false, solo: false,
                 volume: 100, height: SEG_DEFAULT_LANE_H,
+                color: SEG_LANE_COLORS[lanes.length % SEG_LANE_COLORS.length],
                 channel: (g.channel === null || g.channel === undefined) ? undefined : g.channel,
                 name: g.name || '',
                 // isDrum 显式标记: 按 layer 分组时 channel 只是音轨索引, 不能用 === 9 判断打击乐
@@ -436,6 +452,8 @@
     // 效果不如 MIDI 导入时的后处理分割 (后者直接分析 MIDI 事件, 不受延音展开影响)。
 
     // ---- 导出 ----
+    N.SEG_LANE_COLORS = SEG_LANE_COLORS;
+    N.laneColorAt = laneColorAt;
     N.segmentEnsureLanes = segmentEnsureLanes;
     N.segmentEnsureEmptyLane = segmentEnsureEmptyLane;
     N.buildSegmentTracks = buildSegmentTracks;

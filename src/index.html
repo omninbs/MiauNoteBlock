@@ -187,6 +187,10 @@
                 <button class="toolbar-btn seg-tool-btn" id="seg-tb-merge" title="合并全部片段" aria-label="合并全部">
                     <i class="fa-solid fa-object-group"></i>
                 </button>
+                <span class="toolbar-divider"></span>
+                <button class="toolbar-btn seg-tool-btn" id="seg-tb-add-lane" title="添加轨道" aria-label="添加轨道">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
                 <span class="seg-tool-count" id="seg-tool-count">1</span>
                 <button class="toolbar-btn seg-tool-btn seg-mobile-only" id="seg-tb-exit" aria-label="退出片段编辑">退出</button>
             </div>
@@ -556,10 +560,77 @@
             </div>
             <div class="settings-tabs">
                 <button class="settings-tab active" data-settings-tab="general">通用</button>
+                <button class="settings-tab" data-settings-tab="editor">编辑器</button>
+                <button class="settings-tab" data-settings-tab="segment">片段模式</button>
                 <button class="settings-tab" data-settings-tab="personal">个性化</button>
             </div>
             <div class="settings-body">
+                <!-- ===== 通用: 界面 / 性能 / 音频资源 ===== -->
                 <div class="settings-tab-panel active" id="settings-tab-general">
+                    <!-- ===== 界面 ===== -->
+                    <div class="settings-group">
+                        <div class="settings-group-title">界面</div>
+                        <div class="settings-row settings-inline-row">
+                            <label class="settings-label" for="settings-language">语言</label>
+                            <select id="settings-language" class="settings-control" aria-label="语言">
+                                <option value="zh-CN">🇨🇳 简体中文</option>
+                                <option value="en-US">🇺🇸 English (United States)</option>
+                                <option value="es-ES">🇪🇸 Español</option>
+                                <option value="pt-BR">🇧🇷 Português (Brasil)</option>
+                                <option value="ru-RU">🇷🇺 Русский</option>
+                                <option value="de-DE">🇩🇪 Deutsch</option>
+                                <option value="fr-FR">🇫🇷 Français</option>
+                                <option value="ja-JP">🇯🇵 日本語</option>
+                                <option value="ko-KR">🇰🇷 한국어</option>
+                                <option value="id-ID">🇮🇩 Bahasa Indonesia</option>
+                            </select>
+                        </div>
+                        <div class="settings-row">
+                            <button class="popup-btn" id="settings-storage-clean-btn" style="width:100%;">清理本地缓存</button>
+                        </div>
+                        <div class="settings-row">
+                            <button class="popup-btn" id="settings-about-btn" style="width:100%;">关于 MiauNoteBlock</button>
+                        </div>
+                    </div>
+                    <!-- ===== 性能 ===== -->
+                    <div class="settings-group">
+                        <div class="settings-group-title">性能</div>
+                        <div class="settings-row settings-inline-row">
+                            <label class="settings-label" for="settings-render-fps">画面帧率</label>
+                            <select id="settings-render-fps" class="settings-control">
+                                <option value="30">30 FPS</option>
+                                <option value="60" selected>60 FPS</option>
+                                <option value="0">垂直同步</option>
+                            </select>
+                        </div>
+                        <div class="settings-row">
+                            <label class="settings-label">
+                                <input type="checkbox" id="settings-audio-enhance"> 空间音效
+                            </label>
+                        </div>
+                    </div>
+                    <!-- ===== MIDI 音色库 ===== -->
+                    <div class="settings-group">
+                        <div class="settings-group-title">MIDI 音色库</div>
+                        <div class="settings-row settings-inline-row">
+                            <label class="settings-label">音色库</label>
+                            <div class="settings-control settings-control-wide">
+                                <select id="settings-midi-sf-mode">
+                                    <option value="ask" selected>播放时询问</option>
+                                    <option value="auto">自动后台下载</option>
+                                    <option value="off">不使用 (内置合成器)</option>
+                                </select>
+                                <button id="settings-midi-sf-download" class="settings-mini-btn">立即下载</button>
+                                <button id="settings-midi-sf-clear" class="settings-mini-btn">清除缓存</button>
+                            </div>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-hint">音色库状态: <span id="settings-midi-sf-status">未下载</span></span>
+                        </div>
+                    </div>
+                </div>
+                <!-- ===== 编辑器: NBS 钢琴卷帘相关 ===== -->
+                <div class="settings-tab-panel" id="settings-tab-editor">
                     <!-- ===== 播放 ===== -->
                     <div class="settings-group">
                         <div class="settings-group-title">播放</div>
@@ -594,9 +665,9 @@
                             </label>
                         </div>
                     </div>
-                    <!-- ===== 显示 ===== -->
+                    <!-- ===== 音符显示 ===== -->
                     <div class="settings-group">
-                        <div class="settings-group-title">显示</div>
+                        <div class="settings-group-title">音符显示</div>
                         <div class="settings-row">
                             <label class="settings-label">
                                 <input type="checkbox" id="settings-volume-opacity"> 音量映射透明度
@@ -623,9 +694,9 @@
                             </label>
                         </div>
                     </div>
-                    <!-- ===== 时间栏与片段 ===== -->
+                    <!-- ===== 时间栏 (NBS) ===== -->
                     <div class="settings-group">
-                        <div class="settings-group-title">时间栏与片段</div>
+                        <div class="settings-group-title">时间栏</div>
                         <div class="settings-row settings-inline-row">
                             <label class="settings-label" for="settings-timeline-height">时间栏视图高度</label>
                             <select id="settings-timeline-height" class="settings-control">
@@ -642,24 +713,10 @@
                             </select>
                         </div>
                         <div class="settings-row settings-inline-row">
-                            <label class="settings-label" for="settings-timeline-pos-seg">时间栏位置（片段）</label>
-                            <select id="settings-timeline-pos-seg" class="settings-control">
-                                <option value="top">顶部</option>
-                                <option value="bottom" selected>底部</option>
-                            </select>
-                        </div>
-                        <div class="settings-row settings-inline-row">
                             <label class="settings-label" for="settings-timeline-map-mode">时间栏地图显示</label>
                             <select id="settings-timeline-map-mode" class="settings-control">
                                 <option value="track" selected>根据轨道位置</option>
                                 <option value="pitch">根据音调大小</option>
-                            </select>
-                        </div>
-                        <div class="settings-row settings-inline-row">
-                            <label class="settings-label" for="settings-segment-preview-mode">片段音符预览</label>
-                            <select id="settings-segment-preview-mode" class="settings-control">
-                                <option value="track">根据轨道位置</option>
-                                <option value="pitch" selected>根据音调大小</option>
                             </select>
                         </div>
                         <div class="settings-row">
@@ -671,6 +728,27 @@
                             <label class="settings-label">
                                 <input type="checkbox" id="settings-seg-boundary-lines"> 片段分割线（NBS）
                             </label>
+                        </div>
+                    </div>
+                </div>
+                <!-- ===== 片段模式: 片段编辑器相关 ===== -->
+                <div class="settings-tab-panel" id="settings-tab-segment">
+                    <!-- ===== 布局 ===== -->
+                    <div class="settings-group">
+                        <div class="settings-group-title">布局</div>
+                        <div class="settings-row settings-inline-row">
+                            <label class="settings-label" for="settings-timeline-pos-seg">时间栏位置（片段）</label>
+                            <select id="settings-timeline-pos-seg" class="settings-control">
+                                <option value="top">顶部</option>
+                                <option value="bottom" selected>底部</option>
+                            </select>
+                        </div>
+                        <div class="settings-row settings-inline-row">
+                            <label class="settings-label" for="settings-segment-preview-mode">片段音符预览</label>
+                            <select id="settings-segment-preview-mode" class="settings-control">
+                                <option value="track">根据轨道位置</option>
+                                <option value="pitch" selected>根据音调大小</option>
+                            </select>
                         </div>
                     </div>
                     <!-- ===== 片段钢琴窗口 ===== -->
@@ -692,50 +770,19 @@
                             </label>
                         </div>
                     </div>
-                    <!-- ===== 性能 ===== -->
-                    <div class="settings-group">
-                        <div class="settings-group-title">性能</div>
-                        <div class="settings-row settings-inline-row">
-                            <label class="settings-label" for="settings-render-fps">画面帧率</label>
-                            <select id="settings-render-fps" class="settings-control">
-                                <option value="30">30 FPS</option>
-                                <option value="60" selected>60 FPS</option>
-                                <option value="0">垂直同步</option>
-                            </select>
-                        </div>
-                        <div class="settings-row">
-                            <label class="settings-label">
-                                <input type="checkbox" id="settings-audio-enhance"> 空间音效
-                            </label>
-                        </div>
-                    </div>
-                    <!-- ===== 界面 ===== -->
-                    <div class="settings-group">
-                        <div class="settings-group-title">界面</div>
-                        <div class="settings-row settings-inline-row">
-                            <label class="settings-label" for="settings-language">语言</label>
-                            <select id="settings-language" class="settings-control" aria-label="语言">
-                                <option value="zh-CN">🇨🇳 简体中文</option>
-                                <option value="en-US">🇺🇸 English (United States)</option>
-                                <option value="es-ES">🇪🇸 Español</option>
-                                <option value="pt-BR">🇧🇷 Português (Brasil)</option>
-                                <option value="ru-RU">🇷🇺 Русский</option>
-                                <option value="de-DE">🇩🇪 Deutsch</option>
-                                <option value="fr-FR">🇫🇷 Français</option>
-                                <option value="ja-JP">🇯🇵 日本語</option>
-                                <option value="ko-KR">🇰🇷 한국어</option>
-                                <option value="id-ID">🇮🇩 Bahasa Indonesia</option>
-                            </select>
-                        </div>
-                        <div class="settings-row">
-                            <button class="popup-btn" id="settings-storage-clean-btn" style="width:100%;">清理本地缓存</button>
-                        </div>
-                        <div class="settings-row">
-                            <button class="popup-btn" id="settings-about-btn" style="width:100%;">关于 MiauNoteBlock</button>
-                        </div>
-                    </div>
                 </div>
+                <!-- ===== 个性化: 配色 / 背景 / 材质 ===== -->
                 <div class="settings-tab-panel" id="settings-tab-personal">
+                    <!-- ===== UI 配色 ===== -->
+                    <div class="settings-group">
+                        <div class="settings-group-title">UI 配色</div>
+                        <div class="settings-row">
+                            <div class="settings-theme-grid" id="settings-theme-grid"></div>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-hint">强调色应用于按钮、选中状态、焦点描边等界面元素</span>
+                        </div>
+                    </div>
                     <!-- ===== 背景 ===== -->
                     <div class="settings-group">
                         <div class="settings-group-title">背景</div>
@@ -806,25 +853,6 @@
                                 <input type="range" id="settings-grid-opacity" min="0" max="1" step="0.05" value="0.25">
                                 <span id="settings-grid-opacity-value" class="settings-value">25%</span>
                             </div>
-                        </div>
-                    </div>
-                    <!-- ===== MIDI 音色库 ===== -->
-                    <div class="settings-group">
-                        <div class="settings-group-title">MIDI 音色库</div>
-                        <div class="settings-row settings-inline-row">
-                            <label class="settings-label">音色库</label>
-                            <div class="settings-control settings-control-wide">
-                                <select id="settings-midi-sf-mode">
-                                    <option value="ask" selected>播放时询问</option>
-                                    <option value="auto">自动后台下载</option>
-                                    <option value="off">不使用 (内置合成器)</option>
-                                </select>
-                                <button id="settings-midi-sf-download" class="settings-mini-btn">立即下载</button>
-                                <button id="settings-midi-sf-clear" class="settings-mini-btn">清除缓存</button>
-                            </div>
-                        </div>
-                        <div class="settings-row">
-                            <span class="settings-hint">音色库状态: <span id="settings-midi-sf-status">未下载</span></span>
                         </div>
                     </div>
                     <div class="settings-group">

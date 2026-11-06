@@ -69,6 +69,8 @@
         bindSegButton('seg-tb-paste', segActionPaste);
         bindSegButton('seg-tb-delete', segActionDelete);
         bindSegButton('seg-tb-merge', segActionMerge);
+        // 添加轨道: 手动新增一条片段轨道 (取代旧的自动补空轨)
+        bindSegButton('seg-tb-add-lane', function() { N.segmentAddLane(); });
         // 分轴缩放按钮 (触屏也可用)
         bindSegButton('seg-zoom-x-in', function() { segZoomAxis('x', 1.2); });
         bindSegButton('seg-zoom-x-out', function() { segZoomAxis('x', 1 / 1.2); });

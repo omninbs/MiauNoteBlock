@@ -75,6 +75,7 @@
                 muted: !!ln.muted, solo: !!ln.solo,
                 volume: isFinite(ln.volume) ? ln.volume : 100,
                 height: isFinite(ln.height) ? ln.height : SEG_DEFAULT_LANE_H,
+                color: (typeof ln.color === 'string' ? ln.color : undefined),
                 layers: layers
             });
         }
@@ -120,6 +121,7 @@
                         // 导出时音量已烘焙进音符, 导入后重置为 100 避免二次衰减
                         volume: 100,
                         height: isFinite(ld.height) ? ld.height : SEG_DEFAULT_LANE_H,
+                        color: (typeof ld.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(ld.color)) ? ld.color : undefined,
                         layerKeys: laneKeys.length ? laneKeys : undefined
                     });
                     laneLayers.push(laneKeys);

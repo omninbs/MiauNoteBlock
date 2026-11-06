@@ -197,6 +197,7 @@
                 muted: !!ln.muted, solo: !!ln.solo,
                 volume: isFinite(ln.volume) ? ln.volume : 100,
                 height: isFinite(ln.height) ? ln.height : SEG_DEFAULT_LANE_H,
+                color: (typeof ln.color === 'string' ? ln.color : undefined),
                 layers: layers
             });
         }

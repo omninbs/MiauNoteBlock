@@ -357,7 +357,9 @@
             var visualFrameMs = state.renderFpsLimit > 0 ? 1000 / state.renderFpsLimit : 0;
             var shouldRenderVisual = visualFrameMs === 0 || now >= _nextVisualFrame;
             if (state.pianoRoll && shouldRenderVisual) {
-                if (state.pianoRoll.smoothScrollEnabled) {
+                // 平滑翻页 (播放中拖动查看时暂停: 用户正在自由浏览, 松开后由卷帘自己平滑回到播放头)
+                if (state.pianoRoll.smoothScrollEnabled
+                        && !state.pianoRoll._playbackViewHold && !state.pianoRoll._playbackReturnRAF) {
                     var visibleWidth = state.pianoRoll.displayWidth - state.pianoRoll._currentPanelWidth;
                     var playheadX = state.pianoRoll._currentPanelWidth + visibleWidth / 3;
                     // 使用 _zoomX(): 片段模式走独立横向缩放, 避免 scrollX 跳到极端位置

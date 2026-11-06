@@ -391,6 +391,9 @@
         // 进度条/播放头拖拽
         this._isDraggingPlayhead = false;
         this._isDraggingProgressBar = false;  // 顶部进度条拖拽 (按住拖动连续 seek)
+        // 播放中拖动查看: 按住平移/进度条时暂停自动翻页, 松开后平滑回到播放头位置
+        this._playbackViewHold = false;
+        this._playbackReturnRAF = null;
 
         // 全量重绘标记
         this._fullRedrawNeeded = true;
@@ -991,8 +994,25 @@
     // ============ 事件绑定 ============
     PianoRoll.prototype._bindEvents = function() {
         var self = this;
-        this.canvas.addEventListener('mousedown', function(e) { self._onMouseDown(e); });
+        this.canvas.addEventListener('mousedown', function(e) {
+            // 按住拖动期间捕获指针: 鼠标移出画布 (如左侧音轨面板覆盖区) 时仍能收到
+            // move/up 事件, 保证选择框连续跟随 + 边缘自动翻页 (越过左边界全速向左) 生效
+            try {
+                if (self.canvas.setPointerCapture && e.pointerId !== undefined) {
+                    self.canvas.setPointerCapture(e.pointerId);
+                }
+            } catch (err) {}
+            self._onMouseDown(e);
+        });
         this.canvas.addEventListener('mousemove', function(e) { self._onMouseMove(e); });
+        // 拖动期间在 window 上兜底: 鼠标移出画布进入 DOM 覆盖层 (如片段模式左侧轨道板) 时
+        // canvas 的 mousemove 不再触发, 会导致框选中断、边缘自动翻页失效。
+        // mousemove 不受 setPointerCapture 影响, 因此必须在这里继续驱动。
+        window.addEventListener('mousemove', function(e) {
+            if (!self._mouseDown) return;
+            if (e.target === self.canvas) return; // 画布内已由上面的监听处理, 避免重复
+            self._onMouseMove(e);
+        });
         this.canvas.addEventListener('mouseup', function(e) { self._onMouseUp(e); });
         // A drag can end outside the canvas. Finalize it globally to avoid a stale
         // selection or note-drag state affecting the next gesture.
@@ -1431,8 +1451,9 @@
 
     // 画布内片段工具栏的顶边 (与 CSS/DOM 定位共用同一算法, 避免重叠)
     PianoRoll.prototype.getSegmentToolbarTop = function() {
-        // 时间栏在顶部时贴在时间栏下方; 在底部时固定在顶部工具栏下方
-        return Math.max(64, this._editAreaTop() + 8);
+        // 时间栏在顶部时贴在时间栏下方; 在底部时贴画布顶边。
+        // 画布本身已位于 DOM 顶部工具栏之下, 无需再预留 64px, 否则顶栏与画版间出现大片空位
+        return this._editAreaTop() + 6;
     };
     PianoRoll.prototype.getSegmentToolbarHeight = function() { return 34; };
 
@@ -1742,8 +1763,10 @@
                 var px1 = this._tickToScreen(pEnd);
                 ctx.save();
                 ctx.globalAlpha = 0.96;
-                // 扁平预览: 纯色块 + 强调色描边, 无阴影
-                ctx.fillStyle = SEG_THEME.blockSelected;
+                // 扁平预览: 轨道色填充 (与选中态同款提亮) + 强调色描边, 无阴影
+                var plc = (typeof pl.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(pl.color))
+                    ? pl.color : '#4a90d9';
+                ctx.fillStyle = multiplyColor(plc, 0.55);
                 this._segRoundRect(ctx, px0, ptop, Math.max(3, px1 - px0), phh, 4);
                 ctx.fill();
                 ctx.strokeStyle = SEG_THEME.accent;
@@ -1790,32 +1813,7 @@
         ctx.fillStyle = SEG_THEME.divider;
         ctx.fillRect(pw - 1, areaTop, 1, Math.max(0, bottomLimit - areaTop));
 
-        // ---- 片段边界参考线 (中性虚线, 常驻) ----
-        ctx.save();
-        ctx.strokeStyle = SEG_THEME.divider;
-        ctx.lineWidth = 1;
-        ctx.setLineDash([4, 3]);
-        var ticks = [];
-        var seen = {};
-        for (var t = 0; t < list.length; t++) {
-            var st = list[t].start, en = list[t].end;
-            if (drag && drag.id === list[t].id && drag.moved) {
-                st = preview ? preview.start : drag.previewStart;
-                en = preview ? preview.end : drag.previewEnd;
-            }
-            if (!seen[st]) { seen[st] = true; ticks.push(st); }
-            if (!seen[en]) { seen[en] = true; ticks.push(en); }
-        }
-        for (var k2 = 0; k2 < ticks.length; k2++) {
-            var tx = this._tickToScreen(ticks[k2]);
-            if (tx < pw || tx > w) continue;
-            ctx.beginPath();
-            ctx.moveTo(tx + 0.5, areaTop);
-            ctx.lineTo(tx + 0.5, bottomLimit);
-            ctx.stroke();
-        }
-        ctx.setLineDash([]);
-        ctx.restore();
+        // 片段边界不再绘制纵向虚线参考线 (片段块自带清晰边框, 虚线属冗余干扰)
 
         // 播放头由 overlay 画布统一绘制 (避免同时出现两个指示器)
     };
@@ -1833,19 +1831,29 @@
         if (hh < 6) return;
         var selected = selIds.indexOf(seg.id) >= 0;
         var muted = !!lane.muted;
+        // 轨道颜色 (FL Studio 风格): 片段块底色与边框跟随所属轨道颜色
+        var laneColor = (typeof lane.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(lane.color))
+            ? lane.color : '#4a90d9';
         ctx.save();
         if (muted) ctx.globalAlpha = 0.5;
         // 扁平 2D: 纯色填充 + 细边框, 无渐变/阴影
-        ctx.fillStyle = selected ? SEG_THEME.blockSelected : SEG_THEME.block;
+        // 底色 = 轨道色压暗; 选中时同色系提亮 (而非换成灰色, 否则选中瞬间颜色突变显得异常)
+        ctx.fillStyle = selected ? multiplyColor(laneColor, 0.55) : multiplyColor(laneColor, 0.38);
         this._segRoundRect(ctx, x0, top, Math.max(3, x1 - x0), hh, 4);
         ctx.fill();
         // 缩略图
         this._segDrawThumb(ctx, seg, x0, x1, top, hh, staleThumb);
-        // 边框: 选中为白色高亮, 未选中为冷蓝灰细边 (明显可辨)
+        // 边框: 选中为白色高亮, 未选中保持中性冷蓝灰 (不跟随轨道色, 避免视觉过花)
         ctx.strokeStyle = selected ? SEG_THEME.blockBorderSelected : SEG_THEME.blockBorder;
         ctx.lineWidth = selected ? 2 : 1.25;
         this._segRoundRect(ctx, x0 + 0.5, top + 0.5, Math.max(2, x1 - x0 - 1), hh - 1, 4);
         ctx.stroke();
+        // 左侧色条: 与侧边板色点呼应, 快速识别轨道归属
+        if ((x1 - x0) > 10) {
+            ctx.fillStyle = laneColor;
+            this._segRoundRect(ctx, x0 + 1, top + 2, 3, Math.max(2, hh - 4), 2);
+            ctx.fill();
+        }
         // 名称 + 时长: 极窄片段不显示; 放不下时截断并加省略号
         if (hh >= 34) {
             var blockW = x1 - x0;
@@ -1938,30 +1946,38 @@
         e.preventDefault();
     };
 
+    // 根据鼠标位置更新片段框选结果 (mousemove 与边缘自动滚动共用)
+    PianoRoll.prototype._segApplyMarquee = function(x, y) {
+        var m = this._segMarquee;
+        if (!m) return;
+        m.x1 = x; m.y1 = y;
+        var mx0 = Math.min(m.x0, x), mx1 = Math.max(m.x0, x);
+        var my0 = Math.min(m.y0, y), my1 = Math.max(m.y0, y);
+        var ids = m.baseIds.slice();
+        var lanes = this.segmentLanes || [];
+        var list = this.segments || [];
+        for (var i = 0; i < list.length; i++) {
+            var s = list[i];
+            var lane = lanes[s.lane];
+            if (!lane) continue;
+            var lt = this.getSegmentLaneTop(s.lane);
+            var sx0 = this._tickToScreen(s.start);
+            var sx1 = this._tickToScreen(s.end);
+            if (sx1 < mx0 || sx0 > mx1 || lt + lane.height < my0 || lt > my1) continue;
+            if (ids.indexOf(s.id) < 0) ids.push(s.id);
+        }
+        this.segmentSelectedIds = ids;
+        this.segmentSelectedId = ids.length ? ids[ids.length - 1] : null;
+        this._fullRedrawNeeded = true;
+        this.requestRender();
+    };
+
     PianoRoll.prototype._segMouseMove = function(e, x, y) {
         // 框选
         if (this._segMarquee) {
-            var m = this._segMarquee;
-            m.x1 = x; m.y1 = y;
-            var mx0 = Math.min(m.x0, x), mx1 = Math.max(m.x0, x);
-            var my0 = Math.min(m.y0, y), my1 = Math.max(m.y0, y);
-            var ids = m.baseIds.slice();
-            var lanes = this.segmentLanes || [];
-            var list = this.segments || [];
-            for (var i = 0; i < list.length; i++) {
-                var s = list[i];
-                var lane = lanes[s.lane];
-                if (!lane) continue;
-                var lt = this.getSegmentLaneTop(s.lane);
-                var sx0 = this._tickToScreen(s.start);
-                var sx1 = this._tickToScreen(s.end);
-                if (sx1 < mx0 || sx0 > mx1 || lt + lane.height < my0 || lt > my1) continue;
-                if (ids.indexOf(s.id) < 0) ids.push(s.id);
-            }
-            this.segmentSelectedIds = ids;
-            this.segmentSelectedId = ids.length ? ids[ids.length - 1] : null;
-            this._fullRedrawNeeded = true;
-            this.requestRender();
+            this._segApplyMarquee(x, y);
+            // 靠近编辑区边缘时持续翻页 (与 NBS 框选一致)
+            this._updateEdgeAutoScroll(x, y, false);
             return;
         }
         var d = this._segDrag;
@@ -2033,6 +2049,8 @@
 
     PianoRoll.prototype._segMouseUp = function(e, x, y) {
         var committed = false;
+        // 结束框选时停止边缘自动翻页
+        this._stopEdgeAutoScroll();
         if (this._segMarquee) {
             this._segMarquee = null;
         } else if (this._segDrag) {
@@ -3705,6 +3723,7 @@
             this._dragStartY = y;
             this._isPanning = true;
             this._panButton = 0;
+            this._beginPlaybackViewHold();
             this.canvas.style.cursor = 'grabbing';
             e.preventDefault();
             return;
@@ -3718,6 +3737,8 @@
             this._mouseDown = true;
             this._dragStartX = x;
             this._dragStartY = y;
+            // 播放中拖动进度条: 暂停自动翻页, 自由浏览; 松开后回到播放头位置
+            this._beginPlaybackViewHold();
             // 点击导航条: 平滑滚动到目标位置 (而非瞬间跳转)
             this._scrollFromSliderX(x, true);
             return;
@@ -3944,6 +3965,7 @@
             this._isPanning = true;
             this._panButton = e.button;
             this._rightDragMoved = false;
+            this._beginPlaybackViewHold();
             this.canvas.style.cursor = 'grabbing';
             e.preventDefault();
         }
@@ -4208,6 +4230,12 @@
     PianoRoll.prototype._onMouseUp = function(e) {
         if (!this._mouseDown) return;
         this._mouseDown = false;
+        // 释放 mousedown 时设置的指针捕获 (未捕获时会抛错, 静默忽略)
+        try {
+            if (this.canvas.releasePointerCapture && e.pointerId !== undefined) {
+                this.canvas.releasePointerCapture(e.pointerId);
+            }
+        } catch (err) {}
         // 音轨信息栏按钮按下状态复位 (点击动画结束)
         if (this._trackPanelPressed) {
             this._trackPanelPressed = null;
@@ -4277,6 +4305,7 @@
         // 顶部进度条拖拽结束
         if (this._isDraggingProgressBar) {
             this._isDraggingProgressBar = false;
+            this._endPlaybackViewHold();
             return;
         }
 
@@ -4321,6 +4350,7 @@
             if (this._panButton === 2 && this._hasMoved) this._rightDragMoved = true;
             this._isPanning = false;
             this._panButton = -1;
+            this._endPlaybackViewHold();
             this.canvas.style.cursor = 'crosshair';
         }
     };
@@ -5990,16 +6020,21 @@
         var MAX_SPEED = 24; // 最大滚动速度 (px/帧), 限制合理范围避免滑太快
         var MIN_SPEED = 1;  // 最小滚动速度 (px/帧), 进入边沿即开始缓慢翻页
         var pw = this._currentPanelWidth;
-        var th = this._cfg.timelineHeight;
+        // 片段模式的编辑区从片段区顶部开始 (时间栏在顶部/底部两种布局都适用)
+        var th = this.segmentsEditMode ? this.getSegmentAreaTop() : this._cfg.timelineHeight;
         var editW = this.displayWidth - pw;
-        var editH = this.displayHeight - th;
+        var editH = this._editAreaBottom() - th;
         var dx = 0, dy = 0;
-        // 只在编辑区域内才检测边缘
-        if (screenX > pw && screenY > th) {
+        // 纵向只在编辑区域内检测
+        if (screenY > th) {
             var relX = screenX - pw;
             var relY = screenY - th;
-            // 左边缘: relX 越小越靠近边缘, 速度越大 (负方向)
-            if (relX < EDGE) {
+            // 左边缘: 编辑区内按距离比例调速 (负方向);
+            // 鼠标越过左边界 (relX <= 0, 已进入音轨面板覆盖区) 时全速向左翻页——
+            // 否则快速拖动会直接跳过边缘触发窗口, 导致"靠近左边缘不向左翻页"
+            if (relX <= 0) {
+                dx = -MAX_SPEED;
+            } else if (relX < EDGE) {
                 var ratioX = 1 - relX / EDGE; // 0~1, 越靠近边缘越接近 1
                 dx = -(MIN_SPEED + (MAX_SPEED - MIN_SPEED) * ratioX);
             } else if (relX > editW - EDGE) {
@@ -6023,11 +6058,23 @@
                 this._edgeScrollRAF = requestAnimationFrame(function loop() {
                     var maxSx = self._getMaxScrollX();
                     self.scrollX = Math.max(0, Math.min(maxSx, self.scrollX + (self._edgeScrollDx || 0)));
-                    self.scrollY = Math.max(0, self.scrollY + (self._edgeScrollDy || 0));
-                    // 如果正在选择, 更新选择框: 锚点固定为网格坐标, 当前角跟随鼠标
-                    if (self._isSelecting && self._selectionRect && self._edgeCurrentX != null) {
-                        self._selectionRect = self._selectionRectTo(self._edgeCurrentX, self._edgeCurrentY);
-                        self._selectByRect(self._selectionRect.tick1, self._selectionRect.layer1, self._selectionRect.tick2, self._selectionRect.layer2, self._edgeAdditive || false);
+                    if (self.segmentsEditMode) {
+                        // 片段模式纵向滚动使用独立 _segScrollY
+                        if (self._edgeScrollDy) {
+                            self._segScrollY = (self._segScrollY || 0) + self._edgeScrollDy;
+                            self._segClampScroll();
+                        }
+                    } else {
+                        self.scrollY = Math.max(0, self.scrollY + (self._edgeScrollDy || 0));
+                    }
+                    // 滚动后重新计算选择框: 锚点固定为网格/像素坐标, 当前角跟随鼠标
+                    if (self._edgeCurrentX != null) {
+                        if (self._segMarquee) {
+                            self._segApplyMarquee(self._edgeCurrentX, self._edgeCurrentY);
+                        } else if (self._isSelecting && self._selectionRect) {
+                            self._selectionRect = self._selectionRectTo(self._edgeCurrentX, self._edgeCurrentY);
+                            self._selectByRect(self._selectionRect.tick1, self._selectionRect.layer1, self._selectionRect.tick2, self._selectionRect.layer2, self._edgeAdditive || false);
+                        }
                     }
                     self._fullRedrawNeeded = true;
                     self.render();
@@ -6839,6 +6886,8 @@
     // - 普通模式: 播放头越过右边界时整页翻一屏 (书本翻页)
     PianoRoll.prototype._applyPlaybackAutoScroll = function() {
         if (!this.isPlaying) return;
+        // 播放中用户正在拖动查看 (平移/进度条): 暂停自动翻页, 由用户自由浏览
+        if (this._playbackViewHold || this._playbackReturnRAF) return;
         var w = this.displayWidth;
         var pw = this._editOriginX();
         var cellW = this._cfg.cellW * this._zoomX();
@@ -6854,6 +6903,58 @@
             this.scrollX = Math.max(0, tick * cellW);
             this._fullRedrawNeeded = true;
         }
+    };
+
+    // 播放翻页的目标 scrollX (与 _applyPlaybackAutoScroll 同一套规则)
+    PianoRoll.prototype._playbackScrollTarget = function() {
+        var w = this.displayWidth;
+        var pw = this._editOriginX();
+        var cellW = this._cfg.cellW * this._zoomX();
+        var tick = this._getDisplayTick();
+        if (!(w > 0) || !(cellW > 0)) return this.scrollX;
+        if (this.smoothScrollEnabled) {
+            var playheadX = pw + (w - pw) / 3;
+            return Math.max(0, tick * cellW + pw - playheadX);
+        }
+        return Math.max(0, tick * cellW);
+    };
+
+    // 开始"播放中拖动查看": 挂起自动翻页, 直到松手
+    PianoRoll.prototype._beginPlaybackViewHold = function() {
+        if (!this.isPlaying) return;
+        if (this._playbackReturnRAF) {
+            cancelAnimationFrame(this._playbackReturnRAF);
+            this._playbackReturnRAF = null;
+        }
+        this._playbackViewHold = true;
+    };
+
+    // 松手: 播放中则平滑回到播放头位置; 未播放则仅清除挂起标记
+    PianoRoll.prototype._endPlaybackViewHold = function() {
+        if (this._playbackReturnRAF) {
+            cancelAnimationFrame(this._playbackReturnRAF);
+            this._playbackReturnRAF = null;
+        }
+        this._playbackViewHold = false;
+        if (!this.isPlaying) return;
+        var self = this;
+        var from = this.scrollX;
+        var start = performance.now();
+        var DUR = 240;
+        this._playbackReturnRAF = requestAnimationFrame(function step() {
+            self._playbackReturnRAF = null;
+            // 播放已停止或用户再次按住: 交回控制权
+            if (!self.isPlaying || self._playbackViewHold) return;
+            var t = Math.min(1, (performance.now() - start) / DUR);
+            var target = self._playbackScrollTarget();
+            var maxSx = self._getMaxScrollX();
+            if (target > maxSx) target = maxSx;
+            var eased = 1 - Math.pow(1 - t, 3);
+            self.scrollX = from + (target - from) * eased;
+            self._fullRedrawNeeded = true;
+            self.render();
+            if (t < 1) self._playbackReturnRAF = requestAnimationFrame(step);
+        });
     };
 
     // 非播放状态下滚动使播放头可见 (仅当播放头在可视区域外时滚动)
@@ -7220,10 +7321,50 @@
         };
     };
 
+    // 轨道拖动手柄图标 (NBS 轨道与歌词轨道共用同一套绘制, 避免两处样式漂移):
+    // 桌面端: 无底框 6 点 grip dots; 移动端: 浅底 + ≡ 三横线
+    PianoRoll.prototype._drawTrackDragHandle = function(x, w, h, cy, isDesktop) {
+        var ctx = this.ctx;
+        var cx = x + w / 2;
+        if (isDesktop) {
+            // 多排点 grip dots 图标, 代表防滑/可拖拽
+            var dH = h * 0.65;
+            var colGap = 5;
+            var rowGap = dH / 2;
+            ctx.fillStyle = '#888';
+            for (var dr = 0; dr < 3; dr++) {
+                for (var dc = 0; dc < 2; dc++) {
+                    var dx = cx + (dc - 0.5) * colGap;
+                    var dy = cy + (dr - 1) * rowGap;
+                    ctx.beginPath();
+                    ctx.arc(dx, dy, 1.3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        } else {
+            // ≡ 图标, 长按拖动调整顺序
+            ctx.fillStyle = 'rgba(255,255,255,0.08)';
+            ctx.fillRect(x, cy - h / 2, h, h);
+            ctx.strokeStyle = '#888';
+            ctx.lineWidth = 1.2;
+            ctx.lineCap = 'round';
+            var s = h * 0.25;
+            ctx.beginPath();
+            ctx.moveTo(cx - s, cy - s * 0.7);
+            ctx.lineTo(cx + s, cy - s * 0.7);
+            ctx.moveTo(cx - s, cy);
+            ctx.lineTo(cx + s, cy);
+            ctx.moveTo(cx - s, cy + s * 0.7);
+            ctx.lineTo(cx + s, cy + s * 0.7);
+            ctx.stroke();
+        }
+    };
+
     // 歌词轨道行的按钮布局 (只有 删除 + 拖动柄, 没有 M/S/音量/全选)
+    // 按钮尺寸与 NBS 轨道行保持一致 (桌面 btnH, 移动 btnSize)
     PianoRoll.prototype._getLyricLaneButtonLayout = function(cellH) {
         var pw = this._currentPanelWidth;
-        var btnH = Math.min(20, cellH * 0.7);
+        var btnH = this._isDesktop ? Math.min(20, cellH * 0.7) : Math.min(14, cellH * 0.55);
         var btnW = 16;
         var dragW = this._isDesktop ? 14 : Math.min(14, cellH * 0.55);
         var rightMargin = this._isDesktop ? 4 : 2;
@@ -7435,24 +7576,8 @@
                 ctx.font = 'bold ' + Math.max(8, Math.min(12, btnSize * 0.65)) + 'px "Segoe UI", sans-serif';
                 ctx.fillText('✕', layout.deleteX + layout.deleteW / 2, textY);
 
-                // 拖动手柄 (多排点 grip dots 图标, 代表防滑/可拖拽)
-                var dCx = layout.dragX + layout.dragW / 2;
-                var dH = btnSize * 0.65;
-                var dotR = 1.3;
-                var dotCols = 2;
-                var dotRows = 3;
-                var colGap = 5;
-                var rowGap = dH / (dotRows - 1);
-                ctx.fillStyle = '#888';
-                for (var dr = 0; dr < dotRows; dr++) {
-                    for (var dc = 0; dc < dotCols; dc++) {
-                        var dx = dCx + (dc - (dotCols - 1) / 2) * colGap;
-                        var dy = textY + (dr - (dotRows - 1) / 2) * rowGap;
-                        ctx.beginPath();
-                        ctx.arc(dx, dy, dotR, 0, Math.PI * 2);
-                        ctx.fill();
-                    }
-                }
+                // 拖动手柄 (共用 grip dots 绘制)
+                this._drawTrackDragHandle(layout.dragX, layout.dragW, btnSize, textY, true);
             } else {
                 // 全选 按钮 (图标: 双勾 ✓✓)
                 if (layout.selX >= 0) {
@@ -7476,23 +7601,8 @@
                     ctx.stroke();
                 }
 
-                // 拖动手柄 (≡ 图标, 长按拖动调整顺序)
-                ctx.fillStyle = 'rgba(255,255,255,0.08)';
-                ctx.fillRect(layout.dragX, textY - btnSize/2, btnSize, btnSize);
-                ctx.strokeStyle = '#888';
-                ctx.lineWidth = 1.2;
-                ctx.lineCap = 'round';
-                var _dragCx = layout.dragX + btnSize / 2;
-                var _dragCy = textY;
-                var _dragS = btnSize * 0.25;
-                ctx.beginPath();
-                ctx.moveTo(_dragCx - _dragS, _dragCy - _dragS * 0.7);
-                ctx.lineTo(_dragCx + _dragS, _dragCy - _dragS * 0.7);
-                ctx.moveTo(_dragCx - _dragS, _dragCy);
-                ctx.lineTo(_dragCx + _dragS, _dragCy);
-                ctx.moveTo(_dragCx - _dragS, _dragCy + _dragS * 0.7);
-                ctx.lineTo(_dragCx + _dragS, _dragCy + _dragS * 0.7);
-                ctx.stroke();
+                // 拖动手柄 (共用 ≡ 绘制, 长按拖动调整顺序)
+                this._drawTrackDragHandle(layout.dragX, btnSize, btnSize, textY, false);
 
                 // 更多按钮 (⋮): 点击展开 M/S/音量/删除 菜单
                 ctx.fillStyle = 'rgba(255,255,255,0.08)';
@@ -7563,20 +7673,8 @@
                 ctx.textBaseline = 'middle';
                 ctx.fillText('✕', lyLayout.deleteX + lyLayout.deleteW / 2, lyTextY);
 
-                // 拖动手柄 (与 NBS 轨道行同一套 grip dots 图标)
-                ctx.fillStyle = 'rgba(255,255,255,0.08)';
-                ctx.fillRect(lyLayout.dragX, lyTextY - lyLayout.btnSize / 2, lyLayout.dragW, lyLayout.btnSize);
-                btnOverlay(-(100 + ll), 'lyric-drag', lyLayout.dragX, lyTextY - lyLayout.btnSize / 2, lyLayout.dragW, lyLayout.btnSize);
-                ctx.fillStyle = '#888';
-                var ldx = lyLayout.dragX + lyLayout.dragW / 2;
-                var ldy = lyLayout.btnSize * 0.3;
-                for (var ldr = 0; ldr < 3; ldr++) {
-                    var lgy = lyTextY + (ldr - 1) * ldy;
-                    ctx.beginPath();
-                    ctx.arc(ldx - 2.5, lgy, 1.1, 0, Math.PI * 2);
-                    ctx.arc(ldx + 2.5, lgy, 1.1, 0, Math.PI * 2);
-                    ctx.fill();
-                }
+                // 拖动手柄 (与 NBS 轨道行共用同一套绘制)
+                this._drawTrackDragHandle(lyLayout.dragX, lyLayout.dragW, lyLayout.btnSize, lyTextY, this._isDesktop);
 
                 // 行分隔线 (与 NBS 轨道行一致)
                 ctx.strokeStyle = 'rgba(255,255,255,0.04)';

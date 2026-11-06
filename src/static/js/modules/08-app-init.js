@@ -849,6 +849,9 @@
             });
         }
 
+        // UI 配色主题: 渲染预设色卡并绑定选择
+        initUiTheme();
+
         // 表面材质选择 (普通半透明/毛玻璃/亚克力)
         var bgMaterialSelect = $('settings-bg-material');
         if (bgMaterialSelect) {
@@ -1687,6 +1690,72 @@
         if (window.attachTooltips) window.attachTooltips();
     }
 
+    // ---- UI 配色主题 (个性化) ----
+    // 预设主题: id 对应 CSS 中 :root[data-ui-theme=...] 的变量覆盖
+    var UI_THEMES = [
+        { id: 'default', name: '云青', color: '#4cc2ff' },
+        { id: 'teal',    name: '薄荷', color: '#4ecdc4' },
+        { id: 'violet',  name: '紫罗兰', color: '#a78bfa' },
+        { id: 'sunset',  name: '落日', color: '#ffa94d' },
+        { id: 'rose',    name: '玫瑰', color: '#ff6b7d' },
+        { id: 'forest',  name: '森绿', color: '#51cf66' },
+        { id: 'mono',    name: '石墨', color: '#9aa8b5' }
+    ];
+
+    function applyUiTheme(id) {
+        var known = false;
+        for (var i = 0; i < UI_THEMES.length; i++) {
+            if (UI_THEMES[i].id === id) { known = true; break; }
+        }
+        if (!known) id = 'default';
+        if (id === 'default') document.documentElement.removeAttribute('data-ui-theme');
+        else document.documentElement.setAttribute('data-ui-theme', id);
+    }
+
+    function initUiTheme() {
+        var saved = 'default';
+        try { saved = localStorage.getItem('ui_theme') || 'default'; } catch (e) {}
+        applyUiTheme(saved);
+        var grid = $('settings-theme-grid');
+        if (!grid || grid._bound) return;
+        grid._bound = true;
+        var html = '';
+        for (var i = 0; i < UI_THEMES.length; i++) {
+            var t = UI_THEMES[i];
+            html += '<button type="button" class="settings-theme-card" data-theme="' + t.id
+                + '" style="--theme-color:' + t.color + '" title="' + t.name + '">'
+                + '<span class="theme-swatch"></span><span class="theme-name">' + t.name + '</span></button>';
+        }
+        grid.innerHTML = html;
+        var sync = function() {
+            var cur = 'default';
+            try { cur = localStorage.getItem('ui_theme') || 'default'; } catch (e) {}
+            var cards = grid.querySelectorAll('.settings-theme-card');
+            for (var c = 0; c < cards.length; c++) {
+                cards[c].classList.toggle('active', cards[c].getAttribute('data-theme') === cur);
+            }
+        };
+        grid.addEventListener('click', function(e) {
+            var card = e.target.closest ? e.target.closest('.settings-theme-card') : null;
+            if (!card) return;
+            var id = card.getAttribute('data-theme');
+            applyUiTheme(id);
+            try { localStorage.setItem('ui_theme', id); } catch (er) {}
+            sync();
+        });
+        sync();
+    }
+
+    // 模块加载即应用已保存的配色, 避免启动闪烁
+    try {
+        var _savedTheme = localStorage.getItem('ui_theme');
+        if (_savedTheme && _savedTheme !== 'default') {
+            document.documentElement.setAttribute('data-ui-theme', _savedTheme);
+        }
+    } catch (e) {}
+
     // ---- 导出 ----
+    N.applyUiTheme = applyUiTheme;
+    N.initUiTheme = initUiTheme;
     N.init = init;
 })(window.WebNBS);

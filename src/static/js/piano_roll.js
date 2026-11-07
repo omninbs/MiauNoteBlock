@@ -8331,7 +8331,7 @@
             ctx.restore();
         }
 
-        // 乐器图标 (右下角): 自定义音色无贴图, 用其颜色绘制小方块
+        // 乐器图标 (右下角): 直接绘制到音符上, 不加白底边框
         var instImg = this._instrumentImages[note.instrument];
         if (bw > 14) {
             var iconSize = Math.max(6, Math.min(bw * 0.3, 12));
@@ -8339,10 +8339,6 @@
             var iy = by + bh - iconSize - 2;
             ctx.save();
             ctx.imageSmoothingEnabled = false;
-            ctx.globalAlpha = 0.9;
-            // 半透明白底
-            ctx.fillStyle = 'rgba(255,255,255,0.7)';
-            ctx.fillRect(ix - 1, iy - 1, iconSize + 2, iconSize + 2);
             if ((typeof note.instrument === 'number' && note.instrument >= 20) || !(instImg && instImg.complete && instImg.naturalWidth > 0)) {
                 // 自定义音色 / 图标缺失: 纯色方块
                 ctx.fillStyle = this._getInstrumentColor(note.instrument);

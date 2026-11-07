@@ -7,9 +7,9 @@
  *   - 顶部时间标尺 + 视口地图, 点击/拖动可直接跳转播放位置
  *   - 底部力度控制器 (FL 风格细竖线 + 方柄), 按住拖动可连续刷多个音符
  *   - 中键拖动平移视图 (左键保持编辑操作)
- *   - 音符绘制与 NBS 模式一致 (音色色板 + 方块纹理 + 乐器图标 + 放置/删除动画)
+ *   - 音符绘制与 NBS 模式一致 (音色纯色 + 放置/删除补间动画)
  *   - 重叠音符叠层显示, 默认只操作最上层, Alt+滚轮临时切换
- *   - 播放头跟随主窗口并做线性插值, 可用开关切换为仅本窗口播放
+ *   - 播放头跟随主窗口并做线性插值; 切到「仅本窗口」时暂停主播放并独立试听本片段
  * 依赖 window.WebNBS.host
  */
 (function () {
@@ -77,6 +77,40 @@
         return window.WebNBSI18n && WebNBSI18n.translate ? WebNBSI18n.translate(text) : text;
     }
     function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+    // 颜色明度调整: amt 为负则变暗, 为正则向白色提亮
+    function shadeColor(hex, amt) {
+        var h = String(hex || '#000').replace('#', '');
+        if (h.length === 3) h = h.charAt(0) + h.charAt(0) + h.charAt(1) + h.charAt(1) + h.charAt(2) + h.charAt(2);
+        var r = parseInt(h.substring(0, 2), 16) || 0;
+        var g = parseInt(h.substring(2, 4), 16) || 0;
+        var b = parseInt(h.substring(4, 6), 16) || 0;
+        if (amt < 0) {
+            r = Math.round(r * (1 + amt));
+            g = Math.round(g * (1 + amt));
+            b = Math.round(b * (1 + amt));
+        } else {
+            r = Math.round(r + (255 - r) * amt);
+            g = Math.round(g + (255 - g) * amt);
+            b = Math.round(b + (255 - b) * amt);
+        }
+        return 'rgb(' + r + ',' + g + ',' + b + ')';
+    }
+
+    // 统一文档级拖动监听: 支持 Pointer Events, 不支持时回退鼠标
+    function docDrag(moveFn, upFn) {
+        var usePointer = !!window.PointerEvent;
+        var mv = usePointer ? 'pointermove' : 'mousemove';
+        var ue = usePointer ? 'pointerup' : 'mouseup';
+        function onMove(e) { moveFn(e); }
+        function onUp(e) {
+            document.removeEventListener(mv, onMove);
+            document.removeEventListener(ue, onUp);
+            if (upFn) upFn(e);
+        }
+        document.addEventListener(mv, onMove);
+        document.addEventListener(ue, onUp);
+    }
 
     function octaveLabelsEnabled() {
         try { return localStorage.getItem('show_octave_labels') !== '0'; } catch (e) { return true; }
@@ -213,7 +247,6 @@
         this.lane = lane;
         this.seg = seg;
         this.segId = seg ? seg.id : null;
-        this.refSegId = null;
         this.pxPerTick = 8;
         this.viewStart = 0;
         this.rowH = ROW_H;
@@ -237,15 +270,23 @@
         this.needLayout = true;
         this._hover = null;
         this._hoverKey = -1;
+        // 钢琴键按下反馈 (performance.now 做 120ms 明度过渡)
+        this._pressKey = -1;
+        this._pressAt = 0;
+        this._pressReleaseAt = 0;
+        this._pressHold = false;
+        this._keyAnimUntil = 0;
         // 数据版本 (用于缓存音符分组, 避免每帧重建)
         this._ver = 0;
         this._gcache = null;
         // 放置/删除动画
         this._anims = [];
-        // 重叠图标叠层动画
-        this._iconCount = {};
-        this._iconFrom = {};
-        this._iconUsed = {};
+        // 「仅本窗口」播放状态
+        this._localPaused = false;
+        this._mainWasPlaying = false;
+        this._localOn = false;
+        this._localPrev = 0;
+        this._localBaseTick = 0;
         // 场景离屏画布 (静态内容只重绘一次, 播放时只叠加播放头)
         this._scene = document.createElement('canvas');
         this._sctx = this._scene.getContext('2d');
@@ -269,11 +310,12 @@
         var root = document.createElement('div');
         root.className = 'spw';
         root.setAttribute('data-role', 'segment-piano-window');
-        root.setAttribute('tabindex', '-1');
+        root.setAttribute('tabindex', '0');
         root.innerHTML =
             '<div class="spw-titlebar" data-role="titlebar">' +
                 '<span class="spw-glyph"><i class="fa-solid fa-piano-keyboard"></i></span>' +
                 '<span class="spw-title" data-role="title"></span>' +
+                '<span class="spw-beta" data-role="beta"></span>' +
                 '<span class="spw-sub" data-role="subtitle"></span>' +
                 '<span class="spw-actions">' +
                     '<button class="spw-btn" data-act="minimize" tabindex="-1" aria-label="最小化"><i class="fa-solid fa-minus"></i></button>' +
@@ -293,7 +335,6 @@
                     '<button class="spw-btn" data-act="tool-select" data-tool="select" tabindex="-1" aria-label="选择"><i class="fa-solid fa-arrow-pointer"></i></button>' +
                     '<span class="spw-sep"></span>' +
                     '<button class="spw-btn spw-grid" data-act="grid" tabindex="-1" aria-label="网格吸附"><span data-role="grid-label"></span></button>' +
-                    '<button class="spw-btn spw-ref" data-act="reference" tabindex="-1" aria-label="参考片段"><i class="fa-solid fa-layer-group"></i><span data-role="ref-label"></span></button>' +
                     '<span class="spw-spacer"></span>' +
                 '</div>' +
                 '<div class="spw-stage" data-role="stage"><canvas data-role="canvas"></canvas></div>' +
@@ -308,9 +349,15 @@
             '<div class="spw-resize spw-rz-se" data-rz="se"></div>' +
             '<div class="spw-resize spw-rz-sw" data-rz="sw"></div>';
         document.body.appendChild(root);
+        // 入场动画只在首次创建时播放一次, 之后 resize/max 不再重播
+        root.classList.add('spw-in');
+        setTimeout(function () {
+            if (self.root === root) root.classList.remove('spw-in');
+        }, 200);
         this.root = root;
         this.titleEl = root.querySelector('[data-role="title"]');
         this.subtitleEl = root.querySelector('[data-role="subtitle"]');
+        this.betaEl = root.querySelector('[data-role="beta"]');
         this.bodyEl = root.querySelector('[data-role="body"]');
         this.stageEl = root.querySelector('[data-role="stage"]');
         this.canvas = root.querySelector('[data-role="canvas"]');
@@ -319,7 +366,6 @@
         this.velCtx = this.velCanvas.getContext('2d');
         this.playModeLabel = root.querySelector('[data-role="playmode-label"]');
         this.gridLabel = root.querySelector('[data-role="grid-label"]');
-        this.refLabel = root.querySelector('[data-role="ref-label"]');
 
         this.bind();
         this.applySettings();
@@ -353,7 +399,7 @@
         this.subtitleEl.textContent = (this.seg && this.seg.name) ? this.seg.name : '';
         this.playModeLabel.textContent = this.playMode === 'sync' ? t('同步播放') : t('仅本窗口');
         this.gridLabel.textContent = t(GRID_LABELS[this.grid]);
-        this.refLabel.textContent = this.refSegId ? t('参考中') : t('参考片段');
+        if (this.betaEl) this.betaEl.textContent = t('测试版');
         var pm = this.root.querySelector('[data-act="playmode"]');
         if (pm) pm.setAttribute('aria-checked', this.playMode === 'sync' ? 'true' : 'false');
         this.updateToolButtons();
@@ -403,7 +449,6 @@
             else if (act === 'maximize') self.toggleMaximize();
             else if (act === 'playmode') self.togglePlayMode();
             else if (act === 'grid') self.cycleGrid();
-            else if (act === 'reference') self.pickReference();
             else if (act === 'tool-draw') self.setTool('draw');
             else if (act === 'tool-erase') self.setTool('erase');
             else if (act === 'tool-select') self.setTool('select');
@@ -420,19 +465,31 @@
             });
         }
 
-        this.canvas.addEventListener('mousedown', function (e) { self.onCanvasDown(e); });
-        this.canvas.addEventListener('mousemove', function (e) { self.onCanvasMove(e); });
+        // Pointer Events 优先 (触屏/触控笔), 不支持时回退到 mouse, 两者不重复注册
+        var usePointer = !!window.PointerEvent;
+        if (usePointer) {
+            this.canvas.addEventListener('pointerdown', function (e) { self.onCanvasDown(e); });
+            this.canvas.addEventListener('pointermove', function (e) { self.onCanvasMove(e); });
+            this.canvas.addEventListener('pointerleave', function () {
+                self._hover = null;
+                self._hoverKey = -1;
+                self.scheduleTempTopReset(0);
+            });
+        } else {
+            this.canvas.addEventListener('mousedown', function (e) { self.onCanvasDown(e); });
+            this.canvas.addEventListener('mousemove', function (e) { self.onCanvasMove(e); });
+            this.canvas.addEventListener('mouseleave', function () {
+                self._hover = null;
+                self._hoverKey = -1;
+                self.scheduleTempTopReset(0);
+            });
+        }
         this.canvas.addEventListener('dblclick', function (e) { self.onCanvasDblClick(e); });
         this.canvas.addEventListener('contextmenu', function (e) {
             e.preventDefault();
             self.onCanvasRightClick(e);
         });
         this.canvas.addEventListener('wheel', function (e) { self.onWheel(e); }, { passive: false });
-        this.canvas.addEventListener('mouseleave', function () {
-            self._hover = null;
-            self._hoverKey = -1;
-            self.scheduleTempTopReset(0);
-        });
         this.velCanvas.addEventListener('mousedown', function (e) { self.onVelDown(e); });
 
         // 键盘快捷键: 捕获阶段拦截, 避免穿透到主界面 (也避免按钮被浏览器空格选中)
@@ -488,8 +545,7 @@
             if (self.root) self.root.classList.remove('spw-dragging');
             self.persist();
         }
-        document.addEventListener('mousemove', move);
-        document.addEventListener('mouseup', up);
+        docDrag(move, up);
     };
 
     SegmentWindow.prototype.beginResize = function (ev, dir) {
@@ -523,8 +579,7 @@
             self.persist();
             self.autoFit(true);
         }
-        document.addEventListener('mousemove', move);
-        document.addEventListener('mouseup', up);
+        docDrag(move, up);
     };
 
     SegmentWindow.prototype.toggleMaximize = function () {
@@ -605,6 +660,15 @@
 
     SegmentWindow.prototype.close = function () {
         this.stopLoop();
+        // 关闭时若本窗口暂停了主播放, 恢复主编辑器播放状态
+        if (this.playMode === 'local') {
+            try { if (window.AudioEngine && AudioEngine.stopAll) AudioEngine.stopAll(); } catch (e) {}
+            var h = host();
+            if (this._mainWasPlaying && h && !h.state.isPlaying && window.WebNBS && WebNBS.handlePlayToggle) {
+                WebNBS.handlePlayToggle();
+            }
+            this._mainWasPlaying = false;
+        }
         if (this.root && this.root.parentNode) this.root.parentNode.removeChild(this.root);
         this.root = null;
         removeWin(this);
@@ -680,14 +744,6 @@
             if (k < lo) lo = k;
             if (k > hi) hi = k;
         }
-        var ref = this.getRefSeg();
-        if (ref && ref.notes) {
-            for (var j = 0; j < ref.notes.length; j++) {
-                var rk = ref.notes[j].key || 0;
-                if (rk < lo) lo = rk;
-                if (rk > hi) hi = rk;
-            }
-        }
         if (hi < lo) { lo = 33; hi = 57; }
         this.minKey = Math.max(0, lo - 2);
         this.maxKey = Math.min(87, hi + 2);
@@ -699,18 +755,21 @@
         var dpr = window.devicePixelRatio || 1;
         var w = Math.max(80, this.stageEl.clientWidth);
         var h = Math.max(60, this.stageEl.clientHeight);
-        if (this.canvas.width !== Math.round(w * dpr) || this.canvas.height !== Math.round(h * dpr)) {
-            this.canvas.width = Math.round(w * dpr);
-            this.canvas.height = Math.round(h * dpr);
+        var pw = Math.round(w * dpr), ph = Math.round(h * dpr);
+        var sizeChanged = (this.canvas.width !== pw || this.canvas.height !== ph);
+        if (sizeChanged) {
+            this.canvas.width = pw;
+            this.canvas.height = ph;
+            this._scene.width = pw;
+            this._scene.height = ph;
         }
         this.canvas.style.width = w + 'px';
         this.canvas.style.height = h + 'px';
         this.cw = w;
         this.ch = h;
-        this._scene.width = this.canvas.width;
-        this._scene.height = this.canvas.height;
         this.needLayout = false;
-        this.invalidate(true);
+        // 仅在画布实际尺寸变化时重绘静态场景, 避免拖动/布局时反复清屏
+        if (sizeChanged) this.invalidate(true);
 
         if (!this.showVelocity) { this.vw = 0; this.vh = 0; return; }
         var vh = Math.max(40, this.velCanvas.parentNode.clientHeight);
@@ -743,23 +802,53 @@
     };
 
     SegmentWindow.prototype.togglePlayMode = function () {
-        this.playMode = this.playMode === 'sync' ? 'local' : 'sync';
-        this.freezeLocal();
-        this.localTick = 0;
+        var h = host();
+        if (this.playMode === 'sync') {
+            this.playMode = 'local';
+            // 仅本窗口播放: 暂停主编辑器播放, 避免整首歌同时发声
+            this._mainWasPlaying = !!(h && h.state.isPlaying);
+            if (this._mainWasPlaying && window.WebNBS && WebNBS.handlePlayToggle) WebNBS.handlePlayToggle();
+            this._localPaused = false;
+            this.freezeLocal();
+            this.localTick = 0;
+            this._localBaseTick = 0;
+            this._localPrev = performance.now();
+            try { if (window.AudioEngine && AudioEngine.init) AudioEngine.init(); } catch (e) {}
+        } else {
+            this.playMode = 'sync';
+            this.freezeLocal();
+            this._localPaused = false;
+            try { if (window.AudioEngine && AudioEngine.stopAll) AudioEngine.stopAll(); } catch (e) {}
+            // 切回同步: 若原本主窗口正在播放, 则恢复主窗口驱动的播放
+            if (this._mainWasPlaying && h && !h.state.isPlaying && window.WebNBS && WebNBS.handlePlayToggle) {
+                WebNBS.handlePlayToggle();
+            }
+            this._mainWasPlaying = false;
+        }
         this.updateToolButtons();
         this.syncTexts();
+    };
+
+    SegmentWindow.prototype.toggleLocalPause = function () {
+        if (this.playMode !== 'local') return;
+        this._localPaused = !this._localPaused;
+        if (this._localPaused) {
+            this.freezeLocal();
+            try { if (window.AudioEngine && AudioEngine.stopAll) AudioEngine.stopAll(); } catch (e) {}
+        } else {
+            this._localPrev = performance.now();
+        }
     };
 
     SegmentWindow.prototype.segDuration = function () {
         return this.seg ? Math.max(1, this.seg.end - this.seg.start) : 1;
     };
 
-    // 本地播放: 只在主界面播放时推进, 片段内循环发声, 与主播放头解耦
+    // 「仅本窗口」播放: 不依赖主窗口播放状态, 独立推进并循环发声, 不推进主播放头
     SegmentWindow.prototype.stepLocal = function () {
         var h = host();
         if (!h || !this.seg) return;
-        var playing = !!h.state.isPlaying;
-        if (this.playMode !== 'local' || !playing) {
+        if (this.playMode !== 'local' || this._localPaused) {
             if (this._localOn) {
                 this._localBaseTick = this.localTick;
                 this._localOn = false;
@@ -867,7 +956,7 @@
     };
 
     // ---------- 分组 (延音合并 + 叠层) ----------
-    SegmentWindow.prototype._buildGroups = function (seg, isRef) {
+    SegmentWindow.prototype._buildGroups = function (seg) {
         var groups = [];
         if (!seg || !seg.notes) return groups;
         var notes = seg.notes;
@@ -900,8 +989,7 @@
                     key: item.note.key || 0,
                     start: rel,
                     end: rel,
-                    notes: [item],
-                    ref: isRef
+                    notes: [item]
                 };
                 groups.push(cur);
             }
@@ -910,13 +998,12 @@
     };
 
     // 缓存分组: 播放期间每帧都要用, 不能每次重建
-    SegmentWindow.prototype.groups = function (seg, isRef) {
-        if (isRef) return this._buildGroups(seg, true);
+    SegmentWindow.prototype.groups = function (seg) {
         if (!seg) return [];
         if (this._gcache && this._gcache.ver === this._ver && this._gcache.seg === seg) {
             return this._gcache.list;
         }
-        var list = this._buildGroups(seg, false);
+        var list = this._buildGroups(seg);
         this._gcache = { ver: this._ver, seg: seg, list: list };
         return list;
     };
@@ -981,6 +1068,8 @@
         if (!this.root || !this.ctx || !this.cw) return;
         var dpr = window.devicePixelRatio || 1;
         var sceneRedrawn = false;
+        // 钢琴键按下明度过渡期间持续重绘静态场景
+        if (this._keyAnimUntil && performance.now() < this._keyAnimUntil) this._sceneDirty = true;
         if (this._sceneDirty) {
             this.renderScene();
             this._sceneDirty = false;
@@ -993,7 +1082,6 @@
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
         this.drawAnims(ctx);
-        this.drawHoverKey(ctx);
         this.drawPlayhead(ctx);
         this.drawMarquee(ctx);
         if (this.showVelocity && (this._velDirty || sceneRedrawn)) {
@@ -1049,17 +1137,7 @@
         if (sx > KEYBAR_W) ctx.fillRect(KEYBAR_W, top, Math.min(sx - KEYBAR_W, W - KEYBAR_W), H - top);
         if (ex < W) ctx.fillRect(Math.max(KEYBAR_W, ex), top, W - Math.max(KEYBAR_W, ex), H - top);
 
-        // 参考片段
-        this._iconUsed = {};
-        var ref = this.getRefSeg();
-        if (ref) this.drawSegmentNotes(ctx, ref, true);
-        if (this.seg) this.drawSegmentNotes(ctx, this.seg, false);
-        for (var ik in this._iconCount) {
-            if (!this._iconUsed[ik]) {
-                delete this._iconCount[ik];
-                delete this._iconFrom[ik];
-            }
-        }
+        if (this.seg) this.drawSegmentNotes(ctx, this.seg);
 
         // 键盘
         this.drawKeybar(ctx);
@@ -1127,51 +1205,86 @@
     SegmentWindow.prototype.drawKeybar = function (ctx) {
         var H = this.ch;
         var top = this.stageTop();
+        var rowH = this.rowH;
+        var now = performance.now();
+        // 按下反馈: 120ms ease-out 明度过渡, 松开后淡回
+        var pressAmt = 0;
+        if (this._pressKey >= 0) {
+            var pt = this._pressHold
+                ? clamp((now - this._pressAt) / 120, 0, 1)
+                : 1 - clamp((now - this._pressReleaseAt) / 120, 0, 1);
+            pressAmt = -0.2 * easeOutCubic(pt);
+        }
+
+        // 1) 先完整绘制所有白键 (整宽), 黑键行保留白色底, 便于窄黑键覆盖
         for (var k = this.minKey; k <= this.maxKey; k++) {
             var y = this.keyToY(k);
-            if (y > H || y + this.rowH < top) continue;
-            var black = isBlackKey(k);
-            var isHover = this._hoverKey === k;
-            if (black) {
-                ctx.fillStyle = isHover ? C.keyBlackHover : C.keyBlack;
-                ctx.fillRect(0, y, Math.round(KEYBAR_W * 0.64), this.rowH);
-                ctx.fillStyle = C.keyWhite;
-                ctx.fillRect(Math.round(KEYBAR_W * 0.64), y, KEYBAR_W - Math.round(KEYBAR_W * 0.64), this.rowH);
-            } else {
-                ctx.fillStyle = isHover ? C.keyWhiteHover : (pitchClass(k) === 'C' ? C.keyWhite : C.keyWhiteAlt);
-                ctx.fillRect(0, y, KEYBAR_W, this.rowH);
+            if (y > H || y + rowH < top) continue;
+            var blackRow = isBlackKey(k);
+            var amt = 0;
+            if (!blackRow) {
+                if (this._hoverKey === k) amt -= 0.10;
+                if (this._pressKey === k) amt += pressAmt;
             }
+            var base = blackRow ? C.keyWhiteAlt : (pitchClass(k) === 'C' ? C.keyWhite : C.keyWhiteAlt);
+            ctx.fillStyle = amt < 0 ? shadeColor(base, amt) : base;
+            ctx.fillRect(0, y, KEYBAR_W, rowH);
             // 行分隔
             ctx.fillStyle = C.keyLine;
-            ctx.fillRect(0, y + this.rowH - 1, KEYBAR_W, 1);
+            ctx.fillRect(0, y + rowH - 1, KEYBAR_W, 1);
             // C 音的分隔更明显
             if (pitchClass(k) === 'C') {
                 ctx.fillStyle = C.keyCFrame;
                 ctx.fillRect(0, y, KEYBAR_W, 1);
             }
-            // 音名
-            ctx.font = (pitchClass(k) === 'C' ? 'bold ' : '') + '9px "Segoe UI", system-ui, sans-serif';
+            // 白键音名 (黑键文字由窄条覆盖层绘制)
+            if (!blackRow) {
+                ctx.font = (pitchClass(k) === 'C' ? 'bold ' : '') + '9px "Segoe UI", system-ui, sans-serif';
+                ctx.textAlign = 'right';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = C.keyTextDark;
+                ctx.fillText(pitchName(k), KEYBAR_W - 5, y + rowH / 2);
+            }
+        }
+
+        // 2) 黑键: 窄矩形右对齐覆盖, 右侧不再留白色条块
+        var blackW = Math.round(KEYBAR_W * 0.62);
+        var blackX = KEYBAR_W - blackW;
+        for (var b = this.minKey; b <= this.maxKey; b++) {
+            if (!isBlackKey(b)) continue;
+            var by = this.keyToY(b);
+            if (by > H || by + rowH < top) continue;
+            var bamt = 0;
+            if (this._hoverKey === b) bamt += 0.12;
+            if (this._pressKey === b) bamt += pressAmt;
+            ctx.fillStyle = shadeColor(C.keyBlack, bamt);
+            ctx.fillRect(blackX, by, blackW, rowH - 1);
+            // 左侧与顶部细高光, 增强键位边界
+            ctx.fillStyle = C.keyLine;
+            ctx.fillRect(blackX, by, 1, rowH - 1);
+            ctx.fillStyle = 'rgba(255,255,255,0.07)';
+            ctx.fillRect(blackX, by, Math.max(0, blackW - 1), 1);
+            // 音名 (黑键文字置于窄条内)
+            ctx.font = '9px "Segoe UI", system-ui, sans-serif';
             ctx.textAlign = 'right';
             ctx.textBaseline = 'middle';
-            ctx.fillStyle = black ? C.keyTextLight : C.keyTextDark;
-            var lx = black ? Math.round(KEYBAR_W * 0.64) - 4 : KEYBAR_W - 5;
-            ctx.fillText(pitchName(k), lx, y + this.rowH / 2);
+            ctx.fillStyle = C.keyTextLight;
+            ctx.fillText(pitchName(b), KEYBAR_W - 4, by + rowH / 2);
         }
+
         // 右侧分隔线
         ctx.fillStyle = 'rgba(0,0,0,0.35)';
         ctx.fillRect(KEYBAR_W - 1, top, 1, H - top);
     };
 
-    SegmentWindow.prototype.drawSegmentNotes = function (ctx, seg, isRef) {
-        var groups = this.groups(seg, isRef);
+    SegmentWindow.prototype.drawSegmentNotes = function (ctx, seg) {
+        var groups = this.groups(seg);
         var base = seg.start || 0;
         var H = this.ch, top = this.stageTop();
         var self = this;
-        if (!isRef) {
-            groups.sort(function (a, b) {
-                return self.noteZ(self.groupTop(a).note) - self.noteZ(self.groupTop(b).note);
-            });
-        }
+        groups.sort(function (a, b) {
+            return self.noteZ(self.groupTop(a).note) - self.noteZ(self.groupTop(b).note);
+        });
         var rowH = this.rowH;
         for (var i = 0; i < groups.length; i++) {
             var g = groups[i];
@@ -1181,16 +1294,15 @@
             var w = Math.max(this.pxPerTick, (g.end - g.start + 1) * this.pxPerTick);
             if (x + w < KEYBAR_W || x > this.cw) continue;
 
-            var topItem = isRef ? g.notes[0] : this.groupTop(g);
+            var topItem = this.groupTop(g);
             var color = colorFor(topItem.note.instrument);
-            var selected = !isRef && this.isSelected(topItem.note);
+            var selected = this.isSelected(topItem.note);
 
             var bh = Math.max(6, rowH - 1);
             var by = y;
-            ctx.globalAlpha = isRef ? 0.35 : 1;
 
-            // 底色 + 方块纹理 (与 NBS 音符一致)
-            this.drawNoteBody(ctx, x, by, w, bh, color, topItem.note, isRef);
+            // 纯色音符主体 (无方块纹理/乐器贴图)
+            this.drawNoteBody(ctx, x, by, w, bh, color);
 
             if (selected) {
                 ctx.strokeStyle = C.selection;
@@ -1203,40 +1315,8 @@
                 ctx.strokeRect(x + 0.5, by + 0.5, Math.max(0.5, w - 1), Math.max(0.5, bh - 1));
             }
 
-            // 起始端重叠图标: 每个音符一个, 至少露出 1/2, 数量变化平滑动画
-            var iconSize = Math.min(bh - 2, 9);
-            var step = Math.min(iconSize / 2, 5);
-            var maxCount = 4;
-            var targetCount = Math.min(g.notes.length, maxCount);
-            var now = performance.now();
-            var gkey = (isRef ? 'r' : 'e') + g.key + ':' + g.start + ':' + g.layer;
-            this._iconUsed[gkey] = 1;
-            if (this._iconCount[gkey] === undefined) this._iconCount[gkey] = targetCount;
-            if (this._iconCount[gkey] !== targetCount) {
-                this._iconFrom[gkey] = { v: this._iconCount[gkey], t: now };
-                this._iconCount[gkey] = targetCount;
-            }
-            var curCount = targetCount;
-            var from = this._iconFrom[gkey];
-            if (from) {
-                var p = Math.min(1, (now - from.t) / 180);
-                if (p >= 1) delete this._iconFrom[gkey];
-                else curCount = from.v + (targetCount - from.v) * (1 - Math.pow(1 - p, 3));
-            }
-            var drawN = Math.ceil(curCount);
-            var iy = by + (bh - iconSize) / 2;
-            for (var n = 0; n < drawN && n < maxCount; n++) {
-                var ix = x + 2 + n * step;
-                var a = isRef ? 1 : clamp(curCount - n, 0, 1);
-                ctx.globalAlpha = (isRef ? 0.35 : 1) * a;
-                ctx.fillStyle = 'rgba(0,0,0,0.55)';
-                ctx.fillRect(ix, iy + (1 - a) * 2, iconSize, iconSize);
-                this.drawInstrumentIcon(ctx, g.notes[n].note, ix + 1, iy + (1 - a) * 2 + 1, iconSize - 2);
-            }
-            ctx.globalAlpha = isRef ? 0.35 : 1;
-
-            // 文字: 只在起始端, 与图标右缘保持间距
-            var textX = x + 4 + Math.min(curCount, maxCount) * step;
+            // 文字: 只在起始端
+            var textX = x + 4;
             var label = pitchName(g.key);
             ctx.font = 'bold 9px "Segoe UI", sans-serif';
             ctx.textAlign = 'left';
@@ -1251,34 +1331,16 @@
         }
     };
 
-    // 绘制音符主体: 底色 + note_block 纹理
-    SegmentWindow.prototype.drawNoteBody = function (ctx, x, y, w, h, color, note, isRef) {
-        var pr = null;
-        try { pr = host() && host().state && host().state.pianoRoll; } catch (e) { pr = null; }
+    // 绘制音符主体: 纯色 + 顶部高光/底部阴影
+    SegmentWindow.prototype.drawNoteBody = function (ctx, x, y, w, h, color) {
+        var rw = Math.max(1, w), rh = Math.max(1, h);
         ctx.fillStyle = color;
-        ctx.fillRect(x, y, Math.max(1, w), Math.max(1, h));
-        if (pr && pr._noteBlockImg && pr._noteBlockImg.complete && pr._noteBlockImg.naturalWidth > 0 && w > 3) {
-            ctx.save();
-            ctx.globalAlpha *= 0.4;
-            ctx.imageSmoothingEnabled = false;
-            ctx.drawImage(pr._noteBlockImg, 0, 0,
-                pr._noteBlockImg.naturalWidth, pr._noteBlockImg.naturalHeight,
-                x, y, Math.max(1, w), Math.max(1, h));
-            ctx.restore();
-        }
-    };
-
-    SegmentWindow.prototype.drawInstrumentIcon = function (ctx, note, x, y, size) {
-        var pr = null;
-        try { pr = host() && host().state && host().state.pianoRoll; } catch (e) { pr = null; }
-        var img = pr && pr._instrumentImages ? pr._instrumentImages[note.instrument] : null;
-        if (isFinite(note.instrument) && note.instrument < 20 && img && img.complete && img.naturalWidth > 0) {
-            ctx.imageSmoothingEnabled = false;
-            ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, x, y, size, size);
-        } else {
-            ctx.fillStyle = colorFor(note.instrument);
-            ctx.fillRect(x, y, size, size);
-        }
+        ctx.fillRect(x, y, rw, rh);
+        var edge = Math.min(2, rh * 0.28);
+        ctx.fillStyle = 'rgba(255,255,255,0.22)';
+        ctx.fillRect(x, y, rw, edge);
+        ctx.fillStyle = 'rgba(0,0,0,0.22)';
+        ctx.fillRect(x, y + rh - edge, rw, edge);
     };
 
     SegmentWindow.prototype.isSelected = function (note) {
@@ -1293,7 +1355,7 @@
         var rx0 = Math.min(mq.x0, mq.x1), rx1 = Math.max(mq.x0, mq.x1);
         var ry0 = Math.min(mq.y0, mq.y1), ry1 = Math.max(mq.y0, mq.y1);
         if (rx1 - rx0 < 2 && ry1 - ry0 < 2) return;
-        var groups = this.groups(this.seg, false);
+        var groups = this.groups(this.seg);
         var base = this.seg.start || 0;
         var sel = keepSel ? keepSel.slice() : [];
         for (var i = 0; i < groups.length; i++) {
@@ -1331,7 +1393,7 @@
         ctx.fillText(t('力度'), 6, 12);
 
         if (!this.seg) return;
-        var groups = this.groups(this.seg, false);
+        var groups = this.groups(this.seg);
         var base = this.seg.start;
         var top = 18, bottom = Math.max(top + 4, H - 6);
 
@@ -1391,16 +1453,6 @@
         }
     };
 
-    SegmentWindow.prototype.drawHoverKey = function (ctx) {
-        if (this._hoverKey < 0) return;
-        var y = this.keyToY(this._hoverKey);
-        if (y > this.ch || y + this.rowH < this.stageTop()) return;
-        ctx.strokeStyle = 'rgba(76,194,255,0.75)';
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(0.5, y + 0.5, KEYBAR_W - 1, this.rowH - 1);
-        ctx.lineWidth = 1;
-    };
-
     SegmentWindow.prototype.drawMarquee = function (ctx) {
         if (!this.dragging || this.dragging.mode !== 'marquee') return;
         var d = this.dragging.marq;
@@ -1421,7 +1473,9 @@
     SegmentWindow.prototype.addAnim = function (type, key, rel, end, instrument) {
         this._anims.push({
             type: type, key: key, rel: rel, end: end,
-            instrument: instrument, start: performance.now(), duration: type === 'place' ? 280 : 260
+            instrument: instrument,
+            t0: performance.now(),
+            dur: type === 'delete' ? 200 : 300
         });
     };
 
@@ -1433,7 +1487,7 @@
         var top = this.stageTop();
         for (var i = 0; i < this._anims.length; i++) {
             var a = this._anims[i];
-            var raw = (now - a.start) / a.duration;
+            var raw = clamp((now - a.t0) / a.dur, 0, 1);
             if (raw >= 1) continue;
             alive.push(a);
             var x = this.tickToX(base + a.rel);
@@ -1442,16 +1496,18 @@
             if (y > this.ch || y + this.rowH < top) continue;
             var bh = Math.max(6, this.rowH - 1);
             var color = colorFor(a.instrument);
-            var scale, alpha, isDel = a.type === 'delete';
-            if (isDel) {
-                var de = easeOutCubic(raw);
-                scale = 1 + 0.25 * de;
-                alpha = 1 - de;
+            var t = easeOutCubic(raw);
+            var scale, alpha, fill;
+            if (a.type === 'delete') {
+                // 删除: 200ms 淡出 + 缩小
+                scale = 1 - 0.15 * t;
+                alpha = 1 - t;
+                fill = color;
             } else {
-                var pe = easeOutBack(raw);
-                scale = 0.45 + 0.55 * pe;
-                if (raw > 0.75) scale = 1.0 - 0.04 * (1 - easeOutCubic((raw - 0.75) / 0.25));
-                alpha = easeOutCubic(raw);
+                // 放置: 300ms 从亮色/1.15 缩放到目标纯色/1.0
+                scale = 1.15 - 0.15 * t;
+                alpha = 1;
+                fill = shadeColor(color, 0.45 * (1 - t));
             }
             ctx.save();
             ctx.globalAlpha = alpha;
@@ -1459,54 +1515,56 @@
             ctx.translate(cx, cy);
             ctx.scale(scale, scale);
             ctx.translate(-cx, -cy);
-            ctx.fillStyle = color;
+            ctx.fillStyle = fill;
             ctx.fillRect(x, y, w, bh);
-            ctx.strokeStyle = isDel ? 'rgba(233,69,96,' + alpha + ')' : 'rgba(0,0,0,' + (alpha * 0.5) + ')';
-            ctx.lineWidth = isDel ? 2 : 1;
+            var edge = Math.min(2, bh * 0.28);
+            ctx.fillStyle = 'rgba(255,255,255,0.22)';
+            ctx.fillRect(x, y, w, edge);
+            ctx.fillStyle = 'rgba(0,0,0,0.22)';
+            ctx.fillRect(x, y + bh - edge, w, edge);
+            ctx.strokeStyle = a.type === 'delete' ? 'rgba(233,69,96,' + alpha + ')' : 'rgba(0,0,0,0.5)';
+            ctx.lineWidth = 1;
             ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0.5, w - 1), Math.max(0.5, bh - 1));
             ctx.restore();
         }
         this._anims = alive;
     };
 
-    SegmentWindow.prototype.getRefSeg = function () {
-        if (!this.refSegId) return null;
-        var h = host();
-        var segs = (h && h.state.segments) || [];
-        for (var i = 0; i < segs.length; i++) {
-            if (String(segs[i].id) === String(this.refSegId)) return segs[i];
-        }
-        return null;
-    };
-
     // ---------- 命中测试 ----------
+    // 命中测试: 按绘制顺序反向遍历, 最上层音符优先
     SegmentWindow.prototype.hitTest = function (mx, my) {
         if (!this.seg || my < this.stageTop()) return null;
-        var groups = this.groups(this.seg, false);
+        var groups = this.groups(this.seg);
         var base = this.seg.start;
-        var best = null;
-        var bestZ = -1;
-        for (var i = 0; i < groups.length; i++) {
-            var g = groups[i];
+        var self = this;
+        var ordered = groups.slice().sort(function (a, b) {
+            return self.noteZ(self.groupTop(a).note) - self.noteZ(self.groupTop(b).note);
+        });
+        for (var i = ordered.length - 1; i >= 0; i--) {
+            var g = ordered[i];
             var y = this.keyToY(g.key);
             if (my < y || my > y + this.rowH) continue;
             var x = this.tickToX(base + g.start);
             var w = Math.max(this.pxPerTick, (g.end - g.start + 1) * this.pxPerTick);
             if (mx < x || mx > x + w) continue;
             var top = this.groupTop(g);
-            var z = this.noteZ(top.note);
-            if (best && z < bestZ) continue;
             var edge = null;
             if (mx >= x + w - 5 && w > 8) edge = 'right';
-            best = { group: g, note: top.note, item: top, edge: edge, x: x, w: w };
-            bestZ = z;
+            return { group: g, note: top.note, item: top, edge: edge, x: x, w: w };
         }
-        return best;
+        return null;
+    };
+
+    SegmentWindow.prototype.groupNotes = function (g) {
+        var out = [];
+        if (!g) return out;
+        for (var i = 0; i < g.notes.length; i++) out.push(g.notes[i].note);
+        return out;
     };
 
     SegmentWindow.prototype.hitGroupAt = function (mx) {
         if (!this.seg) return null;
-        var groups = this.groups(this.seg, false);
+        var groups = this.groups(this.seg);
         var base = this.seg.start;
         var tol = Math.max(6, this.pxPerTick * 2);
         var best = null, bestD = Infinity;
@@ -1554,7 +1612,12 @@
             if (hit) {
                 var additive = ev.shiftKey;
                 if (!additive) this.selection = [];
-                if (!this.isSelected(hit.note)) this.selection.push(hit.note);
+                if (!this.isSelected(hit.note)) {
+                    var gn = this.groupNotes(hit.group);
+                    for (var gi = 0; gi < gn.length; gi++) {
+                        if (!this.isSelected(gn[gi])) this.selection.push(gn[gi]);
+                    }
+                }
                 this.raiseNote(hit.note);
                 this.beginMove(ev, mx, my, hit);
             } else {
@@ -1585,7 +1648,7 @@
         }
 
         if (hit) {
-            this.selection = [hit.note];
+            this.selection = this.groupNotes(hit.group);
             this.raiseNote(hit.note);
             if (hit.edge === 'right') this.beginResizeNote(ev, mx, my, hit);
             else this.beginMove(ev, mx, my, hit);
@@ -1612,8 +1675,7 @@
             self.canvas.style.cursor = '';
             void cRect;
         }
-        document.addEventListener('mousemove', move);
-        document.addEventListener('mouseup', up);
+        docDrag(move, up);
     };
 
     SegmentWindow.prototype.beginSeek = function (ev, mx) {
@@ -1632,6 +1694,10 @@
         var key = this.yToKey(my);
         if (key < 0 || key > 87) return;
         this._hoverKey = key;
+        this._pressKey = key;
+        this._pressAt = performance.now();
+        this._pressHold = true;
+        this._keyAnimUntil = this._pressAt + 120;
         // 横向位置 -> 力度: 左轻右重
         var ratio = clamp((mx - 2) / (KEYBAR_W - 4), 0, 1);
         var vel = Math.round(20 + ratio * 180);
@@ -1648,6 +1714,10 @@
             var x = clamp(e.clientX - rr.left, 2, KEYBAR_W - 2);
             if (k !== self._hoverKey && k >= 0 && k <= 87) {
                 self._hoverKey = k;
+                self._pressKey = k;
+                self._pressAt = performance.now();
+                self._pressHold = true;
+                self._keyAnimUntil = self._pressAt + 120;
                 var vv = Math.round(20 + clamp(x / KEYBAR_W, 0, 1) * 180);
                 self.defaultVelocity = vv;
                 if (window.AudioEngine && AudioEngine.playNote) {
@@ -1659,9 +1729,14 @@
         function up() {
             document.removeEventListener('mousemove', move);
             document.removeEventListener('mouseup', up);
+            if (self._pressKey >= 0) {
+                self._pressHold = false;
+                self._pressReleaseAt = performance.now();
+                self._keyAnimUntil = self._pressReleaseAt + 120;
+                self._sceneDirty = true;
+            }
         }
-        document.addEventListener('mousemove', move);
-        document.addEventListener('mouseup', up);
+        docDrag(move, up);
         void ev;
     };
 
@@ -1723,24 +1798,41 @@
         var h = host();
         if (!h) return;
         var self = this;
-        var notes = this.selection.length ? this.selection.slice() : [hit.note];
+        var notes = this.selection.length ? this.selection.slice() : this.groupNotes(hit.group);
         if (!this.isSelected(hit.note)) {
-            this.selection = [hit.note];
-            notes = [hit.note];
+            this.selection = this.groupNotes(hit.group);
+            notes = this.selection.slice();
         }
+        if (!notes.length) return;
         h.pushUndo();
         var startTick = this.xToTick(mx);
         var startKey = this.yToKey(my);
+        var dur = this.segDuration();
         var orig = notes.map(function (n) {
-            return { note: n, rel: n.rel || 0, key: n.key || 0 };
+            return { note: n, rel: n.rel || 0, key: n.key || 0, layer: n.layer || 0 };
         });
-        this.dragging = { mode: 'move', notes: notes };
+        var minRel = Infinity, maxRel = -Infinity, minKey = 87, maxKey = 0;
+        for (var i = 0; i < orig.length; i++) {
+            if (orig[i].rel < minRel) minRel = orig[i].rel;
+            if (orig[i].rel > maxRel) maxRel = orig[i].rel;
+            if (orig[i].key < minKey) minKey = orig[i].key;
+            if (orig[i].key > maxKey) maxKey = orig[i].key;
+        }
+        var anchorRel = (hit.group && isFinite(hit.group.start)) ? hit.group.start : minRel;
+        var grabTick = startTick - anchorRel;
+        this.dragging = { mode: 'move', notes: notes, orig: orig, grabTick: grabTick };
         this.hookMove(function (e) {
             var r = self.canvas.getBoundingClientRect();
-            var dt = Math.round((self.xToTick(e.clientX - r.left) - startTick) / self.grid) * self.grid;
+            var rawDelta = self.xToTick(e.clientX - r.left) - startTick;
+            // 以组起点吸附到 tick 网格, 组内音符保持相对偏移; 微小移动不吸附, 避免起拖跳变
+            var dt = Math.abs(rawDelta) < 0.5 ? 0 : (self.snapTick(anchorRel + rawDelta) - anchorRel);
+            if (dt < -minRel) dt = -minRel;
+            if (dur > 0 && dt > (dur - 1) - maxRel) dt = (dur - 1) - maxRel;
             var dk = self.yToKey(e.clientY - r.top) - startKey;
-            for (var i = 0; i < orig.length; i++) {
-                var o = orig[i];
+            if (dk < -minKey) dk = -minKey;
+            if (dk > 87 - maxKey) dk = 87 - maxKey;
+            for (var j = 0; j < orig.length; j++) {
+                var o = orig[j];
                 o.note.rel = Math.max(0, o.rel + dt);
                 o.note.key = clamp(o.key + dk, 0, 87);
             }
@@ -1815,8 +1907,7 @@
             self.dragging = null;
             if (upFn) upFn(e);
         }
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onUp);
+        docDrag(onMove, onUp);
     };
 
     SegmentWindow.prototype.commitEdit = function (noRefresh) {
@@ -1851,7 +1942,7 @@
         this.seg.notes.splice(idx, 1);
         var sel = this.selection.indexOf(note);
         if (sel >= 0) this.selection.splice(sel, 1);
-        var group = this.groups(this.seg, false).find(function (g) {
+        var group = this.groups(this.seg).find(function (g) {
             return g.notes.some(function (it) { return it.note === note; });
         });
         var endRel = group ? group.end : (note.rel || 0);
@@ -1925,7 +2016,7 @@
 
         if (ev.altKey) {
             var g = null;
-            var groups = this.groups(this.seg, false);
+            var groups = this.groups(this.seg);
             for (var i = 0; i < groups.length; i++) {
                 var gg = groups[i];
                 var gy = this.keyToY(gg.key);
@@ -2012,6 +2103,25 @@
                 this.commitEdit();
             }
             handled = true;
+        } else if (k === ' ' || ev.code === 'Space') {
+            // 空格: 本窗口聚焦时切换播放, 不再穿透到主编辑器
+            if (this.playMode === 'local') this.toggleLocalPause();
+            else if (window.WebNBS && WebNBS.handlePlayToggle) WebNBS.handlePlayToggle();
+            handled = true;
+        } else if (k === 'ArrowLeft' || k === 'ArrowRight' || k === 'ArrowUp' || k === 'ArrowDown') {
+            if (this.selection.length) {
+                var dt = (k === 'ArrowLeft' ? -1 : (k === 'ArrowRight' ? 1 : 0));
+                var dk = (k === 'ArrowUp' ? 1 : (k === 'ArrowDown' ? -1 : 0));
+                this.nudgeSelection(dt, dk);
+            } else if (k === 'ArrowLeft' || k === 'ArrowRight') {
+                this.viewStart += (k === 'ArrowLeft' ? -4 : 4) / this.pxPerTick;
+                this._sceneDirty = true;
+            } else {
+                var maxScroll = Math.max(0, (this.maxKey - this.minKey + 1) * this.rowH - this.ch + this.rulerH);
+                this.scrollY = clamp(this.scrollY + (k === 'ArrowUp' ? -this.rowH : this.rowH), 0, maxScroll);
+                this._sceneDirty = true;
+            }
+            handled = true;
         } else if (!ev.ctrlKey && !ev.metaKey && (k === 'b' || k === 'B' || k === 'd' || k === 'D')) {
             this.setTool('draw'); handled = true;
         } else if (!ev.ctrlKey && !ev.metaKey && (k === 'e' || k === 'E')) {
@@ -2023,6 +2133,20 @@
             ev.preventDefault();
             ev.stopPropagation();
         }
+    };
+
+    SegmentWindow.prototype.nudgeSelection = function (dt, dk) {
+        if (!this.selection.length || !this.seg) return;
+        var h = host();
+        if (!h) return;
+        h.pushUndo();
+        var dur = this.segDuration();
+        for (var i = 0; i < this.selection.length; i++) {
+            var n = this.selection[i];
+            n.rel = clamp((n.rel || 0) + dt, 0, dur - 1);
+            n.key = clamp((n.key || 0) + dk, 0, 87);
+        }
+        this.commitEdit();
     };
 
     SegmentWindow.prototype.clampSelection = function () {
@@ -2088,49 +2212,6 @@
         var idx = GRID_LEVELS.indexOf(this.grid);
         this.grid = GRID_LEVELS[(idx + 1) % GRID_LEVELS.length];
         this.syncTexts();
-    };
-
-    SegmentWindow.prototype.pickReference = function () {
-        var self = this;
-        var h = host();
-        if (!h) return;
-        var segs = (h.state.segments || []).filter(function (s) {
-            return String(s.lane) === String(self.seg.lane) && String(s.id) !== String(self.seg.id);
-        });
-        var menu = document.createElement('div');
-        menu.className = 'spw-menu';
-        var html = '<div class="spw-menu-item" data-id="">' + t('不显示参考') + '</div>';
-        for (var i = 0; i < segs.length; i++) {
-            var name = segs[i].name || ('#' + (i + 1));
-            html += '<div class="spw-menu-item" data-id="' + segs[i].id + '">' + name + '</div>';
-        }
-        menu.innerHTML = html;
-        // 挂到 body 并使用 fixed 定位, 避免被窗口 overflow:hidden 裁剪/覆盖
-        document.body.appendChild(menu);
-        var btn = this.root.querySelector('[data-act="reference"]');
-        var br = btn.getBoundingClientRect();
-        menu.style.left = Math.max(4, br.left) + 'px';
-        menu.style.top = (br.bottom + 4) + 'px';
-        // 靠近视口底部时向上翻转
-        var mr = menu.getBoundingClientRect();
-        if (mr.bottom > window.innerHeight - 4) {
-            menu.style.top = Math.max(4, br.top - mr.height - 4) + 'px';
-        }
-        function closeMenu() {
-            if (menu.parentNode) menu.parentNode.removeChild(menu);
-            document.removeEventListener('mousedown', outside, true);
-        }
-        function outside(e) { if (!menu.contains(e.target)) closeMenu(); }
-        menu.addEventListener('click', function (e) {
-            var item = e.target.closest('.spw-menu-item');
-            if (!item) return;
-            self.refSegId = item.getAttribute('data-id') || null;
-            closeMenu();
-            self.fitKeyRange();
-            self.syncTexts();
-            self.invalidate(true);
-        });
-        setTimeout(function () { document.addEventListener('mousedown', outside, true); }, 0);
     };
 
     // ============================================================

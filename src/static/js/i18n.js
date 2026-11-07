@@ -93,7 +93,6 @@
     // 片段浮动钢琴卷帘窗口 (segment_piano_window.js) 文案
     Object.assign(UI_TEXT['en-US'], {
         '片段轨道': 'Segment track', '同步主窗口': 'Sync main view', '仅本窗口': 'This window only',
-        '参考片段': 'Reference segment', '参考中': 'Referencing', '不显示参考': 'No reference',
         'Alt + 滚轮切换重叠音符': 'Alt + wheel to switch overlapping notes',
         '最小化': 'Minimize', '最大化': 'Maximize', '力度': 'Velocity',
         '1/2 小节': '1/2 bar', '1 小节': '1 bar', '播放模式': 'Playback mode', '网格吸附': 'Grid snap',
@@ -101,7 +100,6 @@
     });
     Object.assign(UI_TEXT['pt-BR'], {
         '片段轨道': 'Faixa de segmento', '同步主窗口': 'Sincronizar janela principal', '仅本窗口': 'Somente esta janela',
-        '参考片段': 'Segmento de referência', '参考中': 'Referenciando', '不显示参考': 'Sem referência',
         'Alt + 滚轮切换重叠音符': 'Alt + rodinha para alternar notas sobrepostas',
         '最小化': 'Minimizar', '最大化': 'Maximizar', '力度': 'Velocidade',
         '1/2 小节': '1/2 compasso', '1 小节': '1 compasso', '播放模式': 'Modo de reprodução', '网格吸附': 'Ajuste à grade',
@@ -109,7 +107,6 @@
     });
     Object.assign(UI_TEXT['id-ID'], {
         '片段轨道': 'Trek segmen', '同步主窗口': 'Sinkron jendela utama', '仅本窗口': 'Hanya jendela ini',
-        '参考片段': 'Segmen referensi', '参考中': 'Merujuk', '不显示参考': 'Tanpa referensi',
         'Alt + 滚轮切换重叠音符': 'Alt + roda untuk ganti not bertumpuk',
         '最小化': 'Perkecil', '最大化': 'Perbesar', '力度': 'Velocity',
         '1/2 小节': '1/2 bar', '1 小节': '1 bar', '播放模式': 'Mode pemutaran', '网格吸附': 'Snap kisi',

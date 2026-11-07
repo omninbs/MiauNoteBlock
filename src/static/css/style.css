@@ -9261,8 +9261,14 @@ textarea:disabled {
     overflow: hidden;
     color: var(--text-primary);
     font-family: var(--font-family);
-    animation: spw-in 160ms cubic-bezier(0.2, 0.9, 0.25, 1);
     transform-origin: center;
+}
+/* 入场动画只在首次创建时播放 (类由 JS 添加, 动画结束后移除, resize 不会重播) */
+.spw.spw-in {
+    animation: spw-in 160ms cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+.spw:focus {
+    outline: none;
 }
 @keyframes spw-in {
     from { opacity: 0; transform: scale(0.97); }
@@ -9302,6 +9308,19 @@ textarea:disabled {
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 45%;
+    min-width: 0;
+}
+/* 「测试版」标签: 不抢占标题宽度 */
+.spw-beta {
+    flex: none;
+    font-size: 9px;
+    line-height: 1;
+    padding: 2px 5px;
+    border-radius: 4px;
+    background: rgba(76, 194, 255, 0.13);
+    color: #8fd3ff;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
 }
 .spw-sub {
     font-size: 10.5px;
@@ -9422,7 +9441,7 @@ textarea:disabled {
     font-size: 10.5px;
     letter-spacing: 0.2px;
 }
-.spw-grid, .spw-ref {
+.spw-grid {
     width: auto;
     min-width: 24px;
     padding: 0 6px;
@@ -9441,6 +9460,7 @@ textarea:disabled {
     position: absolute;
     inset: 0;
     display: block;
+    touch-action: none;
 }
 .spw-vel {
     flex: none;
@@ -9462,10 +9482,9 @@ textarea:disabled {
 .spw-rz-se { bottom: 0; right: 0; width: 12px; height: 12px; cursor: nwse-resize; }
 .spw-rz-sw { bottom: 0; left: 0; width: 12px; height: 12px; cursor: nesw-resize; }
 
-/* 拖动/缩放期间关闭过渡, 保证跟手 */
+/* 拖动/缩放期间保证跟手 (不触碰入场动画, 避免结束后重播) */
 .spw.spw-dragging,
 .spw.spw-resizing {
-    animation: none;
     will-change: left, top, width, height;
 }
 
@@ -9482,6 +9501,35 @@ textarea:disabled {
     height: 26px;
     border-bottom: none;
 }
+
+/* 触屏: 按钮最小可点 36px */
+@media (pointer: coarse) {
+    .spw-titlebar {
+        height: 36px;
+    }
+    .spw-titlebar .spw-btn {
+        width: 36px;
+        height: 32px;
+    }
+    .spw-toolbar {
+        height: 40px;
+        gap: 5px;
+    }
+    .spw-toolbar .spw-btn {
+        width: 36px;
+        height: 34px;
+    }
+    .spw-toolbar .spw-grid {
+        width: auto;
+        min-width: 40px;
+    }
+    .spw-toolbar .spw-switch {
+        height: 32px;
+    }
+    .spw-min .spw-titlebar {
+        height: 36px;
+    }
+}
 .spw-min .spw-glyph,
 .spw-min .spw-sub {
     display: none;
@@ -9497,30 +9545,9 @@ textarea:disabled {
     width: 22px;
     height: 20px;
 }
-
-/* 参考片段下拉 (挂载到 body, fixed 定位, 避免被窗口裁剪) */
-.spw-menu {
-    position: fixed;
-    min-width: 150px;
-    max-height: 220px;
-    overflow-y: auto;
-    padding: 4px;
-    background: var(--mica-acrylic, rgba(44, 44, 46, 0.96));
-    border: 1px solid var(--ctrl-stroke-secondary);
-    border-radius: 6px;
-    box-shadow: var(--shadow-flyout);
-    z-index: 2000;
-}
-.spw-menu-item {
-    padding: 5px 8px;
-    font-size: 11.5px;
-    border-radius: 4px;
-    cursor: pointer;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.spw-menu-item:hover {
-    background: var(--ctrl-fill-hover);
-    color: var(--accent);
+@media (pointer: coarse) {
+    .spw-min .spw-btn {
+        width: 36px;
+        height: 32px;
+    }
 }

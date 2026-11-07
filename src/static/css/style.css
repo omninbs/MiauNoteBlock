@@ -228,20 +228,35 @@
     --accent-tertiary: #cdd7df;
 }
 
-/* 设置界面 - UI 配色选择网格 (预设色卡) */
+/* 设置界面 - UI 配色选择网格 (预设色卡, 单行横向滚动) */
 .settings-theme-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-    gap: 8px;
+    grid-auto-flow: column;
+    grid-auto-columns: 62px;
+    gap: 6px;
     width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+}
+.settings-theme-grid::-webkit-scrollbar {
+    height: 4px;
+}
+.settings-theme-grid::-webkit-scrollbar-thumb {
+    background: var(--ctrl-stroke-hover);
+    border-radius: 2px;
 }
 .settings-theme-card {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 5px;
-    padding: 8px 4px 6px;
-    border-radius: 8px;
+    gap: 3px;
+    padding: 4px 2px 3px;
+    border-radius: 6px;
     border: 1px solid var(--ctrl-stroke-default);
     background: var(--ctrl-fill-default);
     cursor: pointer;
@@ -256,19 +271,219 @@
     background: var(--ctrl-fill-secondary);
 }
 .settings-theme-card .theme-swatch {
-    width: 34px;
-    height: 34px;
+    position: relative;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
     background: var(--theme-color, var(--accent));
-    box-shadow: inset 0 -6px 10px rgba(0, 0, 0, 0.22);
+    box-shadow: inset 0 -4px 8px rgba(0, 0, 0, 0.22);
+}
+/* 自定义主题色卡片: 色块外圈加虚线环, 与预设区分 */
+.settings-theme-card.settings-theme-custom .theme-swatch {
+    box-shadow: inset 0 -4px 8px rgba(0, 0, 0, 0.22), 0 0 0 2px var(--ctrl-stroke-hover);
 }
 .settings-theme-card .theme-name {
-    font-size: 11px;
+    font-size: 10px;
+    line-height: 1.2;
     color: var(--text-secondary);
     white-space: nowrap;
 }
 .settings-theme-card.active .theme-name {
     color: var(--text-primary);
+}
+@media (max-width: 768px) {
+    .settings-theme-grid {
+        grid-auto-columns: 54px;
+        gap: 5px;
+    }
+    .settings-theme-card {
+        padding: 3px 1px 2px;
+    }
+    .settings-theme-card .theme-swatch {
+        width: 19px;
+        height: 19px;
+    }
+    .settings-theme-card .theme-name {
+        font-size: 9px;
+    }
+}
+
+/* 设置弹窗内滑块: 去掉外层容器的底色 / 描边 / 内阴影, 只保留滑块本身 */
+.popup-content .settings-range-wrap {
+    padding: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    min-width: 0;
+}
+
+/* ==================================================================
+   统一取色器浮层 (iro.js) — 片段轨道颜色 / 主题自定义色
+   层级高于设置弹窗与片段右键菜单, 低于系统级 tooltip
+   ================================================================== */
+.wn-cp-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100480;
+    background: rgba(0, 0, 0, 0.18);
+}
+.wn-cp-overlay.is-mobile {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+}
+.wn-cp-panel {
+    position: absolute;
+    width: 220px;
+    padding: 10px;
+    border-radius: 12px;
+    background: var(--mica-acrylic, #1d2126);
+    border: 1px solid var(--ctrl-stroke-default);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+    color: var(--text-primary);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.wn-cp-overlay.is-mobile .wn-cp-panel,
+.wn-cp-panel.is-mobile {
+    position: relative;
+    left: auto;
+    top: auto;
+    width: min(92vw, 340px);
+    max-height: 88svh;
+    overflow-y: auto;
+    border-radius: 16px 16px 0 0;
+    padding: 12px 14px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+    align-items: stretch;
+}
+.wn-cp-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.wn-cp-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.wn-cp-close {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+}
+.wn-cp-close:hover {
+    background: var(--ctrl-fill-hover);
+    color: var(--text-primary);
+}
+.wn-cp-wheel {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    touch-action: none;
+    user-select: none;
+}
+.wn-cp-wheel * {
+    touch-action: none;
+}
+.wn-cp-hex-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-tertiary);
+}
+.wn-cp-hex-row > span {
+    flex: 0 0 auto;
+}
+.wn-cp-hex {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 28px;
+    padding: 0 8px;
+    font-family: Consolas, monospace;
+    font-size: 12px;
+    text-transform: uppercase;
+    border-radius: 6px;
+    border: 1px solid var(--ctrl-stroke-default);
+    background: var(--ctrl-fill-default);
+    color: var(--text-primary);
+}
+.wn-cp-hex:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+.wn-cp-rgb {
+    display: flex;
+    gap: 6px;
+}
+.wn-cp-rgb > label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1 1 0;
+    min-width: 0;
+    font-size: 11px;
+    color: var(--text-tertiary);
+}
+.wn-cp-rgb > label > span {
+    flex: 0 0 auto;
+}
+.wn-cp-rgb input {
+    width: 100%;
+    min-width: 0;
+    height: 28px;
+    padding: 0 4px;
+    font-size: 12px;
+    text-align: center;
+    border-radius: 6px;
+    border: 1px solid var(--ctrl-stroke-default);
+    background: var(--ctrl-fill-default);
+    color: var(--text-primary);
+}
+.wn-cp-rgb input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+.wn-cp-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 2px;
+}
+.wn-cp-btn {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0 14px;
+    font-size: 12px;
+    border-radius: 6px;
+    border: 1px solid var(--ctrl-stroke-default);
+    background: var(--ctrl-fill-default);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+.wn-cp-btn:hover {
+    background: var(--ctrl-fill-hover);
+    border-color: var(--ctrl-stroke-hover);
+}
+.wn-cp-btn.wn-cp-ok {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-on-accent, #fff);
+}
+.wn-cp-btn.wn-cp-ok:hover {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
 }
 
 html, body {
@@ -1229,6 +1444,9 @@ body.segment-edit-mode .tool-bar {
     border-radius: 50%;
     flex-shrink: 0;
     cursor: ns-resize;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
     background:
         radial-gradient(circle, #22272d 0 62%, transparent 63%),
         conic-gradient(from 225deg,
@@ -1282,62 +1500,40 @@ body.segment-edit-mode .tool-bar {
     font-variant-numeric: tabular-nums;
     min-width: 22px;
 }
-/* 轨道颜色弹层: 原生调色盘 (整块点击打开系统取色器) + HEX 输入 */
-.seg-lane-color-pop {
-    position: fixed;
-    z-index: 4000;
-    width: 116px;
-    padding: 8px;
-    border-radius: 10px;
-    background: #1d2126;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-.seg-lane-color-wheel {
+/* 轨道实时电平条: 填充 = 当前电平, 细线 = 峰值保持标记 */
+.seg-lane-meter {
     position: relative;
-    display: block;
-    height: 56px;
-    border-radius: 7px;
-    cursor: pointer;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+    flex: 1 1 auto;
+    min-width: 16px;
+    height: 5px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+    pointer-events: none;
 }
-.seg-lane-color-wheel input[type="color"] {
+.seg-lane-meter-fill {
     position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    opacity: 0;
-    border: none;
-    padding: 0;
-    cursor: pointer;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 0;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--accent), var(--accent-red, #ff6b6b));
 }
-.seg-lane-color-hexrow {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    color: var(--text-tertiary);
-    font-size: 11px;
+.seg-lane-meter-peak {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 2px;
+    border-radius: 1px;
+    background: var(--accent-tertiary, #b8b8ff);
+    opacity: 0.9;
 }
-.seg-lane-color-hex {
-    flex: 1;
-    min-width: 0;
-    height: 22px;
-    padding: 0 6px;
-    font-size: 11px;
-    font-family: Consolas, monospace;
-    border-radius: 5px;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    background: rgba(255, 255, 255, 0.05);
-    color: #e4e8ec;
-    text-transform: uppercase;
+.seg-lane-meter.muted {
+    opacity: 0.35;
 }
-.seg-lane-color-hex:focus {
-    outline: none;
-    border-color: rgba(255, 255, 255, 0.4);
-}
+/* 轨道颜色点已改用统一取色器浮层 (36-color-picker.js) */
 .seg-lane-resize {
     position: absolute;
     left: 0;

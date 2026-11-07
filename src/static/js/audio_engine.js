@@ -38,6 +38,17 @@ var wetGain = null;          // 湿声 (含混响)
 var convolverNode = null;    // Convolver 混响节点
 var isAudioReady = false;
 
+// 主电平表: masterGain 之后的旁路 tap (只分析, 不改变原播放链路)
+var masterAnalyser = null;   // AnalyserNode
+var _analyserSink = null;    // 0 增益 sink, 保证 analyser 被音频图拉取且不产生重复声音
+var _analyserBuf = null;     // 复用时域采样缓冲, 避免每帧分配
+var _smoothedMasterLevel = 0;
+// 按音符层记录的发音活动: layer -> { t: 起始时间, gain, until: 预计结束时间 }
+var _layerLevels = {};
+
+// 轨道中用于标识音符层的字段可能有多组别名, 依次兜底
+var _LANE_LAYER_FIELDS = ['layerKeys', 'layerKey', 'layerChannels'];
+
 // 活动音源节点列表 (用于 stopAll 立即停止所有声音)
 var _activeSources = [];
 // 自定义音色注册表: instrument 编号(>=20) -> { buffer, baseKey, gain }
@@ -218,6 +229,29 @@ function disconnectStyleChain() {
     _styleChainOutput = null;
 }
 
+// 在 masterGain 后挂载电平分析 tap。
+// 使用 0 增益 sink 连到 destination: analyser 会随音频图被拉取, 又不会输出第二路声音。
+function ensureAnalyserTap() {
+    if (!audioContext || !masterGain) return;
+    try {
+        if (!masterAnalyser) {
+            masterAnalyser = audioContext.createAnalyser();
+            masterAnalyser.fftSize = 256;
+            masterAnalyser.smoothingTimeConstant = 0.75;
+            _analyserBuf = new Uint8Array(masterAnalyser.fftSize);
+        }
+        masterGain.connect(masterAnalyser);
+        if (!_analyserSink) {
+            _analyserSink = audioContext.createGain();
+            _analyserSink.gain.value = 0;
+            masterAnalyser.connect(_analyserSink);
+            _analyserSink.connect(audioContext.destination);
+        }
+    } catch (e) {
+        console.warn('电平分析节点挂载失败:', e);
+    }
+}
+
 // 重建 masterGain -> 输出 的实时路由
 // 优先级: 整体风格链 > 原声(按增强开关: NBS 直连 / 混响压缩链)
 function rebuildLiveRouting() {
@@ -229,6 +263,7 @@ function rebuildLiveRouting() {
         _styleChainInput = chain.input;
         _styleChainOutput = chain._output || null;
         masterGain.connect(_styleChainInput);
+        ensureAnalyserTap();
         return;
     }
     if (audioEnhanceEnabled) {
@@ -247,6 +282,139 @@ function rebuildLiveRouting() {
             masterGain.connect(audioContext.destination);
         }
     }
+    // rebuild 时 masterGain.disconnect 会连旁路 tap 一起断开, 这里重新接上
+    ensureAnalyserTap();
+}
+
+/**
+ * 主输出电平 (0..1, RMS 归一化)。无音频上下文或静音时返回 0。
+ * 只读旁路 analyser, 不参与声音链路。
+ */
+function getMasterLevel() {
+    if (!audioContext || !masterAnalyser) {
+        _smoothedMasterLevel = 0;
+        return 0;
+    }
+    try {
+        if (!_analyserBuf || _analyserBuf.length !== masterAnalyser.fftSize) {
+            _analyserBuf = new Uint8Array(masterAnalyser.fftSize);
+        }
+        masterAnalyser.getByteTimeDomainData(_analyserBuf);
+        var sum = 0;
+        for (var i = 0; i < _analyserBuf.length; i++) {
+            var x = (_analyserBuf[i] - 128) / 128;
+            sum += x * x;
+        }
+        var rms = Math.sqrt(sum / _analyserBuf.length);
+        var level = Math.min(1, rms * 2.4);   // 提高到接近可视范围, 同时做上限保护
+        // time-domain 不受 smoothingTimeConstant 影响, 这里做时间平滑避免抖动
+        _smoothedMasterLevel = _smoothedMasterLevel * 0.72 + level * 0.28;
+        if (_smoothedMasterLevel < 0.002) _smoothedMasterLevel = 0;
+        return _smoothedMasterLevel;
+    } catch (e) {
+        return 0;
+    }
+}
+
+// 收集一条片段轨道对应的音符层 (兼容 layerKeys / layerKey / layerChannels / channel)
+function collectLaneLayers(lane, layerChannelMap) {
+    var keys = [];
+    var seen = {};
+    function add(k) {
+        if (k === undefined || k === null) return;
+        var s = String(k);
+        if (seen[s]) return;
+        seen[s] = true;
+        keys.push(s);
+    }
+    if (lane) {
+        for (var f = 0; f < _LANE_LAYER_FIELDS.length; f++) {
+            var field = _LANE_LAYER_FIELDS[f];
+            var value = lane[field];
+            if (Array.isArray(value)) {
+                for (var i = 0; i < value.length; i++) add(value[i]);
+            } else if (value && typeof value === 'object') {
+                for (var k in value) add(k);
+            } else if (value !== undefined && value !== null) {
+                add(value);
+            }
+        }
+        if (lane.channel !== undefined && lane.channel !== null && layerChannelMap && typeof layerChannelMap === 'object') {
+            for (var lk in layerChannelMap) {
+                if (String(layerChannelMap[lk]) === String(lane.channel)) add(lk);
+            }
+        }
+    }
+    return keys;
+}
+
+// 记录一次音符发音, 供按轨道估算电平
+function _recordLayerActivity(layer, gain, now, duration) {
+    if (layer === undefined || layer === null) return;
+    var key = String(layer);
+    var g = Math.max(0, Math.min(1, gain || 0));
+    var rec = _layerLevels[key];
+    if (rec && rec.gain > g && now < rec.until) {
+        // 同一层同时有多个音符: 保留更大的力度, 但延长结束时间
+        rec.until = Math.max(rec.until, now + Math.max(0.08, duration || 0.3));
+        return;
+    }
+    _layerLevels[key] = {
+        t: now,
+        gain: g,
+        until: now + Math.max(0.08, duration || 0.3)
+    };
+}
+
+/**
+ * 按片段轨道返回实时电平数组 (与 laneList 索引一一对应, 0..1)。
+ * 精确分轨需要每轨独立 analyser; 这里用「主电平 × 该轨道音符层的发音活动」估算。
+ * 无 channel/layerKeys 信息的轨道退化为主电平估算。
+ */
+function getTrackLevels(laneList) {
+    var master = getMasterLevel();
+    if (!laneList || !laneList.length) return [];
+    var now = audioContext ? audioContext.currentTime : 0;
+    var anySolo = false;
+    for (var s = 0; s < laneList.length; s++) {
+        if (laneList[s] && laneList[s].solo) { anySolo = true; break; }
+    }
+    var stateRef = window.WebNBS && window.WebNBS.state ? window.WebNBS.state : null;
+    var layerChannelMap = stateRef ? stateRef.layerChannelMap : null;
+    var result = [];
+    for (var i = 0; i < laneList.length; i++) {
+        var lane = laneList[i];
+        if (!lane || lane.muted || (anySolo && !lane.solo)) {
+            result.push(0);
+            continue;
+        }
+        var layers = collectLaneLayers(lane, layerChannelMap);
+        if (!layers.length) {
+            // 无分轨信息: 用主电平估算, 略微压低避免与真实分轨混淆
+            result.push(Math.min(1, master * 0.75));
+            continue;
+        }
+        var factor = 0;
+        for (var j = 0; j < layers.length; j++) {
+            var rec = _layerLevels[layers[j]];
+            if (!rec) continue;
+            if (now - rec.until > 2) {
+                delete _layerLevels[layers[j]];
+                continue;
+            }
+            var f;
+            if (now <= rec.until) {
+                var age = now - rec.t;
+                f = age < 0.04 ? Math.max(0, age / 0.04) : 1;
+            } else {
+                // 音符结束后 0.22s 内衰减到 0
+                f = Math.max(0, 1 - (now - rec.until) / 0.22);
+            }
+            if (f > 0) factor = Math.max(factor, f * Math.min(1, rec.gain * 1.4));
+        }
+        result.push(Math.max(0, Math.min(1, master * factor)));
+    }
+    return result;
 }
 
 // 切换实时播放整体风格 (与离线导出使用同一套效果链/预设表)
@@ -447,6 +615,7 @@ function playBuffer(buffer, key, velocity, pan, soundName, customOpt, pitch, lay
         var fullDuration = buffer.duration / Math.max(0.5, rate);
         source.start(now);
         source.stop(now + fullDuration + 0.05);
+        _recordLayerActivity(layer, gain, now, fullDuration);
 
         var sourceEntry = { source: source, layer: layer };
         _activeSources.push(sourceEntry);
@@ -475,6 +644,7 @@ function playBuffer(buffer, key, velocity, pan, soundName, customOpt, pitch, lay
 
         source.start(now);
         source.stop(now + Math.max(0.4, buffer.duration / Math.max(0.5, rate)) + 0.05);
+        _recordLayerActivity(layer, gain, now, Math.max(0.4, buffer.duration / Math.max(0.5, rate)));
 
         var sourceEntry = { source: source, layer: layer };
         _activeSources.push(sourceEntry);
@@ -595,6 +765,9 @@ function stopAllAudio() {
         try { _activeSources[i].source.disconnect(); } catch(e) {}
     }
     _activeSources = [];
+    // 清空分层电平记录, 电平表随后自然归零
+    _layerLevels = {};
+    _smoothedMasterLevel = 0;
     // 2. 重建干净的实时路由 (按当前整体风格/增强模式)
     rebuildLiveRouting();
 }
@@ -635,6 +808,10 @@ window.AudioEngine = {
     stopAll: stopAllAudio,
     stopLayer: stopLayerAudio,
     getContext: function() { return audioContext; },
+    // 实时电平: 主输出 / 按片段轨道估算 (0..1)
+    getMasterLevel: getMasterLevel,
+    getTrackLevels: getTrackLevels,
+    getAnalyser: function() { return masterAnalyser; },
     registerCustomInstrument: registerCustomInstrument,
     unregisterCustomInstrument: unregisterCustomInstrument,
     clearCustomInstruments: clearCustomInstruments,

@@ -796,7 +796,7 @@
                         </div>
                         <div class="settings-row settings-inline-row">
                             <label class="settings-label">背景透明度</label>
-                            <div class="settings-control settings-control-wide">
+                            <div class="settings-control settings-control-wide settings-range-wrap">
                                 <input type="range" id="settings-bg-opacity" min="0" max="100" step="5" value="0">
                                 <span id="settings-bg-opacity-value" class="settings-value">0%</span>
                             </div>
@@ -823,14 +823,14 @@
                         </div>
                         <div class="settings-row settings-inline-row">
                             <label class="settings-label">面板透明度</label>
-                            <div class="settings-control settings-control-wide">
+                            <div class="settings-control settings-control-wide settings-range-wrap">
                                 <input type="range" id="settings-panel-opacity" min="0" max="100" step="5" value="50">
                                 <span id="settings-panel-opacity-value" class="settings-value">50%</span>
                             </div>
                         </div>
                         <div class="settings-row settings-inline-row">
                             <label class="settings-label">音轨栏透明度</label>
-                            <div class="settings-control settings-control-wide">
+                            <div class="settings-control settings-control-wide settings-range-wrap">
                                 <input type="range" id="settings-track-panel-opacity" min="0" max="100" step="5" value="60">
                                 <span id="settings-track-panel-opacity-value" class="settings-value">60%</span>
                             </div>
@@ -849,7 +849,7 @@
                         </div>
                         <div class="settings-row settings-inline-row">
                             <label class="settings-label">网格透明度</label>
-                            <div class="settings-control settings-control-wide">
+                            <div class="settings-control settings-control-wide settings-range-wrap">
                                 <input type="range" id="settings-grid-opacity" min="0" max="1" step="0.05" value="0.25">
                                 <span id="settings-grid-opacity-value" class="settings-value">25%</span>
                             </div>
@@ -1726,9 +1726,10 @@
 <script src="static/js/spessa_player.js?v=20260918a"></script>
 <script src="static/js/soundfont_loader.js?v=20260808b"></script>
 <script src="static/js/piano_roll.js?v=20261030a"></script>
-<!-- 本地化第三方库: ZIP 打包 (jszip) / MP3 编码 (lamejs) -->
+<!-- 本地化第三方库: ZIP 打包 (jszip) / MP3 编码 (lamejs) / 取色器 (iro.js) -->
 <script src="static/vendor/jszip.min.js?v=20260905a"></script>
 <script src="static/vendor/lame.min.js?v=20260905a"></script>
+<script src="static/lib/iro.min.js?v=20261106a"></script>
 <!-- 离线渲染引擎: audio_render.js 必须在 main.js 之前加载 -->
 <script src="static/js/render_jsmix.js?v=20260906e"></script>
 <script src="static/js/audio_render.js?v=20260919c"></script>
@@ -1773,6 +1774,7 @@
 <script src="static/js/modules/33-export.js?v=20261030c"></script>
 <script src="static/js/modules/34-autosave.js?v=20261031f"></script>
 <script src="static/js/modules/35-lyrics-quick.js?v=20261101a"></script>
+<script src="static/js/modules/36-color-picker.js?v=20261106a"></script>
 <!-- 桌面外壳桥接: 仅在 Tauri/MSIX 环境生效, 浏览器与服务器部署下自动空转 -->
 <script src="static/js/modules/40-desktop-bridge.js?v=20261101b"></script>
 <script src="static/js/main.js?v=20261030c"></script>

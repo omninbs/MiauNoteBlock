@@ -1701,13 +1701,63 @@
         { id: 'forest',  name: '森绿', color: '#51cf66' },
         { id: 'mono',    name: '石墨', color: '#9aa8b5' }
     ];
+    var UI_THEME_CUSTOM_KEY = 'ui_theme_custom';
+    var UI_THEME_ACCENT_VARS = ['--accent', '--accent-hover', '--accent-pressed', '--accent-secondary', '--accent-tertiary'];
+
+    function normalizeThemeHex(hex) {
+        var v = String(hex || '').trim().toLowerCase();
+        if (v && v.charAt(0) !== '#') v = '#' + v;
+        return /^#[0-9a-f]{6}$/.test(v) ? v : null;
+    }
+
+    function getSavedCustomThemeColor() {
+        try {
+            var v = normalizeThemeHex(localStorage.getItem(UI_THEME_CUSTOM_KEY));
+            if (v) return v;
+        } catch (e) {}
+        return '#4cc2ff';
+    }
+
+    // 按比例向白色(255)或黑色(0)混合, 生成强调色的 hover/pressed/次要色
+    function blendThemeColor(hex, target, amount) {
+        var r = parseInt(hex.slice(1, 3), 16);
+        var g = parseInt(hex.slice(3, 5), 16);
+        var b = parseInt(hex.slice(5, 7), 16);
+        function mix(c) { return Math.round(c + (target - c) * amount); }
+        function pad(n) { return (n < 16 ? '0' : '') + n.toString(16); }
+        return '#' + pad(mix(r)) + pad(mix(g)) + pad(mix(b));
+    }
+
+    function clearCustomThemeVars() {
+        var st = document.documentElement.style;
+        for (var i = 0; i < UI_THEME_ACCENT_VARS.length; i++) {
+            st.removeProperty(UI_THEME_ACCENT_VARS[i]);
+        }
+    }
+
+    // 应用自定义强调色: 用内联 CSS 变量覆盖预设, 无需新增主题样式表
+    function applyCustomTheme(hex) {
+        hex = normalizeThemeHex(hex) || '#4cc2ff';
+        var st = document.documentElement.style;
+        st.setProperty('--accent', hex);
+        st.setProperty('--accent-hover', blendThemeColor(hex, 255, 0.22));
+        st.setProperty('--accent-pressed', blendThemeColor(hex, 0, 0.22));
+        st.setProperty('--accent-secondary', blendThemeColor(hex, 255, 0.38));
+        st.setProperty('--accent-tertiary', blendThemeColor(hex, 255, 0.66));
+        document.documentElement.setAttribute('data-ui-theme', 'custom');
+    }
 
     function applyUiTheme(id) {
+        if (id === 'custom') {
+            applyCustomTheme(getSavedCustomThemeColor());
+            return;
+        }
         var known = false;
         for (var i = 0; i < UI_THEMES.length; i++) {
             if (UI_THEMES[i].id === id) { known = true; break; }
         }
         if (!known) id = 'default';
+        clearCustomThemeVars();
         if (id === 'default') document.documentElement.removeAttribute('data-ui-theme');
         else document.documentElement.setAttribute('data-ui-theme', id);
     }
@@ -1726,19 +1776,48 @@
                 + '" style="--theme-color:' + t.color + '" title="' + t.name + '">'
                 + '<span class="theme-swatch"></span><span class="theme-name">' + t.name + '</span></button>';
         }
+        // 自定义主题色卡片: 显示当前自定义色, 点击打开统一取色器
+        var customColor = getSavedCustomThemeColor();
+        html += '<button type="button" class="settings-theme-card settings-theme-custom" data-theme="custom"'
+            + ' data-theme-color="' + customColor + '" style="--theme-color:' + customColor + '" title="' + N.i18nText('自定义主题色') + '">'
+            + '<span class="theme-swatch"></span><span class="theme-name">' + N.i18nText('自定义') + '</span></button>';
         grid.innerHTML = html;
         var sync = function() {
             var cur = 'default';
             try { cur = localStorage.getItem('ui_theme') || 'default'; } catch (e) {}
             var cards = grid.querySelectorAll('.settings-theme-card');
+            var customHex = getSavedCustomThemeColor();
             for (var c = 0; c < cards.length; c++) {
-                cards[c].classList.toggle('active', cards[c].getAttribute('data-theme') === cur);
+                var cid = cards[c].getAttribute('data-theme');
+                cards[c].classList.toggle('active', cid === cur);
+                if (cid === 'custom') {
+                    cards[c].setAttribute('data-theme-color', customHex);
+                    cards[c].style.setProperty('--theme-color', customHex);
+                }
             }
         };
         grid.addEventListener('click', function(e) {
             var card = e.target.closest ? e.target.closest('.settings-theme-card') : null;
             if (!card) return;
             var id = card.getAttribute('data-theme');
+            if (id === 'custom') {
+                // 取色器实时预览会重绘主题, 确定后才持久化
+                if (!N.openColorPicker) return;
+                N.openColorPicker({
+                    color: getSavedCustomThemeColor(),
+                    anchorEl: card,
+                    title: N.i18nText('自定义主题色'),
+                    onCommit: function(hex) {
+                        hex = normalizeThemeHex(hex);
+                        if (!hex) return;
+                        try { localStorage.setItem(UI_THEME_CUSTOM_KEY, hex); } catch (er) {}
+                        try { localStorage.setItem('ui_theme', 'custom'); } catch (er) {}
+                        applyUiTheme('custom');
+                        sync();
+                    }
+                });
+                return;
+            }
             applyUiTheme(id);
             try { localStorage.setItem('ui_theme', id); } catch (er) {}
             sync();
@@ -1749,7 +1828,9 @@
     // 模块加载即应用已保存的配色, 避免启动闪烁
     try {
         var _savedTheme = localStorage.getItem('ui_theme');
-        if (_savedTheme && _savedTheme !== 'default') {
+        if (_savedTheme === 'custom') {
+            applyCustomTheme(getSavedCustomThemeColor());
+        } else if (_savedTheme && _savedTheme !== 'default') {
             document.documentElement.setAttribute('data-ui-theme', _savedTheme);
         }
     } catch (e) {}

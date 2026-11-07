@@ -623,16 +623,17 @@
                 if (state.currentInstrument === item.instrument) updateInstrumentSelectorUI();
             });
         } else if (act === 'recolor') {
-            var colInp = document.createElement('input');
-            colInp.type = 'color';
-            colInp.value = item.color || '#4aa3ff';
-            colInp.onchange = function() {
-                var val = colInp.value;
-                CustomInstruments.update(id, { color: val });
-                renderCustomInstList();
-                if (state.currentInstrument === item.instrument) updateInstrumentSelectorUI();
-            };
-            colInp.click();
+            if (!N.openColorPicker) return;
+            N.openColorPicker({
+                color: item.color || '#4aa3ff',
+                anchorEl: btn,
+                title: N.i18nText('音色颜色'),
+                onCommit: function(hex) {
+                    CustomInstruments.update(id, { color: hex });
+                    renderCustomInstList();
+                    if (state.currentInstrument === item.instrument) updateInstrumentSelectorUI();
+                }
+            });
         } else if (act === 'delete') {
             showAppConfirm('确定删除自定义音色「' + item.name + '」吗？\n引用该音色的 NBS 文件中对应乐器将静音。', {title: '删除音色', icon: 'fa-solid fa-triangle-exclamation'}).then(function(ok) {
                 if (!ok) return;

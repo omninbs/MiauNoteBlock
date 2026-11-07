@@ -210,6 +210,8 @@
         '按住琴键会按持续时长补齐音符': 'Holding a piano key fills notes for its duration', '提示: 在画布中点击音轨行可选择/取消选择，可多选': 'Tip: click track rows on the canvas to select or deselect them; multiple tracks are supported.',
         '勾选后可连接外部 MIDI 键盘/架子鼓进行输入': 'Enable this to use an external MIDI keyboard or drum pad.', '不保留': 'Do not keep', '全部保留': 'Keep all', '按轨道选择': 'Choose tracks',
         '选择需要应用音色替代的 MIDI 音轨。未选中的音轨中超出音域的音符将保留原状。右侧迷你图为该轨道音符预览（Y=音高，X=时间），点击可从该位置开始试听。': 'Choose MIDI tracks for timbre substitution. Out-of-range notes in unselected tracks stay unchanged. The mini roll previews pitch (Y) over time (X); click it to preview from that point.',
+        '自定义主题色': 'Custom accent', '自定义': 'Custom', '选择颜色': 'Choose color', '轨道颜色': 'Track color',
+        '十六进制': 'Hex', '色相': 'Hue', '饱和度': 'Saturation', '亮度': 'Lightness', '音色颜色': 'Timbre color',
         '为每个 NBS 音色配置高音/低音替代乐器。超出 MC 音域 (F#3~F#5) 的音符将切换到替代音色并使用等音高换算，保证实际播放音高不变。点击音色槽打开菜单试听当前音色，选择新音色后也会立即试听。': 'Configure high and low substitutes for each NBS timbre. Notes outside F#3-F#5 use an equivalent-pitch substitute so their actual pitch remains unchanged. Click a slot to preview and choose an instrument.',
         '目标为 Minecraft 原版音符盒标准音域 F#3-F#5。先应用偏移，再尝试音色替代，最后可选择强制归位。': 'Targets the Minecraft note-block range F#3-F#5. It shifts first, then tries timbre substitution, then can force-fold remaining notes.',
         '偏移转换': 'Pitch conversion', '同分偏移': 'Tie-break shift', '启用音色替代': 'Enable timbre substitution', '强制转音域内': 'Force fold into range', '全部': 'All', '不启用': 'Disabled', '单独音符归一法': 'Per-note normalization', '整体八度偏移法': 'Whole-track octave shift', '整体音调偏移法': 'Whole-track chromatic shift'

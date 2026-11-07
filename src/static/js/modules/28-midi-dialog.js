@@ -1126,12 +1126,26 @@
     }
 
     function populateMidiDialog(info) {
+        // 提前加载 SF2 包络数据 (延音音量衰减需要), 加载失败时自动回落默认包络
+        if (window.NBSClient && NBSClient.preloadSf2Profiles) NBSClient.preloadSf2Profiles();
         // 该 MIDI 文件之前导入过 → 恢复它的完整配置; 没有则回到默认推荐值
         var fileConfig = getMidiConfigForHash(state._midiHash);
         if (fileConfig && fileConfig.basic) applyMidiBasicConfig(fileConfig.basic);
         else resetMidiBasicToDefaults();
         N.shared._midiFittingLevelOverride = (fileConfig && fileConfig.fitting_level) ? fileConfig.fitting_level : null;
         updateFittingLevelUI();
+        // 恢复「带音量变化的延音」开关 (文件配置优先, 否则沿用当前会话, 缺省开启)
+        N.shared._midiSustainVolumeFade = (fileConfig && fileConfig.sustain_volume_fade !== undefined)
+            ? fileConfig.sustain_volume_fade !== false
+            : (N.shared._midiSustainVolumeFade !== false);
+        var sustainFadeCheck = $('midi-sustain-volume-fade');
+        if (sustainFadeCheck) {
+            sustainFadeCheck.checked = N.shared._midiSustainVolumeFade !== false;
+            // 用户切换后同步到 MIDI 配置对象 (点「导入」时随文件配置一起保存)
+            sustainFadeCheck.onchange = function() {
+                N.shared._midiSustainVolumeFade = this.checked;
+            };
+        }
         state._midiTimbreFittingSaved = (fileConfig && fileConfig.fitting_saved)
             ? JSON.parse(JSON.stringify(fileConfig.fitting_saved))
             : emptyTimbreFittingSaved();
@@ -1564,6 +1578,8 @@
 
     N.shared._midiTrackStates = {};  // { trackIndex: { muted, solo, excluded } }
     N.shared._sustainTrackIndices = []; // 用户手动选择的需要应用延音的 MIDI 轨道索引
+    // 延音是否按 SF2 包络带音量变化 (默认开启; 与 sustain_track_indices 一起保存/加载)
+    N.shared._midiSustainVolumeFade = true;
     // MIDI 导入配置: 仅内存缓存, 按「文件内容哈希」区分, 刷新页面即清空 (不持久化)
     var _midiPrefsByHash = {};
     var _midiTrackPlayback = {
@@ -1753,15 +1769,22 @@
 
     // 根据 MIDI 音色与实际音符时值自动判定需要启用延音的轨道
     // 判定条件 (满足任一即视为延音轨道):
-    //   1. 音色为 GM 持续型音色 (弦乐/管风琴/合唱/管乐/铜管/合成 Pad 等);
+    //   1. 音色为 SF2「明显延音」音色 (is_sustained 且尾部能量 >= 峰值 60%);
+    //      全部可能模式则使用 SF2「可能延音」集合 (is_sustained 或衰减 > 1.2s);
     //   2. 音色虽非持续型, 但实际余音/拖尾很长 (电钢琴/颤音琴/管钟/电吉他/合成贝斯/钢鼓);
     //   3. 该轨道音符实际持续时值明显偏长 (长音占比高且平均时值 >= 2 拍),
     //      说明音乐本身就有持续发声 (管乐连奏等), 视为延音。
-    function detectSustainTrackIndices(info) {
+    // mode: 'obvious'(默认, 仅明显的延音) / 'all'(全部可能的延音)
+    function detectSustainTrackIndices(info, mode) {
         var result = [];
         if (!info) return result;
-        var sustainMap = (window.NBSClient && NBSClient.GM_SUSTAIN_PROGRAMS) || null;
+        var obviousMap = (window.NBSClient && NBSClient.GM_SUSTAIN_PROGRAMS) || null;
+        var possibleMap = (window.NBSClient && NBSClient.GM_POSSIBLE_SUSTAIN_PROGRAMS) || obviousMap;
+        // 无 SF2 数据时降级到旧 GM_TIMBRE_MAP 的持续型判定
+        var legacyMap = (window.NBSClient && NBSClient.GM_LEGACY_SUSTAIN_PROGRAMS) || null;
+        var sustainMap = obviousMap || legacyMap;
         if (!sustainMap) return result;
+        var timbreMap = (mode === 'all') ? (possibleMap || sustainMap) : sustainMap;
         var longTailMap = (window.NBSClient && NBSClient.GM_LONG_TAIL_PROGRAMS) || {};
         var ticksPerBeat = info.ticks_per_beat || 480;
         // 通道 → program 映射 (排除打击乐通道)
@@ -1779,7 +1802,7 @@
             for (var c = 0; c < tl.length; c++) {
                 var prog = chProgram[tl[c]];
                 if (prog === undefined) continue;
-                if (sustainMap[prog] || longTailMap[prog]) { byTimbre = true; break; }
+                if (timbreMap[prog] || longTailMap[prog]) { byTimbre = true; break; }
             }
             // 实际时值判定: 长音(>=1拍)占比 >= 75% 且平均时值 >= 2 拍
             var ratio = tr.long_note_ratio || 0;
@@ -1832,9 +1855,12 @@
 
         var tracks = info.tracks;
         var listHtml = '';
+        var initialCheckedCount = 0;
         for (var i = 0; i < tracks.length; i++) {
             var t = tracks[i];
-            var checked = N.shared._sustainTrackIndices.indexOf(t.index) !== -1 ? 'checked' : '';
+            var isChecked = N.shared._sustainTrackIndices.indexOf(t.index) !== -1;
+            if (isChecked) initialCheckedCount++;
+            var checked = isChecked ? 'checked' : '';
             listHtml += '<div class="sustain-track-item" style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--ctrl-stroke-default);">'
                 + '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;width:180px;overflow:hidden;flex-shrink:0;">'
                 + '<input type="checkbox" class="sustain-track-checkbox" value="' + t.index + '" ' + checked + '>'
@@ -1854,10 +1880,15 @@
             + '<div class="settings-header">'
             + '<i class="fa-solid fa-list-check"></i>'
             + '<h4>选择延音轨道</h4>'
-            + '<button class="settings-mini-btn" id="sustain-tracks-reset-btn" title="恢复默认的延音轨道选择（仅重置这一项）">重置配置</button>'
+            + '<select id="sustain-tracks-preset" style="width:138px;flex-shrink:0;" title="延音轨道预设">'
+            + '<option value="all">全部可能的延音</option>'
+            + '<option value="obvious" selected>仅明显的延音</option>'
+            + '<option value="manual">保持当前手动选择</option>'
+            + '</select>'
             + '<button class="settings-close-btn" id="sustain-tracks-close-x" title="关闭">&times;</button>'
             + '</div>'
             + '<div class="settings-body" style="overflow-y:auto;">'
+            + '<p id="sustain-tracks-dialog-count" style="margin:0 0 8px;font-size:12px;color:var(--text-secondary);">已选 ' + initialCheckedCount + ' 条</p>'
             + '<p style="margin:0 0 10px;font-size:12px;color:var(--text-secondary);">勾选需要应用延音的 MIDI 轨道（多选）。右侧迷你图为该轨道音符预览（Y=音高，X=时间），点击可从该位置开始试听。</p>'
             + '<div class="sustain-tracks-list">' + listHtml + '</div>'
             + '</div>'
@@ -1876,17 +1907,51 @@
         }
         wrapper.querySelector('#sustain-tracks-close-x').addEventListener('click', close);
         wrapper.querySelector('#sustain-tracks-cancel-btn').addEventListener('click', close);
-        // 重置配置: 仅恢复延音轨道的默认勾选 (依据 GM 持续型音色自动判定)
-        var sustainResetBtn = wrapper.querySelector('#sustain-tracks-reset-btn');
-        if (sustainResetBtn) sustainResetBtn.addEventListener('click', function() {
-            N.shared._sustainTrackIndices = detectSustainTrackIndices(state._midiInfo || {});
-            var allBoxes = wrapper.querySelectorAll('.sustain-track-checkbox');
-            for (var b = 0; b < allBoxes.length; b++) {
-                allBoxes[b].checked = N.shared._sustainTrackIndices.indexOf(parseInt(allBoxes[b].value, 10)) !== -1;
+        // 「已选 N 条」摘要 (与列表勾选状态实时同步)
+        function refreshSustainDialogCount() {
+            var countEl = wrapper.querySelector('#sustain-tracks-dialog-count');
+            if (!countEl) return;
+            var checkedBoxes = wrapper.querySelectorAll('.sustain-track-checkbox:checked');
+            countEl.textContent = '已选 ' + checkedBoxes.length + ' 条';
+        }
+        // 预设下拉: 全部可能的延音 / 仅明显的延音 / 保持当前手动选择
+        var sustainPresetSelect = wrapper.querySelector('#sustain-tracks-preset');
+        function applySustainPreset(mode) {
+            if (mode !== 'manual') {
+                N.shared._sustainTrackIndices = detectSustainTrackIndices(
+                    state._midiInfo || {},
+                    mode === 'all' ? 'all' : 'obvious'
+                );
+                var allBoxes = wrapper.querySelectorAll('.sustain-track-checkbox');
+                for (var b = 0; b < allBoxes.length; b++) {
+                    allBoxes[b].checked = N.shared._sustainTrackIndices.indexOf(parseInt(allBoxes[b].value, 10)) !== -1;
+                }
+                updateSustainTracksUI();
+                // 预设立即写入本次导入状态; 文件级配置在点「导入」时保存
             }
-            updateSustainTracksUI();
-            // 重置只影响本次导入; 配置在点「导入」时才写入该文件的记录
-        });
+            refreshSustainDialogCount();
+        }
+        if (sustainPresetSelect) {
+            sustainPresetSelect.addEventListener('change', function() {
+                applySustainPreset(this.value);
+            });
+            if (window.CustomDropdown && CustomDropdown.convert) {
+                try { CustomDropdown.convert(sustainPresetSelect); } catch (err) {}
+            }
+        }
+        // 手动勾选后切换到「保持当前手动选择」, 仅刷新摘要
+        var manualBoxes = wrapper.querySelectorAll('.sustain-track-checkbox');
+        for (var mb = 0; mb < manualBoxes.length; mb++) {
+            manualBoxes[mb].addEventListener('change', function() {
+                if (sustainPresetSelect) {
+                    sustainPresetSelect.value = 'manual';
+                    if (sustainPresetSelect._cdd && sustainPresetSelect._cdd.refresh) {
+                        sustainPresetSelect._cdd.refresh();
+                    }
+                }
+                refreshSustainDialogCount();
+            });
+        }
         wrapper.querySelector('#sustain-tracks-ok-btn').addEventListener('click', function() {
             var selected = [];
             var boxes = wrapper.querySelectorAll('.sustain-track-checkbox:checked');

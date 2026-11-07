@@ -1265,6 +1265,10 @@ function buildTimbreFittingRows(info) {
             dedupe_notes: $('midi-dedupe-notes') ? $('midi-dedupe-notes').checked : false,
             dedupe_reorder: ($('midi-dedupe-notes') && $('midi-dedupe-notes').checked && $('midi-dedupe-reorder')) ? $('midi-dedupe-reorder').checked : false,
             sustain_tracks: N.shared._sustainTrackIndices.slice(),
+            // 带音量变化的延音 (按 SF2 包络衰减; 默认开启)
+            sustain_volume_fade: $('midi-sustain-volume-fade')
+                ? $('midi-sustain-volume-fade').checked
+                : (N.shared._midiSustainVolumeFade !== false),
             snap_enabled: $('midi-snap-enabled') ? $('midi-snap-enabled').checked : false,
             snap_beat: $('midi-snap-beat') ? parseInt($('midi-snap-beat').value) : 4,
             // 音域处理模式: 0=不应用, 1=单独音符归一法, 2=整体八度偏移法, 3=整体半音偏移法

@@ -82,6 +82,8 @@
                 voice_ignore_metadata: !!settings.voice_ignore_metadata
             },
             sustain_track_indices: (settings.sustain_tracks || []).slice(),
+            // 延音音量衰减开关 (与 sustain_track_indices 一起保存/加载, 缺省开启)
+            sustain_volume_fade: settings.sustain_volume_fade !== false,
             percussion_instruments: settings.percussion_instruments || {},
             percussion_pitches: settings.percussion_pitches || {},
             // 音色拟合: 传给转换器的按通道数据 + 弹窗重建用的按音色数据

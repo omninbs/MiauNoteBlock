@@ -1161,31 +1161,39 @@
             applyLaneVolume(idx, 100);
             syncLaneKnobUI(panel, idx, 100);
         });
-        panel.addEventListener('mousedown', function(e) {
+        // 轨道行高拖拽: 用 Pointer Events, 鼠标 / 触屏 / 触控笔统一处理
+        panel.addEventListener('pointerdown', function(e) {
             var rz = e.target.closest ? e.target.closest('.seg-lane-resize') : null;
             if (!rz) return;
+            if (e.pointerType === 'mouse' && e.button !== 0) return;
             e.preventDefault();
+            e.stopPropagation();
+            var pointerId = e.pointerId;
             var idx = parseInt(rz.getAttribute('data-lane'), 10);
             _segLaneResize = { idx: idx, startY: e.clientY, startH: state.segmentLanes[idx].height };
             var move = function(ev) {
-                if (!_segLaneResize) return;
+                if (ev.pointerId !== pointerId || !_segLaneResize) return;
+                ev.preventDefault();
                 var h = Math.max(28, Math.min(180, _segLaneResize.startH + (ev.clientY - _segLaneResize.startY)));
                 state.segmentLanes[_segLaneResize.idx].height = h;
                 if (state.pianoRoll) state.pianoRoll.render();
                 renderSegmentSidePanel();
             };
-            var up = function() {
+            var up = function(ev) {
+                if (ev.pointerId !== pointerId) return;
                 _segLaneResize = null;
-                document.removeEventListener('mousemove', move);
-                document.removeEventListener('mouseup', up);
+                document.removeEventListener('pointermove', move);
+                document.removeEventListener('pointerup', up);
+                document.removeEventListener('pointercancel', up);
                 try {
                     localStorage.setItem('segment_lane_heights', JSON.stringify(
                         state.segmentLanes.map(function(l) { return l.height; })));
                 } catch (er) {}
                 markDirty();
             };
-            document.addEventListener('mousemove', move);
-            document.addEventListener('mouseup', up);
+            document.addEventListener('pointermove', move);
+            document.addEventListener('pointerup', up);
+            document.addEventListener('pointercancel', up);
         });
     }
 

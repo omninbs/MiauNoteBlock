@@ -242,6 +242,8 @@
     padding-bottom: 4px;
     scrollbar-width: thin;
     -webkit-overflow-scrolling: touch;
+    /* 横向滚动色卡, 同时允许纵向滚动设置内容 */
+    touch-action: pan-x pan-y;
 }
 .settings-theme-grid::-webkit-scrollbar {
     height: 4px;
@@ -260,6 +262,8 @@
     border: 1px solid var(--ctrl-stroke-default);
     background: var(--ctrl-fill-default);
     cursor: pointer;
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
     transition: border-color var(--anim-fast), background var(--anim-fast);
 }
 .settings-theme-card:hover {
@@ -396,6 +400,17 @@
 .wn-cp-wheel * {
     touch-action: none;
 }
+/* 控件层禁止长按选中 / 系统菜单; 输入框保持可选可编辑 */
+.wn-cp-head,
+.wn-cp-actions,
+.wn-cp-wheel {
+    -webkit-touch-callout: none;
+}
+.wn-cp-close,
+.wn-cp-btn {
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
+}
 .wn-cp-hex-row {
     display: flex;
     align-items: center;
@@ -454,6 +469,16 @@
 .wn-cp-rgb input:focus {
     outline: none;
     border-color: var(--accent);
+}
+/* 触屏: 文本/数值输入框抬高到 36px, 便于点按 (需放在基础高度规则之后) */
+@media (pointer: coarse) {
+    .wn-cp-hex,
+    .wn-cp-rgb input {
+        height: 36px;
+    }
+    .wn-cp-rgb > label {
+        min-height: 36px;
+    }
 }
 .wn-cp-actions {
     display: flex;
@@ -1366,6 +1391,8 @@ body.segment-edit-mode .tool-bar {
     overflow: hidden;
     font-size: 11px;
     user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
 }
 .seg-lane-row {
     position: absolute;
@@ -1541,6 +1568,52 @@ body.segment-edit-mode .tool-bar {
     bottom: -3px;
     height: 7px;
     cursor: ns-resize;
+    touch-action: none;
+}
+/* 触屏: 面板宽度固定 120px, 不放大视觉尺寸, 用伪元素把色点 / M / S / 旋钮
+   的命中区扩到约 36×36 (行高只有 52px, 直接放大控件会挤压电平表) */
+@media (pointer: coarse) {
+    .seg-lane-row .seg-lane-color {
+        position: relative;
+        touch-action: manipulation;
+    }
+    .seg-lane-row .seg-lane-color::after {
+        content: '';
+        position: absolute;
+        /* 上 -4 / 下 -22: 垂直命中 36px, 下半段与旋钮重叠处由后者优先命中 */
+        inset: -4px -13px -22px -13px;
+    }
+    .seg-lane-title > span:last-child {
+        display: inline-flex;
+        gap: 12px;
+    }
+    .seg-lane-btn {
+        position: relative;
+        width: 24px;
+        touch-action: manipulation;
+    }
+    .seg-lane-btn::after {
+        content: '';
+        position: absolute;
+        /* 左右各 -6 与 12px 间距刚好相接, 相邻按钮热区不互相覆盖 */
+        inset: -4px -6px -16px -6px;
+    }
+    .seg-lane-name {
+        max-width: 30px;
+    }
+    .seg-lane-knob::after {
+        content: '';
+        position: absolute;
+        inset: -6px;
+        border-radius: 50%;
+    }
+    .seg-lane-resize {
+        /* 避开旋钮及其热区 (x≈6-36), 只覆盖电平表/数值一侧 */
+        left: 38px;
+        right: 0;
+        bottom: 0;
+        height: 14px;
+    }
 }
 
 /* ===== 片段编辑: 右键菜单 ===== */
@@ -2356,6 +2429,9 @@ body.segment-edit-mode .tool-bar {
     cursor: grab;
     -webkit-user-select: none;
     user-select: none;
+    /* 横向平移由 JS 拖拽处理, 只放行纵向页面手势, 避免触屏拖动被浏览器抢走 */
+    touch-action: pan-y;
+    -webkit-touch-callout: none;
     /* 背景使用面板透明度 + 表面材质 (与工具栏/状态栏一致, 可透出背景图) */
     background-color: rgba(20, 20, 34, var(--surface-bg-alpha));
     backdrop-filter: var(--surface-blur);
@@ -3879,8 +3955,21 @@ body.segment-edit-mode .tool-bar {
     position: sticky;
     top: 0;
     z-index: 3;
+    /* 窄屏 / 长语种: 标签页横向滚动, 不挤压也不换行 */
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    /* 横向滑动标签页, 同时保留纵向滚动静止区外的默认行为 */
+    touch-action: pan-x pan-y;
+}
+.settings-tabs::-webkit-scrollbar {
+    display: none;
 }
 .settings-tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    touch-action: manipulation;
     transition: all 0.15s;
     padding: 5px 12px;
     font-size: 12px;
@@ -8680,6 +8769,8 @@ textarea:disabled {
     .settings-header h4 { font-size: 12.5px; line-height: 1.2; }
     .settings-header i { font-size: 11px; }
     .settings-close-btn { width: 18px; height: 18px; font-size: 11px; }
+    /* 触屏热区补偿: 视觉仍为 18px, 伪元素扩到 18+22=40px */
+    .popup-content .settings-close-btn::after { inset: -11px; }
     .settings-body { padding: 6px 8px; gap: 8px; }
     .settings-tabs { padding: 0 6px; }
     .settings-row { padding: 1px 0; }
@@ -8939,8 +9030,20 @@ textarea:disabled {
     .popup-content .settings-control {
         min-width: 112px;
     }
+    /* 窄屏: 背景图片行 (文件框 + 文件名 + 清除) 允许换行, 避免被 overflow-x:hidden 裁掉 */
     .popup-content .settings-control-wide {
         min-width: 140px;
+        flex-wrap: wrap;
+    }
+    .popup-content .settings-control-wide .settings-file-input {
+        flex: 1 1 100%;
+        max-width: 100%;
+        min-width: 0;
+    }
+    .popup-content .settings-control-wide .settings-file-name {
+        flex: 1 1 auto;
+        max-width: 100%;
+        min-width: 0;
     }
     .popup-content .midi-settings {
         padding: 4px 8px 10px;
@@ -9244,6 +9347,21 @@ textarea:disabled {
     #midi-popup .midi-control-sm { min-width: 72px; }
     #midi-popup .midi-file-info { padding: 6px 10px; gap: 3px 12px; }
 }
+/* 触屏: 延音处理下拉 / 带音量变化延音开关的可点高度抬高到 36px */
+@media (pointer: coarse) {
+    #midi-popup .midi-control,
+    #midi-popup .midi-check,
+    #midi-popup .midi-settings-row select,
+    #midi-popup .midi-settings-row input[type="number"],
+    #sustain-tracks-popup .cdd-trigger,
+    #sustain-tracks-popup .settings-header select {
+        min-height: 36px;
+    }
+    #sustain-tracks-popup .cdd-trigger,
+    #sustain-tracks-popup .settings-header select {
+        touch-action: manipulation;
+    }
+}
 
 /* ==================================================================
    片段浮动钢琴卷帘窗口 (FL Studio 风格, NBS 优化)
@@ -9288,6 +9406,8 @@ textarea:disabled {
     border-bottom: 1px solid var(--ctrl-stroke-default);
     cursor: default;
     user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
 }
 .spw-glyph {
     width: 16px;
@@ -9573,6 +9693,8 @@ body.spw-fullscreen-open {
 }
 .spw-fs .spw-back {
     display: inline-flex;
+    width: 40px;
+    height: 40px;
     font-size: 14px;
 }
 .spw-fs .spw-titlebar {

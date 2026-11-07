@@ -428,6 +428,11 @@
             addField('author', '作者', defaults.author || '', '可选');
             addField('description', '描述', defaults.description || '', '可选', true);
 
+            // 插入 DOM 并入栈: 此前缺失导致弹窗创建在游离节点上, 永远不可见
+            overlay.appendChild(box);
+            document.body.appendChild(overlay);
+            _appDialogStack.push(overlay);
+
             var done = false;
             var close = function() {
                 if (done) return;

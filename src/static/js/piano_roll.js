@@ -215,6 +215,18 @@
         this._pinchMidX = 0;
         this._pinchMidY = 0;
         this._touchMoved = false;
+        // 双指分轴缩放状态: 横向间距 -> 每 tick 像素, 纵向间距 -> 行高
+        this._pinchDX0 = 0;
+        this._pinchDY0 = 0;
+        this._pinchLastDX = 0;
+        this._pinchLastDY = 0;
+        this._pinchAxis = null;
+        // 触屏长按片段打开全屏
+        this._segLongPressTimer = null;
+        this._segLongPressFired = false;
+        this._segLongPressAt = 0;
+        this._segLongPressX = 0;
+        this._segLongPressY = 0;
         this._longPressTimer = null;
         this._longPressFired = false;
         this._pendingContextMenu = false;
@@ -1406,6 +1418,8 @@
         this.canvas.addEventListener('contextmenu', function(ev) {
             if (!self.segmentsEditMode) return;
             ev.preventDefault();
+            // 长按打开全屏后, 浏览器补发的右键菜单事件直接忽略
+            if (self._segLongPressFired && Date.now() - self._segLongPressAt < 800) return;
             var rect = self.canvas.getBoundingClientRect();
             var x = ev.clientX - rect.left;
             var y = ev.clientY - rect.top;
@@ -1425,6 +1439,8 @@
         });
         this.canvas.addEventListener('dblclick', function(ev) {
             if (!self.segmentsEditMode) return;
+            // 触屏长按已打开全屏: 忽略紧随其后的双击事件
+            if (self._segLongPressFired && Date.now() - self._segLongPressAt < 800) return;
             var rect = self.canvas.getBoundingClientRect();
             var x = ev.clientX - rect.left;
             var y = ev.clientY - rect.top;
@@ -1886,6 +1902,41 @@
             ctx.fillRect(x1 - 5, top + 3, 3, hh - 6);
         }
         ctx.restore();
+    };
+
+    // 触屏长按片段 (约 450ms): 打开全屏钢琴卷帘; 移动超过 10px 取消
+    PianoRoll.prototype._cancelSegLongPress = function() {
+        if (this._segLongPressTimer) {
+            clearTimeout(this._segLongPressTimer);
+            this._segLongPressTimer = null;
+        }
+    };
+
+    PianoRoll.prototype._startSegLongPress = function(seg, clientX, clientY) {
+        if (!seg) return;
+        this._cancelSegLongPress();
+        var self = this;
+        this._segLongPressFired = false;
+        this._segLongPressX = clientX;
+        this._segLongPressY = clientY;
+        this._segLongPressTimer = setTimeout(function() {
+            self._segLongPressTimer = null;
+            self._segLongPressFired = true;
+            self._segLongPressAt = Date.now();
+            // 长按不触发拖动/右键菜单: 清空按下时的拖动与 seek 状态
+            self._segDrag = null;
+            self._segMarquee = null;
+            self._segSeekDrag = false;
+            self._segPointerActive = false;
+            self._segmentPreview = null;
+            self._mouseDown = false;
+            if (self._stopEdgeAutoScroll) self._stopEdgeAutoScroll();
+            self._touchMode = 'seg-open';
+            self._touchMoved = true;
+            self._fullRedrawNeeded = true;
+            if (typeof self.onSegmentOpen === 'function') self.onSegmentOpen(seg);
+            self.requestRender();
+        }, 450);
     };
 
     // 片段编辑器鼠标事件
@@ -4464,12 +4515,27 @@
 
         if (e.touches.length === 2) {
             this._cancelLongPress();
+            this._cancelSegLongPress();
             this._fadeOutAnimation();
+            // 双指落下: 取消单指片段拖动/长按, 只做缩放, 避免误移动片段
+            if (this._segPointerActive) {
+                this._segDrag = null;
+                this._segMarquee = null;
+                this._segSeekDrag = false;
+                this._segPointerActive = false;
+                this._mouseDown = false;
+            }
             this._touchMode = 'zoom';
             this._touchMoved = false;
             var t1 = e.touches[0], t2 = e.touches[1];
             var dx = t1.clientX - t2.clientX, dy = t1.clientY - t2.clientY;
             this._pinchDist = Math.sqrt(dx * dx + dy * dy);
+            // 分轴缩放: 记录横/纵初始间距, 由位移变化量判定主导轴
+            this._pinchDX0 = Math.max(1, Math.abs(dx));
+            this._pinchDY0 = Math.max(1, Math.abs(dy));
+            this._pinchLastDX = this._pinchDX0;
+            this._pinchLastDY = this._pinchDY0;
+            this._pinchAxis = null;
             var rect = this.canvas.getBoundingClientRect();
             this._pinchMidX = (t1.clientX + t2.clientX) / 2 - rect.left;
             this._pinchMidY = (t1.clientY + t2.clientY) / 2 - rect.top;
@@ -4489,6 +4555,9 @@
                     button: 0, ctrlKey: false, metaKey: false, shiftKey: false,
                     preventDefault: function() {}
                 }, x, y);
+                // 触屏长按片段 (约 450ms): 进入全屏钢琴卷帘页面
+                var segHit = this._segHitTest(x, y);
+                if (segHit && segHit.seg) this._startSegLongPress(segHit.seg, x, y);
                 this._lastTouchX = x;
                 this._lastTouchY = y;
                 return;
@@ -4715,15 +4784,25 @@
             var rect = this.canvas.getBoundingClientRect();
             var cx = (t1.clientX + t2.clientX) / 2 - rect.left;
             var cy = (t1.clientY + t2.clientY) / 2 - rect.top;
-            if (this._pinchDist > 0 && Math.abs(dist - this._pinchDist) > 5) {
-                // 片段模式: 双指仅缩放时间轴, 锚点统一为播放指示器
-                if (this.segmentsEditMode) {
-                    this.zoomSegment(dist / this._pinchDist);
-                } else {
-                    this.setZoom(this.zoom * (dist / this._pinchDist), cx, cy);
-                }
-                this._pinchDist = dist;
+            var dxAbs = Math.abs(dx), dyAbs = Math.abs(dy);
+            // 主导轴判定: 横向间距变化 -> 每 tick 像素; 纵向间距变化 -> 行高
+            if (!this._pinchAxis) {
+                var chX = Math.abs(dxAbs - (this._pinchDX0 || 1));
+                var chY = Math.abs(dyAbs - (this._pinchDY0 || 1));
+                if (Math.max(chX, chY) > 8) this._pinchAxis = chX >= chY ? 'x' : 'y';
             }
+            if (this._pinchAxis === 'x' && Math.abs(dxAbs - (this._pinchLastDX || 1)) > 2) {
+                var fx = dxAbs / Math.max(1, this._pinchLastDX || 1);
+                this._pinchLastDX = dxAbs;
+                if (this.segmentsEditMode) this.zoomSegment(fx);
+                else this._pinchZoomHorizontal(fx, cx, cy);
+            } else if (this._pinchAxis === 'y' && Math.abs(dyAbs - (this._pinchLastDY || 1)) > 2) {
+                var fy = dyAbs / Math.max(1, this._pinchLastDY || 1);
+                this._pinchLastDY = dyAbs;
+                if (this.segmentsEditMode) this.zoomSegmentLanes(fy);
+                else this.setZoomAxis('y', fy, cx, cy);
+            }
+            this._pinchDist = dist;
             var panX = this._lastTouchX - cx, panY = this._lastTouchY - cy;
             if (Math.abs(panX) > 1 || Math.abs(panY) > 1) {
                 this._touchMoved = true;
@@ -4746,8 +4825,19 @@
             var rect = this.canvas.getBoundingClientRect();
             var x = touch.clientX - rect.left;
             var y = touch.clientY - rect.top;
+            // 长按已打开全屏窗口: 剩余手指移动不再参与画布操作
+            if (this._touchMode === 'seg-open') {
+                this._lastTouchX = x;
+                this._lastTouchY = y;
+                return;
+            }
             // 片段编辑模式: 拖动/框选 (进度条/标尺拖动时不走片段逻辑; 允许拖出区域继续)
             if (this.segmentsEditMode && this._segPointerActive && !this._isDraggingProgressBar) {
+                // 长按期间移动超过阈值即取消长按, 后续仍按普通拖动处理
+                if (this._segLongPressTimer &&
+                    (Math.abs(x - this._segLongPressX) > 10 || Math.abs(y - this._segLongPressY) > 10)) {
+                    this._cancelSegLongPress();
+                }
                 this._segMouseMove({}, x, y);
                 this._lastTouchX = x;
                 this._lastTouchY = y;
@@ -4925,9 +5015,19 @@
     PianoRoll.prototype._onTouchEnd = function(e) {
         // 片段编辑模式: 提交拖动 / 结束框选
         if (this.segmentsEditMode && this._segPointerActive) {
+            this._cancelSegLongPress();
             this._segMouseUp({}, this._lastTouchX || 0, this._lastTouchY || 0);
             this._mouseDown = false;
             this._touchMode = 'none';
+            return;
+        }
+        // 长按已打开全屏窗口: 本次抬手不再触发任何点击/拖动
+        if (this._touchMode === 'seg-open') {
+            this._touchMode = 'none';
+            this._touchMoved = true;
+            this._suppressNextClick = true;
+            this._fullRedrawNeeded = true;
+            this.render();
             return;
         }
         // 若本次不是音符拖动, 清理拖动预览状态
@@ -5044,6 +5144,11 @@
         if (this._touchMode === 'zoom') {
             this._touchMode = 'none';
             this._pinchDist = 0;
+            this._pinchAxis = null;
+            this._pinchDX0 = 0;
+            this._pinchDY0 = 0;
+            this._pinchLastDX = 0;
+            this._pinchLastDY = 0;
             this._fullRedrawNeeded = true;
             this.render();
             return;
@@ -6258,6 +6363,30 @@
         // 用 RAF 合并高频滚轮事件: 同步 render 会在连续滚轮时阻塞主线程, 表现为"缩放卡顿/没反应"
         this.requestRender();
     };
+
+    // 双指横向缩放 (NBS 模式): 只改每 tick 像素宽度, 行高保持不变
+    // 通过反向调整 zoomY 抵消 zoom 对纵向单元高度的影响
+    PianoRoll.prototype._pinchZoomHorizontal = function(factor, anchorX, anchorY) {
+        if (!isFinite(factor) || factor <= 0.05) return;
+        if (this.segmentsEditMode) { this.zoomSegment(factor); return; }
+        var cellW = this._cfg.cellW;
+        var cx = (anchorX !== undefined) ? anchorX
+            : (this._currentPanelWidth + (this.displayWidth - this._currentPanelWidth) / 2);
+        var wx = (cx - this._editOriginX() + this.scrollX) / Math.max(0.0001, cellW * this._zoomX());
+        var oldZoom = this.zoom || 1;
+        var oldZoomY = this.zoomY || 1;
+        var newZoom = Math.max(0.15, Math.min(4, oldZoom * factor));
+        if (Math.abs(newZoom - oldZoom) < 1e-9) return;
+        this.zoom = newZoom;
+        // 保持 cellH * zoom * zoomY 不变: 音高行高不随横向缩放跳动
+        this.zoomY = Math.max(0.25, Math.min(4, oldZoomY * oldZoom / newZoom));
+        this.scrollX = wx * cellW * this._zoomX() - cx + this._editOriginX();
+        this._clampScrollX();
+        void anchorY;
+        this._fullRedrawNeeded = true;
+        this.requestRender();
+    };
+
 
     // 片段缩放的持久化: 高频滚轮下节流写 localStorage (同步写入是缩放卡顿的主要来源之一)
     PianoRoll.prototype._persistSegmentZoom = function() {

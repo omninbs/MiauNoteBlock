@@ -280,6 +280,7 @@
         var seq = 0;
         var layerChannelOut = null;   // 片段合成后的 layer -> MIDI 通道 (自动分轨工程用)
         var composeLayerMap = {};     // 原始 layer -> 合成后的 layer (声部映射同步用)
+        var layerOwner = {};          // 合成后的 layer -> 片段轨道下标 (新增层沿用轨道配置)
         for (var li = 0; li < lanes.length; li++) {
             var lane = lanes[li];
             var segs = [];
@@ -299,6 +300,7 @@
             for (var r = 0; r < rels.length; r++) {
                 map[rels[r]] = base + r;
                 composeLayerMap[rels[r]] = base + r;
+                layerOwner[base + r] = li;
             }
             // 记录本轨合成后的新 layer 归属, 再次进入片段模式时按通道归位
             if (lane.layerChannels) {
@@ -381,13 +383,129 @@
         var layerCount = Math.max(1, base);
         if (state.song && Array.isArray(state.song.layers)) {
             while (state.song.layers.length < layerCount) {
+                // 新增层沿用所属片段 lane 的名称/音量; 无归属时用默认值
+                var ownIdx = state.song.layers.length;
+                var ownLane = (layerOwner[ownIdx] !== undefined) ? lanes[layerOwner[ownIdx]] : null;
                 state.song.layers.push({
-                    name: 'Layer ' + (state.song.layers.length + 1),
-                    volume: 100, stereo: 100, lock: 0
+                    name: (ownLane && ownLane.name) ? ownLane.name : ('Layer ' + (state.song.layers.length + 1)),
+                    volume: (ownLane && isFinite(ownLane.volume)) ? Math.max(0, Math.min(100, ownLane.volume)) : 100,
+                    stereo: 100, lock: 0
                 });
             }
         }
         return out;
+    }
+
+    // 片段内实际使用的音高层数量 (按 lane 汇总)
+    function segmentLaneLayerUsage(laneIdx) {
+        var used = {};
+        var segs = state.segments || [];
+        for (var i = 0; i < segs.length; i++) {
+            if (segs[i].lane !== laneIdx) continue;
+            var sn = segs[i].notes || [];
+            for (var j = 0; j < sn.length; j++) {
+                used[isFinite(sn[j].layer) ? sn[j].layer : 0] = true;
+            }
+        }
+        return Object.keys(used).map(Number);
+    }
+
+    // 片段编辑新增音高层时, 按 lane 配置补齐 NBS 轨道层, 并把新层 key 记入 lane
+    // neededHint: 预计使用的高层数 (放置/粘贴预检可传入); 超限返回 ok:false
+    function segmentEnsureLaneLayers(laneIdx, neededHint) {
+        segmentEnsureLanes();
+        var lane = state.segmentLanes && state.segmentLanes[laneIdx];
+        var layers = (state.song && Array.isArray(state.song.layers)) ? state.song.layers : null;
+        var NBS_MAX_LAYERS = 65535;
+        if (!lane || !layers) return { ok: true, added: 0, keys: [] };
+        var used = segmentLaneLayerUsage(laneIdx);
+        var need = used.length;
+        if (isFinite(neededHint) && neededHint > need) need = neededHint;
+        if (!need) return { ok: true, added: 0, keys: [] };
+
+        // 该 lane 池内已登记的层号; 未登记的层号需要新增 NBS 轨道层
+        var missing = [];
+        var hasKeySet = false;
+        if (Array.isArray(lane.layerKeys)) {
+            hasKeySet = true;
+            for (var u = 0; u < used.length; u++) {
+                if (lane.layerKeys.indexOf(used[u]) < 0) missing.push(used[u]);
+            }
+        } else if (lane.layerKey !== undefined && lane.layerKey !== null) {
+            hasKeySet = true;
+            for (var u2 = 0; u2 < used.length; u2++) {
+                if (used[u2] !== lane.layerKey) missing.push(used[u2]);
+            }
+        }
+
+        var base = 0;
+        for (var pi = 0; pi < laneIdx; pi++) base += segmentLaneLayerUsage(pi).length;
+        var addCount;
+        if (hasKeySet) {
+            // 层集合用尽: 缺几个就追加几层
+            addCount = missing.length;
+        } else {
+            // 通道/声部归位的轨道: 保证总层数能承载 base + 本轨所需层数
+            addCount = Math.max(0, base + need - layers.length);
+        }
+        var totalNeeded = Math.max(base + need, layers.length + addCount);
+        addCount = Math.max(addCount, totalNeeded - layers.length);
+        if (!addCount) {
+            // 已有足够 NBS 层, 仅补记缺失的层 key
+            if (hasKeySet && missing.length) {
+                if (Array.isArray(lane.layerKeys)) {
+                    for (var m0 = 0; m0 < missing.length; m0++) lane.layerKeys.push(missing[m0]);
+                } else {
+                    lane.layerKeys = [lane.layerKey].concat(missing);
+                    delete lane.layerKey;
+                }
+            }
+            return { ok: true, added: 0, keys: missing };
+        }
+        if (layers.length + addCount > NBS_MAX_LAYERS) {
+            return { ok: false, added: 0, keys: [], reason: 'layer-limit' };
+        }
+
+        var newKeys = [];
+        for (var a2 = 0; a2 < addCount; a2++) {
+            var key = layers.length;
+            layers.push({
+                name: lane.name ? lane.name : ('Layer ' + (key + 1)),
+                volume: isFinite(lane.volume) ? Math.max(0, Math.min(100, lane.volume)) : 100,
+                stereo: 100, lock: 0
+            });
+            newKeys.push(key);
+        }
+
+        // 把新层 key 记入 lane.layerKeys (单层轨道自动升级为层集合)
+        if (Array.isArray(lane.layerKeys)) {
+            for (var k2 = 0; k2 < missing.length; k2++) {
+                if (lane.layerKeys.indexOf(missing[k2]) < 0) lane.layerKeys.push(missing[k2]);
+            }
+        } else if (lane.layerKey !== undefined && lane.layerKey !== null) {
+            var merged = [lane.layerKey];
+            for (var k3 = 0; k3 < missing.length; k3++) {
+                if (merged.indexOf(missing[k3]) < 0) merged.push(missing[k3]);
+            }
+            lane.layerKeys = merged;
+            delete lane.layerKey;
+        }
+        // 若 lane 维护层->通道映射, 新层沿用 lane.channel (channel 已定义则保持)
+        if (lane.layerChannels) {
+            for (var k4 = 0; k4 < missing.length; k4++) {
+                if (lane.layerChannels[missing[k4]] === undefined) {
+                    lane.layerChannels[missing[k4]] = (lane.channel === undefined ? null : lane.channel);
+                }
+            }
+        }
+        // 声部归位: 新增层补记 voice, 保证保存/导出时声部信息完整
+        if (state.song && state.song.layer_voice_map && lane.voice !== undefined && lane.voice !== null) {
+            var vmap = state.song.layer_voice_map;
+            for (var k5 = 0; k5 < used.length; k5++) {
+                if (vmap[used[k5]] === undefined) vmap[used[k5]] = lane.voice;
+            }
+        }
+        return { ok: true, added: addCount, keys: missing, layerIndexes: newKeys };
     }
 
     function segmentAt(tick) {
@@ -1189,6 +1307,8 @@
     N.pushSegmentNote = pushSegmentNote;
     N.segmentCaptureFromSong = segmentCaptureFromSong;
     N.segmentCompose = segmentCompose;
+    N.segmentEnsureLaneLayers = segmentEnsureLaneLayers;
+    N.segmentLaneLayerUsage = segmentLaneLayerUsage;
     N.segmentAt = segmentAt;
     N.segmentDropNotes = segmentDropNotes;
     N.segmentSync = segmentSync;

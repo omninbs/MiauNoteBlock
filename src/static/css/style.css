@@ -9551,3 +9551,72 @@ textarea:disabled {
         height: 32px;
     }
 }
+
+/* 全屏钢琴卷帘 (手机 / 小平板): 隐藏浮窗手柄, 顶部只留返回按钮 */
+body.spw-fullscreen-open {
+    overflow: hidden;
+}
+.spw-back {
+    display: none;
+}
+.spw.spw-fs {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+.spw-fs .spw-resize {
+    display: none;
+}
+.spw-fs .spw-glyph,
+.spw-fs .spw-actions {
+    display: none;
+}
+.spw-fs .spw-back {
+    display: inline-flex;
+    font-size: 14px;
+}
+.spw-fs .spw-titlebar {
+    height: 46px;
+    padding: 0 8px;
+    gap: 8px;
+    cursor: default;
+}
+.spw-fs .spw-title {
+    max-width: 52%;
+    font-size: 13px;
+}
+.spw-fs .spw-sub {
+    font-size: 11px;
+}
+/* 工具栏允许换行与横向滚动, 不被裁剪 */
+.spw-fs .spw-toolbar {
+    height: auto;
+    min-height: 44px;
+    flex-wrap: wrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 4px 6px;
+    gap: 4px;
+}
+.spw-fs .spw-toolbar .spw-spacer {
+    display: none;
+}
+.spw-fs .spw-body {
+    width: 100%;
+    min-height: 0;
+}
+.spw-fs .spw-vel {
+    height: 64px;
+}
+@media (pointer: coarse) {
+    .spw-fs .spw-titlebar {
+        height: 50px;
+    }
+    .spw-fs .spw-back {
+        width: 40px;
+        height: 40px;
+    }
+    .spw-fs .spw-toolbar {
+        min-height: 48px;
+    }
+}

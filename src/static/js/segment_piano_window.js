@@ -25,6 +25,7 @@
     var KEYBAR_W = 54;
     var VEL_H = 54;
     var ROW_H = 16;
+    var ROW_H_MIN = 8, ROW_H_MAX = 40;
     var GRID_LEVELS = [1, 8, 16];
     var GRID_LABELS = { 1: '1 tick', 8: '1/2 小节', 16: '1 小节' };
     var MINECRAFT_PITCH_MIN = 33, MINECRAFT_PITCH_MAX = 57;
@@ -77,6 +78,25 @@
         return window.WebNBSI18n && WebNBSI18n.translate ? WebNBSI18n.translate(text) : text;
     }
     function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+    function isCoarsePointer() {
+        try {
+            return !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+        } catch (e) { return false; }
+    }
+
+    // 全屏布局判定: 按可用屏幕尺寸, 触屏设备更倾向全屏; 桌面常规尺寸保持浮窗
+    // w/h/coarse 可显式传入, 便于单测; 缺省读取当前视口与指针类型
+    function shouldUseFullscreen(w, h, coarse) {
+        if (!isFinite(w) || !isFinite(h)) {
+            w = window.innerWidth;
+            h = window.innerHeight;
+        }
+        if (coarse === undefined) coarse = isCoarsePointer();
+        var shortSide = Math.min(w, h);
+        if (coarse) return w < 1100 || shortSide < 800;
+        return shortSide < 720 || w < 900;
+    }
 
     // 颜色明度调整: amt 为负则变暗, 为正则向白色提亮
     function shadeColor(hex, amt) {
@@ -188,6 +208,7 @@
         var lanes = h.state.segmentLanes || [];
         var lane = lanes[seg.lane];
         if (!lane) return;
+        var wantFullscreen = shouldUseFullscreen();
         var found = null;
         for (var i = 0; i < wins.length; i++) {
             if (wins[i].lane === lane) { found = wins[i]; break; }
@@ -195,6 +216,8 @@
         if (found) {
             found.setSegment(seg);
             found.restoreFromMinimized();
+            // 手机/小平板再次打开: 浮窗切换为全屏页面, 复用同一实例
+            if (wantFullscreen) found.setLayoutMode('fullscreen');
             found.focus();
             return found;
         }
@@ -210,7 +233,41 @@
             var w = wins.pop();
             if (w) w.destroy();
         }
+        syncBodyScrollLock();
     }
+
+    // 全屏窗口存在时锁定 body 滚动
+    function syncBodyScrollLock() {
+        var any = false;
+        for (var i = 0; i < wins.length; i++) {
+            if (wins[i] && wins[i].layoutMode === 'fullscreen' && wins[i].root) { any = true; break; }
+        }
+        if (document.body) document.body.classList.toggle('spw-fullscreen-open', any);
+    }
+
+    // 浏览器 back: 退出全屏并回到片段模式 (只处理最近打开的全屏窗口)
+    window.addEventListener('popstate', function () {
+        for (var i = wins.length - 1; i >= 0; i--) {
+            var w = wins[i];
+            if (!w || !w.root) continue;
+            if (w.layoutMode === 'fullscreen' && w._fsHistoryPushed) {
+                w._fsHistoryPushed = false;
+                w.backToSegments();
+                break;
+            }
+        }
+    });
+
+    // 全屏窗口跟随视口尺寸 (旋转/软键盘/窗口缩放)
+    window.addEventListener('resize', function () {
+        for (var i = 0; i < wins.length; i++) {
+            var w = wins[i];
+            if (w && w.root && w.layoutMode === 'fullscreen') {
+                w.applyRect();
+                w.needLayout = true;
+            }
+        }
+    });
 
     function refreshAll() {
         for (var i = wins.length - 1; i >= 0; i--) {
@@ -250,9 +307,12 @@
         this.pxPerTick = 8;
         this.viewStart = 0;
         this.rowH = ROW_H;
+        this.layoutMode = shouldUseFullscreen() ? 'fullscreen' : 'float';
         this.maximized = false;
         this.minimized = false;
         this.prevRect = null;
+        this._floatRect = null;
+        this._fsHistoryPushed = false;
         this.manualMiniPos = null;
         this.tool = 'draw';
         this.grid = 1;
@@ -270,6 +330,11 @@
         this.needLayout = true;
         this._hover = null;
         this._hoverKey = -1;
+        // 触屏双指缩放: pointerId -> 位置; _pinch 保存手势起点
+        this._touchPts = {};
+        this._pinch = null;
+        this._rowHSaveTimer = 0;
+        this._layerWarnAt = 0;
         // 钢琴键按下反馈 (performance.now 做 120ms 明度过渡)
         this._pressKey = -1;
         this._pressAt = 0;
@@ -306,13 +371,24 @@
         this.rect = { x: x, y: y, w: w, h: hgt };
         this.maximized = !!rest.max;
         this.minimized = !!rest.min;
+        // 行高随窗口布局持久化 (限幅 8..40, 默认 16)
+        var savedRowH = parseFloat(rest.rowH);
+        this.rowH = isFinite(savedRowH) ? clamp(savedRowH, ROW_H_MIN, ROW_H_MAX) : ROW_H;
+        if (this.layoutMode === 'fullscreen') {
+            // 全屏页面: 记下浮窗尺寸以便返回时还原; 页面本身铺满视口
+            this._floatRect = { x: x, y: y, w: w, h: hgt };
+            this.rect = { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight };
+            this.maximized = false;
+            this.minimized = false;
+        }
 
         var root = document.createElement('div');
-        root.className = 'spw';
+        root.className = 'spw' + (this.layoutMode === 'fullscreen' ? ' spw-fs' : '');
         root.setAttribute('data-role', 'segment-piano-window');
         root.setAttribute('tabindex', '0');
         root.innerHTML =
             '<div class="spw-titlebar" data-role="titlebar">' +
+                '<button class="spw-btn spw-back" data-act="back" tabindex="-1" aria-label="返回"><i class="fa-solid fa-arrow-left"></i></button>' +
                 '<span class="spw-glyph"><i class="fa-solid fa-piano-keyboard"></i></span>' +
                 '<span class="spw-title" data-role="title"></span>' +
                 '<span class="spw-beta" data-role="beta"></span>' +
@@ -335,6 +411,9 @@
                     '<button class="spw-btn" data-act="tool-select" data-tool="select" tabindex="-1" aria-label="选择"><i class="fa-solid fa-arrow-pointer"></i></button>' +
                     '<span class="spw-sep"></span>' +
                     '<button class="spw-btn spw-grid" data-act="grid" tabindex="-1" aria-label="网格吸附"><span data-role="grid-label"></span></button>' +
+                    '<span class="spw-sep"></span>' +
+                    '<button class="spw-btn" data-act="rowh-out" tabindex="-1" aria-label="减小行高" title="减小行高"><i class="fa-solid fa-minus"></i></button>' +
+                    '<button class="spw-btn" data-act="rowh-in" tabindex="-1" aria-label="增大行高" title="增大行高"><i class="fa-solid fa-plus"></i></button>' +
                     '<span class="spw-spacer"></span>' +
                 '</div>' +
                 '<div class="spw-stage" data-role="stage"><canvas data-role="canvas"></canvas></div>' +
@@ -372,6 +451,10 @@
         this.syncTexts();
         this.applyRect();
         this.applyMinimized();
+        if (this.layoutMode === 'fullscreen') {
+            syncBodyScrollLock();
+            this._pushFullscreenHistory();
+        }
         this.autoFit();
         this.startLoop();
         if (this.minimized) this.restoreMiniStackPos();
@@ -433,10 +516,12 @@
         tbar.addEventListener('mousedown', function (e) {
             if (e.target.closest('button')) return;
             if (e.button !== 0) return;
+            if (self.layoutMode === 'fullscreen') return;
             self.beginWindowDrag(e);
         });
         tbar.addEventListener('dblclick', function (e) {
             if (e.target.closest('button')) return;
+            if (self.layoutMode === 'fullscreen') return;
             self.toggleMaximize();
         });
 
@@ -445,10 +530,13 @@
             if (!btn) return;
             var act = btn.getAttribute('data-act');
             if (act === 'close') self.close();
+            else if (act === 'back') self.backToSegments();
             else if (act === 'minimize') self.toggleMinimize();
             else if (act === 'maximize') self.toggleMaximize();
             else if (act === 'playmode') self.togglePlayMode();
             else if (act === 'grid') self.cycleGrid();
+            else if (act === 'rowh-out') self.changeRowH(-1);
+            else if (act === 'rowh-in') self.changeRowH(1);
             else if (act === 'tool-draw') self.setTool('draw');
             else if (act === 'tool-erase') self.setTool('erase');
             else if (act === 'tool-select') self.setTool('select');
@@ -475,6 +563,10 @@
                 self._hoverKey = -1;
                 self.scheduleTempTopReset(0);
             });
+            // 触屏抬起在任意位置都要清理双指状态 (手指可能移出画布)
+            this._docPointerUp = function (e) { self.onDocPointerEnd(e); };
+            document.addEventListener('pointerup', this._docPointerUp);
+            document.addEventListener('pointercancel', this._docPointerUp);
         } else {
             this.canvas.addEventListener('mousedown', function (e) { self.onCanvasDown(e); });
             this.canvas.addEventListener('mousemove', function (e) { self.onCanvasMove(e); });
@@ -499,6 +591,15 @@
     // ---------- 窗口位置 / 尺寸 ----------
     SegmentWindow.prototype.applyRect = function () {
         if (!this.root) return;
+        if (this.layoutMode === 'fullscreen') {
+            // 全屏页面固定铺满视口 (position: fixed), 不写具体像素, 旋转时自动跟随
+            this.root.style.left = '0px';
+            this.root.style.top = '0px';
+            this.root.style.width = '100%';
+            this.root.style.height = '100%';
+            this.needLayout = true;
+            return;
+        }
         var r = this.rect;
         this.root.style.left = r.x + 'px';
         this.root.style.top = r.y + 'px';
@@ -508,12 +609,25 @@
     };
 
     SegmentWindow.prototype.persist = function () {
+        var rect = (this.layoutMode === 'fullscreen' && this._floatRect) ? this._floatRect : this.rect;
         var store = loadLayout();
         store[laneKey(this.lane)] = {
-            x: this.rect.x, y: this.rect.y, w: this.rect.w, h: this.rect.h,
-            max: this.maximized, min: this.minimized
+            x: rect.x, y: rect.y, w: rect.w, h: rect.h,
+            max: this.layoutMode === 'fullscreen' ? false : this.maximized,
+            min: this.layoutMode === 'fullscreen' ? false : this.minimized,
+            rowH: this.rowH
         };
         saveLayout();
+    };
+
+    // 行高变更较频繁 (滚轮/双指), 节流写 localStorage, 避免同步写入卡顿
+    SegmentWindow.prototype.schedulePersist = function () {
+        var self = this;
+        if (this._rowHSaveTimer) clearTimeout(this._rowHSaveTimer);
+        this._rowHSaveTimer = setTimeout(function () {
+            self._rowHSaveTimer = 0;
+            if (self.root) self.persist();
+        }, 250);
     };
 
     SegmentWindow.prototype.focus = function () {
@@ -582,7 +696,65 @@
         docDrag(move, up);
     };
 
+    // ---------- 全屏 / 浮窗布局 ----------
+    SegmentWindow.prototype.setLayoutMode = function (mode) {
+        if (!this.root) return;
+        if (mode === 'fullscreen') this.enterFullscreen();
+        else this.exitFullscreen();
+    };
+
+    SegmentWindow.prototype.enterFullscreen = function () {
+        if (!this.root || this.layoutMode === 'fullscreen') return;
+        if (this.minimized) this.restoreFromMinimized();
+        this._floatRect = { x: this.rect.x, y: this.rect.y, w: this.rect.w, h: this.rect.h };
+        this.layoutMode = 'fullscreen';
+        this.maximized = false;
+        this.minimized = false;
+        this.root.classList.remove('spw-max', 'spw-min');
+        this.root.classList.add('spw-fs');
+        this.applyRect();
+        syncBodyScrollLock();
+        this._pushFullscreenHistory();
+        this.updateToolButtons();
+        this.autoFit(true);
+    };
+
+    SegmentWindow.prototype.exitFullscreen = function (keepHistory) {
+        if (this.layoutMode !== 'fullscreen') return;
+        this.layoutMode = 'float';
+        if (this.root) {
+            this.root.classList.remove('spw-fs');
+            this.applyMinimized();
+        }
+        this.rect = this._floatRect || this.defaultRect();
+        this._floatRect = null;
+        this.applyRect();
+        syncBodyScrollLock();
+        if (!keepHistory && this._fsHistoryPushed) {
+            // 主动返回: 弹出本窗口压入的历史项, 同时避免 popstate 再次关闭窗口
+            this._fsHistoryPushed = false;
+            try { window.history.back(); } catch (e) {}
+        }
+        this.persist();
+        this.autoFit(true);
+    };
+
+    // 左上角返回 / 浏览器 back: 退出全屏并关闭窗口, 回到片段模式
+    SegmentWindow.prototype.backToSegments = function () {
+        this.exitFullscreen(true);
+        this.close();
+    };
+
+    SegmentWindow.prototype._pushFullscreenHistory = function () {
+        if (this._fsHistoryPushed || !window.history || !history.pushState) return;
+        try {
+            history.pushState({ segmentPianoFullscreen: 1 }, '', window.location.href);
+            this._fsHistoryPushed = true;
+        } catch (e) {}
+    };
+
     SegmentWindow.prototype.toggleMaximize = function () {
+        if (this.layoutMode === 'fullscreen') return;
         if (this.minimized) this.restoreFromMinimized();
         if (!this.maximized) {
             this.prevRect = { x: this.rect.x, y: this.rect.y, w: this.rect.w, h: this.rect.h };
@@ -604,6 +776,7 @@
     };
 
     SegmentWindow.prototype.toggleMinimize = function () {
+        if (this.layoutMode === 'fullscreen') return;
         if (this.minimized) { this.restoreFromMinimized(); return; }
         this.prevRect = { x: this.rect.x, y: this.rect.y, w: this.rect.w, h: this.rect.h };
         this.minimized = true;
@@ -660,6 +833,15 @@
 
     SegmentWindow.prototype.close = function () {
         this.stopLoop();
+        if (this.root) this.persist();
+        if (this._rowHSaveTimer) { clearTimeout(this._rowHSaveTimer); this._rowHSaveTimer = 0; }
+        if (this._docPointerUp) {
+            document.removeEventListener('pointerup', this._docPointerUp);
+            document.removeEventListener('pointercancel', this._docPointerUp);
+            this._docPointerUp = null;
+        }
+        this._touchPts = {};
+        this._pinch = null;
         // 关闭时若本窗口暂停了主播放, 恢复主编辑器播放状态
         if (this.playMode === 'local') {
             try { if (window.AudioEngine && AudioEngine.stopAll) AudioEngine.stopAll(); } catch (e) {}
@@ -672,6 +854,12 @@
         if (this.root && this.root.parentNode) this.root.parentNode.removeChild(this.root);
         this.root = null;
         removeWin(this);
+        syncBodyScrollLock();
+        if (this._fsHistoryPushed) {
+            // 移除本窗口压入的全屏历史项, 避免下次 back 关闭别的窗口
+            this._fsHistoryPushed = false;
+            try { window.history.back(); } catch (e) {}
+        }
     };
 
     SegmentWindow.prototype.destroy = function () { this.close(); };
@@ -748,6 +936,32 @@
         this.minKey = Math.max(0, lo - 2);
         this.maxKey = Math.min(87, hi + 2);
         this.scrollY = 0;
+    };
+
+    SegmentWindow.prototype.clampScrollY = function () {
+        var maxScroll = Math.max(0, (this.maxKey - this.minKey + 1) * this.rowH
+            - (this.ch - this.stageTop()));
+        this.scrollY = clamp(this.scrollY, 0, maxScroll);
+    };
+
+    // 行高缩放 (范围 8..40px): anchorY 为画布内 Y, 保持该处音高位置不跳
+    SegmentWindow.prototype.setRowH = function (next, anchorY) {
+        next = clamp(next, ROW_H_MIN, ROW_H_MAX);
+        if (!isFinite(next) || Math.abs(next - this.rowH) < 0.0001) return;
+        var top = this.stageTop();
+        var ay = (anchorY === undefined || anchorY === null) ? (top + (this.ch - top) / 2) : anchorY;
+        var keyFloat = this.maxKey - (ay - top + this.scrollY) / this.rowH;
+        this.rowH = next;
+        this.scrollY = (this.maxKey - keyFloat) * next - (ay - top);
+        this.clampScrollY();
+        this._sceneDirty = true;
+        this._velDirty = true;
+        this.schedulePersist();
+    };
+
+    // 工具栏 +/- 按钮: 每步 2px, 以画布中心为锚点
+    SegmentWindow.prototype.changeRowH = function (dir) {
+        this.setRowH(this.rowH + (dir < 0 ? -2 : 2), null);
     };
 
     SegmentWindow.prototype.resizeCanvas = function () {
@@ -1580,12 +1794,116 @@
         return bestD <= tol ? best : null;
     };
 
+    // ---------- 触屏双指缩放 (Pointer Events) ----------
+    SegmentWindow.prototype.beginPinch = function () {
+        var ids = Object.keys(this._touchPts);
+        if (ids.length < 2) return;
+        var a = this._touchPts[ids[0]], b = this._touchPts[ids[1]];
+        var r = this.canvas.getBoundingClientRect();
+        this._pinch = {
+            ids: [ids[0], ids[1]],
+            dx0: Math.max(1, Math.abs(a.x - b.x)),
+            dy0: Math.max(1, Math.abs(a.y - b.y)),
+            dx: Math.abs(a.x - b.x),
+            dy: Math.abs(a.y - b.y),
+            axis: null,
+            cx: (a.x + b.x) / 2 - r.left,
+            cy: (a.y + b.y) / 2 - r.top
+        };
+        // 取消单指正在进行的编辑, 避免双指落下时误放置/误拖动
+        if (this.dragging && this.dragging.mode === 'draw' && this.dragging.placedNote) {
+            var idx = this.seg.notes.indexOf(this.dragging.placedNote);
+            if (idx >= 0) {
+                this.seg.notes.splice(idx, 1);
+                this.dragging.placedNote = null;
+                this.commitEdit();
+            }
+        }
+        this.dragging = null;
+        this.canvas.style.cursor = '';
+        this._stopPinchDrag();
+        this._sceneDirty = true;
+    };
+
+    // 双指移动只记录比例, 不实时改动视图; 松手时按最终比例一次性应用
+    SegmentWindow.prototype.onPinchMove = function (ev) {
+        var p = this._pinch;
+        if (!p) return;
+        if (this._touchPts[ev.pointerId]) {
+            this._touchPts[ev.pointerId] = { x: ev.clientX, y: ev.clientY };
+        }
+        var a = this._touchPts[p.ids[0]], b = this._touchPts[p.ids[1]];
+        if (!a || !b) return;
+        ev.preventDefault();
+        var dx = Math.abs(a.x - b.x), dy = Math.abs(a.y - b.y);
+        // 按位移变化量判定主导轴, 一次手势只缩放一个方向, 互不串扰
+        if (!p.axis) {
+            var chX = Math.abs(dx - p.dx0), chY = Math.abs(dy - p.dy0);
+            if (Math.max(chX, chY) > 8) p.axis = chX >= chY ? 'x' : 'y';
+        }
+        p.dx = dx;
+        p.dy = dy;
+        var r = this.canvas.getBoundingClientRect();
+        p.cx = (a.x + b.x) / 2 - r.left;
+        p.cy = (a.y + b.y) / 2 - r.top;
+    };
+
+    SegmentWindow.prototype.applyPinch = function () {
+        var p = this._pinch;
+        if (!p || !p.axis) return;
+        if (p.axis === 'x') {
+            var fx = p.dx / p.dx0;
+            if (fx > 0.05 && Math.abs(fx - 1) > 0.01) this.zoomTicks(fx, p.cx);
+        } else {
+            var fy = p.dy / p.dy0;
+            if (fy > 0.05 && Math.abs(fy - 1) > 0.01) this.setRowH(this.rowH * fy, p.cy);
+        }
+    };
+
+    // 横向 tick 密度缩放, 以鼠标/手指 X 为锚点
+    SegmentWindow.prototype.zoomTicks = function (factor, anchorX) {
+        var ax = (anchorX === undefined) ? KEYBAR_W : anchorX;
+        var anchorTick = this.xToTick(ax);
+        var next = clamp(this.pxPerTick * factor, 0.5, 48);
+        if (Math.abs(next - this.pxPerTick) < 0.001) return;
+        this.pxPerTick = next;
+        this.viewStart = anchorTick - (ax - KEYBAR_W) / next;
+        this._sceneDirty = true;
+    };
+
+    SegmentWindow.prototype.onDocPointerEnd = function (ev) {
+        if (!ev || !ev.pointerId) return;
+        if (this._touchPts[ev.pointerId]) delete this._touchPts[ev.pointerId];
+        if (!this._pinch) return;
+        if (Object.keys(this._touchPts).length >= 2) return;
+        // 最后一根手指抬起: 一次性应用双指缩放结果
+        this.applyPinch();
+        this._pinch = null;
+        this._touchPts = {};
+    };
+
+    // 双指期间清理单指拖拽的残留状态 (用于触摸开始时打断编辑)
+    SegmentWindow.prototype._stopPinchDrag = function () {
+        if (this.canvas) this.canvas.style.cursor = '';
+    };
+
     // ---------- 鼠标交互 ----------
     SegmentWindow.prototype.onCanvasDown = function (ev) {
         this.focus();
         if (this.minimized) return;
         var r = this.canvas.getBoundingClientRect();
         var mx = ev.clientX - r.left, my = ev.clientY - r.top;
+
+        // 触屏: 维护 pointerId 集合, 第二指落下即进入双指缩放 (不与 touch 事件混用)
+        if (ev.pointerType && ev.pointerType !== 'mouse') {
+            this._touchPts[ev.pointerId] = { x: ev.clientX, y: ev.clientY };
+            var ids = Object.keys(this._touchPts);
+            if (ids.length >= 2) {
+                ev.preventDefault();
+                this.beginPinch();
+                return;
+            }
+        }
 
         if (ev.button === 1) {
             // 中键: 平移视图 (X/Y)
@@ -1744,9 +2062,11 @@
         var h = host();
         if (!h) return;
         var self = this;
-        h.pushUndo();
         var layer = this.seg.notes.length ? (isFinite(this.seg.notes[0].layer) ? this.seg.notes[0].layer : 0) : 0;
-        this.dragging = { mode: 'draw', layer: layer, lastKey: -1, lastTick: -1 };
+        // 放置前预检轨道层容量, 超限时阻止本次放置并提示
+        if (!this.ensureLaneLayers(this._distinctLayerCount(layer))) return;
+        h.pushUndo();
+        this.dragging = { mode: 'draw', layer: layer, lastKey: -1, lastTick: -1, placedNote: null };
         this.drawAt(mx, my);
         this.hookMove(function (e) {
             var r = self.canvas.getBoundingClientRect();
@@ -1783,6 +2103,7 @@
                 pitch: 0
             };
             notes.push(note);
+            if (d) d.placedNote = note;
             this.addAnim('place', key, rel, rel, this.currentInstrument);
             this.commitEdit();
         }
@@ -1921,11 +2242,81 @@
             }
             this.selection = live;
         }
+        // 片段可能新增了音高层: 补齐 NBS 轨道层后再交给主编辑器缝合
+        this.ensureLaneLayers(undefined, true);
         this.invalidate(true);
         this._velDirty = true;
         if (h.segmentSync) h.segmentSync();
         if (h.markDirty) h.markDirty();
         void noRefresh;
+    };
+
+    // ---------- 轨道层自动扩展 ----------
+    SegmentWindow.prototype._laneIndex = function () {
+        var h = host();
+        var lanes = (h && h.state && h.state.segmentLanes) || [];
+        var idx = lanes.indexOf(this.lane);
+        if (idx >= 0) return idx;
+        var id = this.lane ? this.lane.id : null;
+        if (id === null || id === undefined) return -1;
+        for (var i = 0; i < lanes.length; i++) {
+            if (lanes[i] && lanes[i].id === id) return i;
+        }
+        return -1;
+    };
+
+    SegmentWindow.prototype._distinctLayerCount = function (extraLayer) {
+        var seen = {};
+        var notes = this.seg.notes || [];
+        for (var i = 0; i < notes.length; i++) {
+            var L = isFinite(notes[i].layer) ? notes[i].layer : 0;
+            seen[L] = true;
+        }
+        if (extraLayer !== undefined && extraLayer !== null) seen[extraLayer] = true;
+        return Object.keys(seen).length;
+    };
+
+    // 返回 false 表示层数已达 NBS 上限, 调用方应阻止本次放置
+    SegmentWindow.prototype.ensureLaneLayers = function (neededHint, silent) {
+        var idx = this._laneIndex();
+        if (idx < 0) return true;
+        var fn = window.WebNBS && window.WebNBS.segmentEnsureLaneLayers;
+        if (fn) {
+            var res = fn(idx, neededHint);
+            if (res && res.ok === false) {
+                if (!silent) this.warnLayerLimit();
+                return false;
+            }
+        } else {
+            // 兜底: 没有扩展函数时至少在层数组不足时补默认层
+            var h = host();
+            var layers = h && h.state && h.state.song && h.state.song.layers;
+            var need = neededHint;
+            if (need === undefined || need === null) need = this._distinctLayerCount();
+            if (Array.isArray(layers) && layers.length < need) {
+                while (layers.length < need) {
+                    layers.push({
+                        name: this.lane.name || ('Layer ' + (layers.length + 1)),
+                        volume: isFinite(this.lane.volume) ? this.lane.volume : 100,
+                        stereo: 100, lock: 0
+                    });
+                }
+            }
+        }
+        return true;
+    };
+
+    SegmentWindow.prototype.warnLayerLimit = function () {
+        var now = Date.now();
+        if (now - (this._layerWarnAt || 0) < 3000) return;
+        this._layerWarnAt = now;
+        var h = host();
+        if (h && h.showToast) {
+            h.showToast('无法新增轨道层：已达到 NBS 最大层数，本次操作已取消',
+                { type: 'warning', duration: 4000, icon: 'fa-solid fa-triangle-exclamation' });
+        } else if (h && h.showAppAlert) {
+            h.showAppAlert('无法新增轨道层：已达到 NBS 最大层数，本次操作已取消');
+        }
     };
 
     SegmentWindow.prototype.finishEdit = function () {
@@ -1951,6 +2342,10 @@
     };
 
     SegmentWindow.prototype.onCanvasMove = function (ev) {
+        if (this._pinch) {
+            this.onPinchMove(ev);
+            return;
+        }
         var r = this.canvas.getBoundingClientRect();
         var mx = ev.clientX - r.left, my = ev.clientY - r.top;
 
@@ -2031,18 +2426,16 @@
         }
 
         if (ev.ctrlKey || ev.metaKey) {
-            var anchor = this.xToTick(mx);
-            var next = clamp(this.pxPerTick * (ev.deltaY > 0 ? 0.88 : 1.14), 0.5, 48);
-            this.viewStart = anchor - (mx - KEYBAR_W) / next;
-            this.pxPerTick = next;
-            this._sceneDirty = true;
+            // Ctrl + 滚轮: 纵向行高缩放, 以鼠标 Y 为锚点 (同时阻止浏览器页面缩放)
+            this.setRowH(this.rowH * (ev.deltaY > 0 ? 0.88 : 1.14), my);
             return;
         }
         if (ev.shiftKey) {
-            this.viewStart -= (ev.deltaY > 0 ? 1 : -1) * (8 / this.pxPerTick) * 12;
+            // Shift + 滚轮: 横向 tick 密度缩放, 以鼠标 X 为锚点
+            this.zoomTicks(ev.deltaY > 0 ? 0.88 : 1.14, mx);
         } else {
-            var maxScroll = Math.max(0, (this.maxKey - this.minKey + 1) * this.rowH - this.ch + this.rulerH);
-            this.scrollY = clamp(this.scrollY + (ev.deltaY > 0 ? this.rowH * 2 : -this.rowH * 2), 0, maxScroll);
+            this.scrollY = clamp(this.scrollY + (ev.deltaY > 0 ? this.rowH * 2 : -this.rowH * 2),
+                0, Math.max(0, (this.maxKey - this.minKey + 1) * this.rowH - this.ch + this.rulerH));
         }
         this._sceneDirty = true;
     };
@@ -2181,6 +2574,16 @@
         var h = host();
         if (!h) return;
         var mx = this._hover ? (this._hover.x + 4) : this.tickToX(this.seg.start);
+        // 粘贴可能引入新的音高层: 先预检层容量, 失败则不落音符
+        var layerSeen = {};
+        for (var ni = 0; ni < this.seg.notes.length; ni++) {
+            layerSeen[isFinite(this.seg.notes[ni].layer) ? this.seg.notes[ni].layer : 0] = true;
+        }
+        for (var pk = 0; pk < this.clipboard.length; pk++) {
+            layerSeen[isFinite(this.clipboard[pk].layer) ? this.clipboard[pk].layer : 0] = true;
+        }
+        var maxLayerCount = Object.keys(layerSeen).length;
+        if (!this.ensureLaneLayers(maxLayerCount)) return;
         h.pushUndo();
         var targetTick = Math.round(this.snapTick(this.xToTick(mx)) - (this.seg.start || 0));
         var targetKey = this._hover ? this._hover.group.key : (this.minKey + 5);
@@ -2220,6 +2623,9 @@
     window.SegmentPianoWindow = {
         open: open,
         closeAll: closeAll,
+        shouldUseFullscreen: shouldUseFullscreen,
+        ROW_H_MIN: ROW_H_MIN,
+        ROW_H_MAX: ROW_H_MAX,
         refresh: refreshAll,
         refreshLane: function (laneId) {
             var w = findLaneWin(laneId);

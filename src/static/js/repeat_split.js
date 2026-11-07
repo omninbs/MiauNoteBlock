@@ -7,7 +7,8 @@
  *   3. 硬约束: 切割点不得落在任何音符的持续区间内部 (延音不会被从中间断开)
  *   4. 自动寻优: 对候选模式长度 (1/2/4/8 小节) 分别切分并评分,
  *      优先「片段种类数最少」, 其次片段数量接近目标, 并抑制过长片段;
- *      没有可利用的重复结构时退化为「按周期均匀切块」(片段名各自不同), 不会整轨不切
+ *      只接受「存在真实复用」(同一片段内容出现 >= 2 次) 的切分方案,
+ *      没有可利用的重复结构时该轨完全不切分, 保留整轨一个片段
  *   5. 每轨独立切点
  */
 (function () {
@@ -23,6 +24,11 @@
     var MAX_PIECE_BARS = 8;                  // 单片段超过此长度视为"过长"
     var MIN_PIECES = 2;                      // 少于 2 段等于没切
     var MIN_AVG_NOTES = 2.5;                 // 平均每段音符数低于此值时视为"碎得没意义"
+    // 复用门槛: 片段内容被复用的比例, 计算方式为 1 - 片段种类数 / 片段数。
+    // 只要存在任意一处真实重复 (同一片段内容出现 >= 2 次), 复用率就 > 0;
+    // 复用率为 0 说明整轨内容各不相同, 此时该轨完全不切分 (保留整轨一个片段),
+    // 不再退化为按 2/4/8 小节的均匀切块。
+    var MIN_REUSE = 0;
 
     // 颗粒度等级 -> 旋律允许的最小片段长度 (小节)
     // 小: 允许 1 小节细碎循环; 中(默认): 最小 2 小节; 大: 最小 4 小节, 只保留较长重复块
@@ -398,14 +404,18 @@
             var kinds = countUnique(sigs);
             var maxBars = maxPieceBars(ranges);
             var avgNotes = n > 0 ? (noteCount / n) : 0;
+            var reuse = n > 0 ? (1 - kinds / n) : 0;
 
             // 质量门槛
             if (maxBars > MAX_PIECE_BARS * 1.5) continue;
             if (avgNotes < MIN_AVG_NOTES * 0.4) continue;
+            // 复用门槛: 没有任何片段内容被复用的方案直接剔除,
+            // 避免无重复轨道退化成按周期均匀切块
+            if (reuse <= MIN_REUSE) continue;
 
             candidates.push({
                 ranges: ranges, sigs: sigs, pieces: n, kinds: kinds,
-                maxBars: maxBars, periodBars: P, avgNotes: avgNotes
+                maxBars: maxBars, periodBars: P, avgNotes: avgNotes, reuse: reuse
             });
         }
         if (!candidates.length) return null;
@@ -437,8 +447,7 @@
             best = candidates[0];
         }
 
-        // 门槛: 至少切成 2 段才有意义
-        // (不再按"重用率"拒绝: 无重复结构时按周期均匀切块, 只是片段名各不相同)
+        // 门槛: 至少切成 2 段才有意义 (候选阶段已要求存在真实复用, 见 MIN_REUSE)
         if (best.pieces < MIN_PIECES) return null;
 
         // ---- 裁掉片段内部的「大面积空白」 ----
@@ -465,6 +474,11 @@
             sigCount[sg] = (sigCount[sg] || 0) + 1;
         }
         var sigList = Object.keys(sigCount);
+        // 最终复用门槛: 裁掉空白后若已不存在任何被复用的片段内容
+        // (同一内容出现 >= 2 次), 则放弃该轨切分, 由调用方保留整轨一个片段
+        var finalReuse = finalRanges.length > 0
+            ? (1 - sigList.length / finalRanges.length) : 0;
+        if (finalReuse <= MIN_REUSE) return null;
         sigList.sort(function(a, b) {
             if (sigCount[b] !== sigCount[a]) return sigCount[b] - sigCount[a];
             return a < b ? -1 : (a > b ? 1 : 0);
@@ -488,9 +502,8 @@
                 kinds: sigList.length,
                 maxBars: maxPieceBars(namedRanges),
                 periodBars: best.periodBars,
-                // 重用率: 1 - 种类数/片段数 (越高说明重复段落越多)
-                reuse: namedRanges.length > 0
-                    ? (1 - sigList.length / namedRanges.length) : 0
+                // 重用率: 1 - 种类数/片段数 (越高说明重复段落越多); 为 0 时本轨不会切分
+                reuse: finalReuse
             }
         };
     }

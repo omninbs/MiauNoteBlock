@@ -199,9 +199,9 @@
         this._selectionRect = null;
         this._dragThreshold = 6;       // 桌面端点击/拖动判定阈值 (px)
         this._pendingPlace = false;    // 左键点击空白准备放置
-        this._isPanning = false;       // 中键/右键/Space+左键平移画布
-        this._panButton = -1;          // 当前平移使用的鼠标按键 (0=左键+Space, 1=中键, 2=右键)
-        this._rightDragMoved = false;  // 本次右键是否发生过平移拖动 (决定 contextmenu 是否弹菜单)
+        this._isPanning = false;       // 中键 / Space+左键平移画布 (右键只弹菜单, 不平移)
+        this._panButton = -1;          // 当前平移使用的鼠标按键 (0=左键+Space, 1=中键)
+        this._rightDragMoved = false;  // 兼容旧状态字段 (右键已不再参与平移)
         this._spaceHeld = false;       // Space 键是否按住 (用于 Space+左键平移)
 
         // 触摸状态
@@ -215,6 +215,18 @@
         this._pinchMidX = 0;
         this._pinchMidY = 0;
         this._touchMoved = false;
+        // 双指分轴缩放状态: 横向间距 -> 每 tick 像素, 纵向间距 -> 行高
+        this._pinchDX0 = 0;
+        this._pinchDY0 = 0;
+        this._pinchLastDX = 0;
+        this._pinchLastDY = 0;
+        this._pinchAxis = null;
+        // 触屏长按片段打开全屏
+        this._segLongPressTimer = null;
+        this._segLongPressFired = false;
+        this._segLongPressAt = 0;
+        this._segLongPressX = 0;
+        this._segLongPressY = 0;
         this._longPressTimer = null;
         this._longPressFired = false;
         this._pendingContextMenu = false;
@@ -316,6 +328,8 @@
         this._segmentPreview = null;
         this._segMarquee = null;
         this._segPointerActive = false;
+        // 空白处左键按下后拖动播放头 (连续 seek)
+        this._segSeekDrag = false;
         // 片段纵向滚动回调 (main.js 用于同步 DOM 侧边板)
         this.onSegmentScroll = null;
         this._segKeyMin = 0;
@@ -1377,6 +1391,7 @@
             this._segmentPreview = null;
             this._segMarquee = null;
             this._segPointerActive = false;
+            this._segSeekDrag = false;
             if (this._segPrevPanelWidth) {
                 this._currentPanelWidth = this._segPrevPanelWidth;
                 this._segPrevPanelWidth = null;
@@ -1403,6 +1418,8 @@
         this.canvas.addEventListener('contextmenu', function(ev) {
             if (!self.segmentsEditMode) return;
             ev.preventDefault();
+            // 长按打开全屏后, 浏览器补发的右键菜单事件直接忽略
+            if (self._segLongPressFired && Date.now() - self._segLongPressAt < 800) return;
             var rect = self.canvas.getBoundingClientRect();
             var x = ev.clientX - rect.left;
             var y = ev.clientY - rect.top;
@@ -1422,6 +1439,8 @@
         });
         this.canvas.addEventListener('dblclick', function(ev) {
             if (!self.segmentsEditMode) return;
+            // 触屏长按已打开全屏: 忽略紧随其后的双击事件
+            if (self._segLongPressFired && Date.now() - self._segLongPressAt < 800) return;
             var rect = self.canvas.getBoundingClientRect();
             var x = ev.clientX - rect.left;
             var y = ev.clientY - rect.top;
@@ -1512,7 +1531,22 @@
         return lanes.length - 1;
     };
 
+    // 片段绘制/命中顺序: lane 升序 → 同 lane 内 start 升序 → start 相同按 id 升序。
+    // 返回排序副本, 不修改 this.segments 自身顺序; 末尾元素即最上层片段。
+    PianoRoll.prototype._segRenderOrder = function() {
+        var list = (this.segments || []).slice();
+        list.sort(function(a, b) {
+            var la = isFinite(a.lane) ? a.lane : 0;
+            var lb = isFinite(b.lane) ? b.lane : 0;
+            if (la !== lb) return la - lb;
+            if (a.start !== b.start) return a.start - b.start;
+            return (isFinite(a.id) ? a.id : 0) - (isFinite(b.id) ? b.id : 0);
+        });
+        return list;
+    };
+
     // 命中测试: 返回 { seg, zone:'left'|'right'|'body' }
+    // 按绘制顺序反向遍历 (从最上层开始), 同轨重叠时优先命中后绘制的片段
     PianoRoll.prototype._segHitTest = function(x, y) {
         if (y < this.getSegmentAreaTop()) return null;
         var pw = this.getSegmentPanelWidth();
@@ -1523,7 +1557,7 @@
         var lt = this.getSegmentLaneTop(lane);
         var lh = lanes[lane].height;
         if (y < lt + 4 || y > lt + lh - 4) return null;
-        var list = this.segments || [];
+        var list = this._segRenderOrder();
         var edge = 7;
         for (var i = list.length - 1; i >= 0; i--) {
             var s = list[i];
@@ -1736,7 +1770,7 @@
         ctx.rect(pw, areaTop, Math.max(0, w - pw), Math.max(0, bottomLimit - areaTop));
         ctx.clip();
 
-        var list = this.segments || [];
+        var list = this._segRenderOrder();
         var selIds = this.segmentSelectedIds || [];
         var drag = this._segDrag;
         var preview = this._segmentPreview;
@@ -1745,52 +1779,21 @@
 
         for (var s = 0; s < list.length; s++) {
             var seg = list[s];
-            if (drag && drag.id === seg.id && drag.moved) continue; // 拖动中单独绘制
+            // 被拖动的片段本体不画, 由下面的预览实体代替, 避免重影
+            if (drag && drag.moved && drag.id === seg.id) continue;
             this._segDrawBlock(ctx, seg, selIds, lanes, staleThumb);
         }
 
-        // 拖动预览
+        // 拖动 / 改长度预览: 直接按预览的 start/end/lane 绘制片段实体 (与正式片段同一套颜色/圆角/标题)
         if (drag && drag.moved) {
             var pseg = drag.seg;
             var pStart = preview ? preview.start : drag.previewStart;
             var pEnd = preview ? preview.end : drag.previewEnd;
             var pLane = preview ? preview.lane : drag.previewLane;
-            var pl = lanes[pLane] || lanes[drag.origLane];
-            if (pl) {
-                var ptop = this.getSegmentLaneTop(pLane) + 5;
-                var phh = pl.height - 10;
-                var px0 = this._tickToScreen(pStart);
-                var px1 = this._tickToScreen(pEnd);
-                ctx.save();
-                ctx.globalAlpha = 0.96;
-                // 扁平预览: 轨道色填充 (与选中态同款提亮) + 强调色描边, 无阴影
-                var plc = (typeof pl.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(pl.color))
-                    ? pl.color : '#4a90d9';
-                ctx.fillStyle = multiplyColor(plc, 0.55);
-                this._segRoundRect(ctx, px0, ptop, Math.max(3, px1 - px0), phh, 4);
-                ctx.fill();
-                ctx.strokeStyle = SEG_THEME.accent;
-                ctx.lineWidth = 2;
-                this._segRoundRect(ctx, px0 + 1, ptop + 1, Math.max(2, px1 - px0 - 2), phh - 2, 3);
-                ctx.stroke();
-                // 拖动中宽度每帧在变, 沿用上一帧缩略图拉伸, 保持画面连续
-                this._segDrawThumb(ctx, pseg, px0, px1, ptop, phh, true);
-                ctx.restore();
-            }
-            // 吸附落点白色虚线框
-            if (preview) {
-                var sx0 = this._tickToScreen(preview.start);
-                var sx1 = this._tickToScreen(preview.end);
-                var slt = this.getSegmentLaneTop(preview.lane);
-                var slh = (lanes[preview.lane] || { height: 52 }).height;
-                ctx.save();
-                ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-                ctx.lineWidth = 1;
-                ctx.setLineDash([5, 4]);
-                ctx.strokeRect(sx0 + 0.5, slt + 5.5, Math.max(2, sx1 - sx0 - 1), slh - 11);
-                ctx.setLineDash([]);
-                ctx.restore();
-            }
+            this._segDrawBlock(ctx, {
+                id: pseg.id, lane: pLane, start: pStart, end: pEnd,
+                name: pseg.name, notes: pseg.notes || []
+            }, selIds, lanes, true);
         }
 
         // 框选矩形
@@ -1901,12 +1904,50 @@
         ctx.restore();
     };
 
+    // 触屏长按片段 (约 450ms): 打开全屏钢琴卷帘; 移动超过 10px 取消
+    PianoRoll.prototype._cancelSegLongPress = function() {
+        if (this._segLongPressTimer) {
+            clearTimeout(this._segLongPressTimer);
+            this._segLongPressTimer = null;
+        }
+    };
+
+    PianoRoll.prototype._startSegLongPress = function(seg, clientX, clientY) {
+        if (!seg) return;
+        this._cancelSegLongPress();
+        var self = this;
+        this._segLongPressFired = false;
+        this._segLongPressX = clientX;
+        this._segLongPressY = clientY;
+        this._segLongPressTimer = setTimeout(function() {
+            self._segLongPressTimer = null;
+            self._segLongPressFired = true;
+            self._segLongPressAt = Date.now();
+            // 长按不触发拖动/右键菜单: 清空按下时的拖动与 seek 状态
+            self._segDrag = null;
+            self._segMarquee = null;
+            self._segSeekDrag = false;
+            self._segPointerActive = false;
+            self._segmentPreview = null;
+            self._mouseDown = false;
+            if (self._stopEdgeAutoScroll) self._stopEdgeAutoScroll();
+            self._touchMode = 'seg-open';
+            self._touchMoved = true;
+            self._fullRedrawNeeded = true;
+            if (typeof self.onSegmentOpen === 'function') self.onSegmentOpen(seg);
+            self.requestRender();
+        }, 450);
+    };
+
     // 片段编辑器鼠标事件
+    // 交互规则: 左键按在片段上 = 选中/拖动/改长度; 左键按在空白 = 播放头 seek (可按住连续拖动),
+    //           Shift+左键拖拽空白 = 框选; 右键交给 contextmenu
     PianoRoll.prototype._segMouseDown = function(e, x, y) {
+        // 只处理左键: 右键不得改变 _mouseDown / 选择 / 播放头, 只走 contextmenu
+        if (e.button !== undefined && e.button !== 0) return;
         this._mouseDown = true;
         this._segPointerActive = true;
         this._segDown = { x: x, y: y, button: e.button };
-        if (e.button === 2) return;
         var hit = this._segHitTest(x, y);
         var multi = e.ctrlKey || e.metaKey || e.shiftKey;
         if (hit) {
@@ -1929,21 +1970,36 @@
                 moved: false
             };
             this._segMarquee = null;
+            if (typeof this.onSegmentSelectionChange === 'function') this.onSegmentSelectionChange();
         } else {
-            if (!multi) {
-                this.segmentSelectedIds = [];
-                this.segmentSelectedId = null;
-            }
+            // 空白处: 不改变片段选择
             this._segDrag = null;
-            this._segMarquee = {
-                x0: x, y0: y, x1: x, y1: y,
-                baseIds: multi ? (this.segmentSelectedIds || []).slice() : []
-            };
+            if (e.shiftKey) {
+                // Shift + 拖拽空白 = 框选 (保留原有框选能力)
+                this._segMarquee = {
+                    x0: x, y0: y, x1: x, y1: y,
+                    baseIds: (this.segmentSelectedIds || []).slice()
+                };
+            } else {
+                // 普通左键点空白: 直接 seek 到该 X 对应 tick, 按住可连续拖动
+                this._segMarquee = null;
+                this._segSeekDrag = true;
+                this._segSeekToX(x);
+            }
+            if (typeof this.onSegmentSelectionChange === 'function') this.onSegmentSelectionChange();
         }
-        if (typeof this.onSegmentSelectionChange === 'function') this.onSegmentSelectionChange();
         this._fullRedrawNeeded = true;
         this.requestRender();
         e.preventDefault();
+    };
+
+    // 片段模式空白处 seek: 复用时间栏同一套 seek 路径, 播放头直接跟手
+    PianoRoll.prototype._segSeekToX = function(x) {
+        var t = this._screenToTickNearest(x);
+        if (!isFinite(t)) return;
+        t = Math.max(0, Math.round(t));
+        this.seekToTick(t, true);
+        if (typeof this.onTimelineSeek === 'function') this.onTimelineSeek(t, true);
     };
 
     // 根据鼠标位置更新片段框选结果 (mousemove 与边缘自动滚动共用)
@@ -1955,9 +2011,9 @@
         var my0 = Math.min(m.y0, y), my1 = Math.max(m.y0, y);
         var ids = m.baseIds.slice();
         var lanes = this.segmentLanes || [];
-        var list = this.segments || [];
-        for (var i = 0; i < list.length; i++) {
-            var s = list[i];
+        var order = this._segRenderOrder();
+        for (var i = 0; i < order.length; i++) {
+            var s = order[i];
             var lane = lanes[s.lane];
             if (!lane) continue;
             var lt = this.getSegmentLaneTop(s.lane);
@@ -1967,12 +2023,22 @@
             if (ids.indexOf(s.id) < 0) ids.push(s.id);
         }
         this.segmentSelectedIds = ids;
-        this.segmentSelectedId = ids.length ? ids[ids.length - 1] : null;
+        // 主片段 = 选中集合中绘制层级最高者 (排序列表中的最后一个)
+        var mainId = null;
+        for (var k = 0; k < order.length; k++) {
+            if (ids.indexOf(order[k].id) >= 0) mainId = order[k].id;
+        }
+        this.segmentSelectedId = ids.length ? (mainId !== null ? mainId : ids[ids.length - 1]) : null;
         this._fullRedrawNeeded = true;
         this.requestRender();
     };
 
     PianoRoll.prototype._segMouseMove = function(e, x, y) {
+        // 空白处按下拖动: 播放头连续跟随 (不改变片段选择, 不参与框选/边缘自动翻页)
+        if (this._segSeekDrag) {
+            this._segSeekToX(x);
+            return;
+        }
         // 框选
         if (this._segMarquee) {
             this._segApplyMarquee(x, y);
@@ -1998,23 +2064,24 @@
             var startPx = x - d.grabOffset;
             var startTick = this._screenToTick(startPx);
             var dur = d.origEnd - d.origStart;
-            var ns = this._segSnapTick(Math.max(0, startTick), d.id);
+            // 移动: 起点 clamp 到 >= 0, 允许换轨, 不回退
+            var ns = Math.max(0, this._segSnapTick(startTick, d.id));
             var ne = ns + dur;
             var lane = this.segmentLaneAtY(y);
-            // 目标 lane 与时间重叠时回退到原 lane
-            if (this._segLaneOverlapsClient(lane, ns, ne, d.id)) lane = d.origLane;
             d.previewStart = ns;
             d.previewEnd = ne;
             d.previewLane = lane;
             this._segmentPreview = { id: d.id, start: ns, end: ne, lane: lane, fStart: ns, fEnd: ne };
         } else if (d.mode === 'left') {
-            var ls = this._segSnapTick(Math.min(tickNow, d.origEnd - 1), d.id);
+            // 改左边缘: 起点 clamp 到 [0, end-1], 终点不变
+            var ls = Math.min(this._segSnapTick(tickNow, d.id), d.origEnd - 1);
             ls = Math.max(0, ls);
             d.previewStart = ls;
             d.previewEnd = d.origEnd;
             this._segmentPreview = { id: d.id, start: ls, end: d.origEnd, lane: d.origLane, fStart: ls, fEnd: d.origEnd };
         } else {
-            var re = this._segSnapTick(Math.max(tickNow, d.origStart + 1), d.id);
+            // 改右边缘: 终点取 max(tick, start+1), 不设上限
+            var re = Math.max(this._segSnapTick(tickNow, d.id), d.origStart + 1);
             d.previewStart = d.origStart;
             d.previewEnd = re;
             this._segmentPreview = { id: d.id, start: d.origStart, end: re, lane: d.origLane, fStart: d.origStart, fEnd: re };
@@ -2036,22 +2103,14 @@
         this.requestRender();
     };
 
-    PianoRoll.prototype._segLaneOverlapsClient = function(lane, start, end, excludeId) {
-        var list = this.segments || [];
-        for (var i = 0; i < list.length; i++) {
-            var s = list[i];
-            if (s.id === excludeId) continue;
-            if (s.lane !== lane) continue;
-            if (start < s.end && end > s.start) return true;
-        }
-        return false;
-    };
-
     PianoRoll.prototype._segMouseUp = function(e, x, y) {
         var committed = false;
-        // 结束框选时停止边缘自动翻页
+        // 结束框选/seek 拖动时停止边缘自动翻页
         this._stopEdgeAutoScroll();
-        if (this._segMarquee) {
+        if (this._segSeekDrag) {
+            // 空白处 seek 拖动结束: 播放头已实时跟随, 无需提交
+            this._segSeekDrag = false;
+        } else if (this._segMarquee) {
             this._segMarquee = null;
         } else if (this._segDrag) {
             var d = this._segDrag;
@@ -3708,6 +3767,14 @@
         this._lastMouseY = y;
         var pw = this._currentPanelWidth;
 
+        // 右键只走 contextmenu: 不得设置 _mouseDown、不得 seek、不得启停 playback view hold。
+        // 之前右键会落入下方进度条/标尺等分支 (这些分支没判断按键), 松手后
+        // _onMouseUp 的 _endPlaybackViewHold 把视口平滑拉回播放头 (即"右键误跳转")
+        if (e.button === 2) {
+            e.preventDefault();
+            return;
+        }
+
         // 片段编辑模式: 片段绘画区内的左键交给片段时间线处理
         // (中键保留原平移逻辑, 与 NBS 模式一致)
         if (this.segmentsEditMode && e.button === 0 && this._segAreaContains(y)) {
@@ -3836,14 +3903,7 @@
             }
         }
 
-        // 左侧音轨信息区右键菜单 (桌面端)
-        if (x < pw && y >= this._cfg.timelineHeight && e.button === 2) {
-            var layerHit = this._screenToLayer(y);
-            if (layerHit >= 0 && layerHit < this.trackCount) {
-                this._handleTrackContextMenu(e, layerHit);
-                return;
-            }
-        }
+        // 音轨信息区的右键菜单统一由 _onContextMenu 处理 (右键在函数入口已提前返回)
 
         this._mouseButton = e.button;
         this._mouseDown = true;
@@ -3958,10 +4018,8 @@
                     this.render();
                 }
             }
-        } else if (e.button === 1 || e.button === 2) {
-            // 中键 / 右键: 按住拖动平移画布
-            // 右键原本是浏览器默认手势(上下文菜单), 这里覆盖为平移;
-            // 右键轻点(未移动)松手后仍会弹出上下文菜单 (见 _onContextMenu 的 _rightDragMoved 判断)
+        } else if (e.button === 1) {
+            // 中键: 按住拖动平移画布 (右键已由上方提前返回, 只走 contextmenu)
             this._isPanning = true;
             this._panButton = e.button;
             this._rightDragMoved = false;
@@ -3972,11 +4030,10 @@
     };
 
     PianoRoll.prototype._onContextMenu = function(e) {
+        // 右键只弹应用内上下文菜单: 不再参与平移, 也不改动 _mouseDown / 播放头
         e.preventDefault();
         e.stopPropagation();
 
-        // 右键按住拖动进行过平移: 只覆盖浏览器默认菜单, 不弹出应用内菜单
-        // (右键轻点未移动时, 这里会正常继续弹出上下文菜单)
         if (this._rightDragMoved) {
             this._rightDragMoved = false;
             return;
@@ -4165,8 +4222,6 @@
         }
 
         if (this._isPanning) {
-            // 右键拖动标记: 拖动过则 contextmenu 事件不再弹出菜单
-            if (this._panButton === 2 && this._hasMoved) this._rightDragMoved = true;
             var dx = x - this._dragStartX;
             var dy = y - this._dragStartY;
             this.scrollX = Math.max(0, this.scrollX - dx);
@@ -4228,6 +4283,12 @@
     };
 
     PianoRoll.prototype._onMouseUp = function(e) {
+        // 右键释放不参与拖动收口 (右键只走 contextmenu): 不改 _mouseDown,
+        // 不 seek, 也不结束/开始 playback view hold
+        if (e.button === 2) {
+            this._rightDragMoved = false;
+            return;
+        }
         if (!this._mouseDown) return;
         this._mouseDown = false;
         // 释放 mousedown 时设置的指针捕获 (未捕获时会抛错, 静默忽略)
@@ -4346,8 +4407,6 @@
         }
 
         if (this._isPanning) {
-            // 松手时若右键发生过拖动, 标记本次右键为"平移"而非"打开菜单"
-            if (this._panButton === 2 && this._hasMoved) this._rightDragMoved = true;
             this._isPanning = false;
             this._panButton = -1;
             this._endPlaybackViewHold();
@@ -4456,12 +4515,27 @@
 
         if (e.touches.length === 2) {
             this._cancelLongPress();
+            this._cancelSegLongPress();
             this._fadeOutAnimation();
+            // 双指落下: 取消单指片段拖动/长按, 只做缩放, 避免误移动片段
+            if (this._segPointerActive) {
+                this._segDrag = null;
+                this._segMarquee = null;
+                this._segSeekDrag = false;
+                this._segPointerActive = false;
+                this._mouseDown = false;
+            }
             this._touchMode = 'zoom';
             this._touchMoved = false;
             var t1 = e.touches[0], t2 = e.touches[1];
             var dx = t1.clientX - t2.clientX, dy = t1.clientY - t2.clientY;
             this._pinchDist = Math.sqrt(dx * dx + dy * dy);
+            // 分轴缩放: 记录横/纵初始间距, 由位移变化量判定主导轴
+            this._pinchDX0 = Math.max(1, Math.abs(dx));
+            this._pinchDY0 = Math.max(1, Math.abs(dy));
+            this._pinchLastDX = this._pinchDX0;
+            this._pinchLastDY = this._pinchDY0;
+            this._pinchAxis = null;
             var rect = this.canvas.getBoundingClientRect();
             this._pinchMidX = (t1.clientX + t2.clientX) / 2 - rect.left;
             this._pinchMidY = (t1.clientY + t2.clientY) / 2 - rect.top;
@@ -4481,6 +4555,9 @@
                     button: 0, ctrlKey: false, metaKey: false, shiftKey: false,
                     preventDefault: function() {}
                 }, x, y);
+                // 触屏长按片段 (约 450ms): 进入全屏钢琴卷帘页面
+                var segHit = this._segHitTest(x, y);
+                if (segHit && segHit.seg) this._startSegLongPress(segHit.seg, x, y);
                 this._lastTouchX = x;
                 this._lastTouchY = y;
                 return;
@@ -4707,15 +4784,25 @@
             var rect = this.canvas.getBoundingClientRect();
             var cx = (t1.clientX + t2.clientX) / 2 - rect.left;
             var cy = (t1.clientY + t2.clientY) / 2 - rect.top;
-            if (this._pinchDist > 0 && Math.abs(dist - this._pinchDist) > 5) {
-                // 片段模式: 双指仅缩放时间轴, 锚点统一为播放指示器
-                if (this.segmentsEditMode) {
-                    this.zoomSegment(dist / this._pinchDist);
-                } else {
-                    this.setZoom(this.zoom * (dist / this._pinchDist), cx, cy);
-                }
-                this._pinchDist = dist;
+            var dxAbs = Math.abs(dx), dyAbs = Math.abs(dy);
+            // 主导轴判定: 横向间距变化 -> 每 tick 像素; 纵向间距变化 -> 行高
+            if (!this._pinchAxis) {
+                var chX = Math.abs(dxAbs - (this._pinchDX0 || 1));
+                var chY = Math.abs(dyAbs - (this._pinchDY0 || 1));
+                if (Math.max(chX, chY) > 8) this._pinchAxis = chX >= chY ? 'x' : 'y';
             }
+            if (this._pinchAxis === 'x' && Math.abs(dxAbs - (this._pinchLastDX || 1)) > 2) {
+                var fx = dxAbs / Math.max(1, this._pinchLastDX || 1);
+                this._pinchLastDX = dxAbs;
+                if (this.segmentsEditMode) this.zoomSegment(fx);
+                else this._pinchZoomHorizontal(fx, cx, cy);
+            } else if (this._pinchAxis === 'y' && Math.abs(dyAbs - (this._pinchLastDY || 1)) > 2) {
+                var fy = dyAbs / Math.max(1, this._pinchLastDY || 1);
+                this._pinchLastDY = dyAbs;
+                if (this.segmentsEditMode) this.zoomSegmentLanes(fy);
+                else this.setZoomAxis('y', fy, cx, cy);
+            }
+            this._pinchDist = dist;
             var panX = this._lastTouchX - cx, panY = this._lastTouchY - cy;
             if (Math.abs(panX) > 1 || Math.abs(panY) > 1) {
                 this._touchMoved = true;
@@ -4738,8 +4825,19 @@
             var rect = this.canvas.getBoundingClientRect();
             var x = touch.clientX - rect.left;
             var y = touch.clientY - rect.top;
+            // 长按已打开全屏窗口: 剩余手指移动不再参与画布操作
+            if (this._touchMode === 'seg-open') {
+                this._lastTouchX = x;
+                this._lastTouchY = y;
+                return;
+            }
             // 片段编辑模式: 拖动/框选 (进度条/标尺拖动时不走片段逻辑; 允许拖出区域继续)
             if (this.segmentsEditMode && this._segPointerActive && !this._isDraggingProgressBar) {
+                // 长按期间移动超过阈值即取消长按, 后续仍按普通拖动处理
+                if (this._segLongPressTimer &&
+                    (Math.abs(x - this._segLongPressX) > 10 || Math.abs(y - this._segLongPressY) > 10)) {
+                    this._cancelSegLongPress();
+                }
                 this._segMouseMove({}, x, y);
                 this._lastTouchX = x;
                 this._lastTouchY = y;
@@ -4917,9 +5015,19 @@
     PianoRoll.prototype._onTouchEnd = function(e) {
         // 片段编辑模式: 提交拖动 / 结束框选
         if (this.segmentsEditMode && this._segPointerActive) {
+            this._cancelSegLongPress();
             this._segMouseUp({}, this._lastTouchX || 0, this._lastTouchY || 0);
             this._mouseDown = false;
             this._touchMode = 'none';
+            return;
+        }
+        // 长按已打开全屏窗口: 本次抬手不再触发任何点击/拖动
+        if (this._touchMode === 'seg-open') {
+            this._touchMode = 'none';
+            this._touchMoved = true;
+            this._suppressNextClick = true;
+            this._fullRedrawNeeded = true;
+            this.render();
             return;
         }
         // 若本次不是音符拖动, 清理拖动预览状态
@@ -5036,6 +5144,11 @@
         if (this._touchMode === 'zoom') {
             this._touchMode = 'none';
             this._pinchDist = 0;
+            this._pinchAxis = null;
+            this._pinchDX0 = 0;
+            this._pinchDY0 = 0;
+            this._pinchLastDX = 0;
+            this._pinchLastDY = 0;
             this._fullRedrawNeeded = true;
             this.render();
             return;
@@ -6250,6 +6363,30 @@
         // 用 RAF 合并高频滚轮事件: 同步 render 会在连续滚轮时阻塞主线程, 表现为"缩放卡顿/没反应"
         this.requestRender();
     };
+
+    // 双指横向缩放 (NBS 模式): 只改每 tick 像素宽度, 行高保持不变
+    // 通过反向调整 zoomY 抵消 zoom 对纵向单元高度的影响
+    PianoRoll.prototype._pinchZoomHorizontal = function(factor, anchorX, anchorY) {
+        if (!isFinite(factor) || factor <= 0.05) return;
+        if (this.segmentsEditMode) { this.zoomSegment(factor); return; }
+        var cellW = this._cfg.cellW;
+        var cx = (anchorX !== undefined) ? anchorX
+            : (this._currentPanelWidth + (this.displayWidth - this._currentPanelWidth) / 2);
+        var wx = (cx - this._editOriginX() + this.scrollX) / Math.max(0.0001, cellW * this._zoomX());
+        var oldZoom = this.zoom || 1;
+        var oldZoomY = this.zoomY || 1;
+        var newZoom = Math.max(0.15, Math.min(4, oldZoom * factor));
+        if (Math.abs(newZoom - oldZoom) < 1e-9) return;
+        this.zoom = newZoom;
+        // 保持 cellH * zoom * zoomY 不变: 音高行高不随横向缩放跳动
+        this.zoomY = Math.max(0.25, Math.min(4, oldZoomY * oldZoom / newZoom));
+        this.scrollX = wx * cellW * this._zoomX() - cx + this._editOriginX();
+        this._clampScrollX();
+        void anchorY;
+        this._fullRedrawNeeded = true;
+        this.requestRender();
+    };
+
 
     // 片段缩放的持久化: 高频滚轮下节流写 localStorage (同步写入是缩放卡顿的主要来源之一)
     PianoRoll.prototype._persistSegmentZoom = function() {

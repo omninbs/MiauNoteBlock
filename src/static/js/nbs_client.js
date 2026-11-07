@@ -30,16 +30,17 @@ window.NBS_EXPORT_VERSION = 5;
 //   low_sub : 主音色音域下方溢出时使用的替代 NBS 音色 (-1=无更低替代)
 //   sustain : 1=延音类 (organ/strings/brass/reed/pipe/pad/lead/choir 等持续型),
 //             0=衰减型 (piano/guitar/perc 等拨击型)。延音类轨道默认启用"使用延音"。
-// 主音色/替代基于联网检索的 GM 128 音色描述 + NBS 20 音色音域/音色组合拟合:
-//   钢琴→Harp/Pling, 钟琴→Bell/Chime/Xylo, 管风琴→Bit, 吉他→Guitar, 贝斯→DoubleBass,
-//   弦乐→Harp(延音), 合唱/管乐→Flute(延音), 铜管→CopperHorn(延音), 合成Lead→Bit,
-//   合成Pad→Harp/Bit/Flute/Bell(延音), 班卓→Banjo, 迪吉→Didgeridoo, 木鱼→Click 等。
+// 主音色/替代基于 NBS 20 种乐器的真实音色/音域 (INSTRUMENT_NAMES / _INSTRUMENT_OFFSET):
+//   钢琴族→Pling(15, 明亮电钢) / Harp(0), 钟琴→Bell(7)/Chime(8)/Xylo(9),
+//   管风琴/合成Lead→Bit(13), 吉他/班卓/拨弦→Guitar(5)/Banjo(14), 贝斯→DoubleBass(1),
+//   持续弦乐→Harp(0, 重复触发 + 包络淡出), 合唱/管乐→Flute(6), 铜管→CopperHorn(16),
+//   合成Pad→Harp/Bit/Flute/Bell(延音), 迪吉/风笛→Didgeridoo(12), 木鱼/音效→Click(4) 等。
 var GM_TIMBRE_MAP = [
-    // Piano (0-7)
-    ["Acoustic Grand Piano", 0, 0, 7, 1, 0],
-    ["Bright Acoustic Piano", 0, 0, 7, 1, 0],
-    ["Electric Grand Piano", 0, 0, 7, 1, 0],
-    ["Honky-tonk Piano", 0, 0, 7, 1, 0],
+    // Piano (0-7): 明亮钢琴优先映射到电钢琴 Pling(15), 古钢琴/击弦键盘保留竖琴拨弦
+    ["Acoustic Grand Piano", 15, 0, 7, 1, 0],
+    ["Bright Acoustic Piano", 15, 0, 7, 1, 0],
+    ["Electric Grand Piano", 15, 0, 7, 1, 0],
+    ["Honky-tonk Piano", 15, 0, 7, 1, 0],
     ["Electric Piano 1", 15, 0, 7, 1, 0],
     ["Electric Piano 2", 15, 0, 7, 1, 0],
     ["Harpsichord", 0, 1, 7, 1, 0],
@@ -51,7 +52,7 @@ var GM_TIMBRE_MAP = [
     ["Vibraphone", 10, 0, 7, 1, 0],
     ["Marimba", 9, 0, -1, 0, 0],
     ["Xylophone", 9, -2, -1, 0, 0],
-    ["Tubular Bells", 7, -2, -1, 0, 0],
+    ["Tubular Bells", 8, -2, -1, 0, 0],
     ["Dulcimer", 0, 1, 7, 1, 0],
     // Organ (16-23)
     ["Drawbar Organ", 13, -1, 7, 1, 1],
@@ -69,7 +70,7 @@ var GM_TIMBRE_MAP = [
     ["Electric Guitar (clean)", 5, 1, 0, 1, 0],
     ["Electric Guitar (muted)", 5, 2, 0, 1, 0],
     ["Overdriven Guitar", 5, 2, 0, 1, 0],
-    ["Distortion Guitar", 13, 2, 0, 1, 0],
+    ["Distortion Guitar", 5, 2, 0, 1, 0],
     ["Guitar Harmonics", 0, 3, 7, 1, 0],
     // Bass (32-39)
     ["Acoustic Bass", 1, 2, 0, -1, 0],
@@ -155,7 +156,7 @@ var GM_TIMBRE_MAP = [
     // Ethnic (104-111)
     ["Sitar", 0, 0, 7, 1, 0],
     ["Banjo", 14, 0, 7, 1, 0],
-    ["Shamisen", 0, 0, 7, 1, 0],
+    ["Shamisen", 14, 0, 7, 1, 0],
     ["Koto", 0, 1, 7, 1, 0],
     ["Kalimba", 8, 0, -1, 0, 0],
     ["Bag pipe", 12, -1, 0, -1, 1],
@@ -185,8 +186,158 @@ var GM_TIMBRE_MAP = [
 var GM_PROGRAM_TABLE = GM_TIMBRE_MAP.map(function (e) { return [e[0], e[1], e[2]]; });
 // 派生: 每个 program 的 [high_sub, low_sub] (音色拟合默认替代槽)
 var GM_FITTING_SLOTS = GM_TIMBRE_MAP.map(function (e) { return [e[3], e[4]]; });
-// 派生: 每个 program 是否为延音类 (true=持续型, 默认启用延音轨道)
-var GM_SUSTAIN_PROGRAMS = GM_TIMBRE_MAP.map(function (e) { return e[5] === 1; });
+// 兼容旧逻辑: GM_TIMBRE_MAP 第 6 列声明的持续型音色 (无 SF2 数据时降级使用)
+var GM_LEGACY_SUSTAIN_PROGRAMS = GM_TIMBRE_MAP.map(function (e) { return e[5] === 1; });
+
+// ====================================================================
+// GM → SF2 真实采样包络 (gm_sf2_profile.json, 由 FluidR3_GM.sf2 分析生成)
+// ====================================================================
+var SF2_PROFILE_PATH = 'static/data/gm_sf2_profile.json';
+// 明显延音判定: is_sustained 且尾部能量 >= 峰值的 60%
+var SF2_OBVIOUS_SUSTAIN_RATIO = 0.6;
+var SF2_DEFAULT_PROFILE = {
+    is_sustained: false,
+    decay_ms: 1200,
+    curve: 'exponential',
+    env: [1, 0.9, 0.81, 0.72, 0.63, 0.55, 0.47, 0.4, 0.33, 0.26, 0.18, 0.1]
+};
+// 由 gm_sf2_profile.json 预计算 (同步兜底, fetch 完成后会用最新数据就地覆盖)
+var GM_SF2_OBVIOUS_SUSTAIN_IDS = [
+    4, 7, 8, 11, 16, 17, 18, 19, 20, 21, 22, 23, 30, 31, 33, 38, 39, 40, 41, 42, 43, 44, 48, 49, 50, 51, 52, 53, 54, 56,
+    57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 84, 85, 86,
+    87, 88, 89, 91, 92, 93, 95, 97, 98, 100, 101, 102, 106, 109, 110, 111, 122, 125, 126
+];
+var GM_SF2_POSSIBLE_SUSTAIN_IDS = [
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 11, 16, 17, 18, 19, 20, 21, 22, 23, 25, 26, 27, 29, 30, 31, 33, 34, 35, 36, 37, 38, 39, 40,
+    41, 42, 43, 44, 46, 48, 49, 50, 51, 52, 53, 54, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72,
+    73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 100, 101,
+    102, 103, 106, 109, 110, 111, 122, 124, 125, 126
+];
+function _makeProgramSet(ids) {
+    var map = [];
+    for (var i = 0; i < 128; i++) map[i] = false;
+    for (var j = 0; j < ids.length; j++) map[ids[j]] = true;
+    return map;
+}
+function _fillProgramSet(target, ids) {
+    for (var i = 0; i < 128; i++) target[i] = false;
+    for (var j = 0; j < ids.length; j++) target[ids[j]] = true;
+    target.length = 128;
+}
+// 明显延音集合 (默认勾选): SF2 is_sustained 且尾部能量足够高
+var GM_SUSTAIN_PROGRAMS = _makeProgramSet(GM_SF2_OBVIOUS_SUSTAIN_IDS);
+// 可能延音集合 (下拉"全部可能的延音"): SF2 is_sustained 或衰减 > 1.2s
+var GM_POSSIBLE_SUSTAIN_PROGRAMS = _makeProgramSet(GM_SF2_POSSIBLE_SUSTAIN_IDS);
+var _sf2ProfileData = null;      // program 字符串 → profile
+var _sf2LoadPromise = null;
+var _sf2Warned = false;
+
+// 兼容页面位于子目录的情况: 相对 document.baseURI 解析
+function _sf2ProfileUrl() {
+    try {
+        if (typeof document !== 'undefined' && document.baseURI && typeof URL !== 'undefined') {
+            return new URL(SF2_PROFILE_PATH, document.baseURI).href;
+        }
+    } catch (e) {}
+    return SF2_PROFILE_PATH;
+}
+
+// 根据 SF2 数据重新计算延音集合 (就地更新, 保持外部引用有效)
+function _refreshSustainProgramsFromSf2(programs) {
+    if (!programs) return;
+    var obvious = [];
+    var possible = [];
+    for (var i = 0; i < 128; i++) {
+        var p = programs[String(i)];
+        if (!p) continue;
+        var peak = Number(p.peak_rms) || 0;
+        var tail = Number(p.tail_rms) || 0;
+        var ratio = peak > 0 ? (tail / peak) : 0;
+        if (p.is_sustained === true && ratio >= SF2_OBVIOUS_SUSTAIN_RATIO) obvious.push(i);
+        if (p.is_sustained === true || (Number(p.decay_ms) || 0) > 1200) possible.push(i);
+    }
+    _fillProgramSet(GM_SUSTAIN_PROGRAMS, obvious);
+    _fillProgramSet(GM_POSSIBLE_SUSTAIN_PROGRAMS, possible);
+}
+
+// 惰性加载 SF2 包络数据 (结果缓存; 失败只 warn 一次并回落默认包络)
+function preloadSf2Profiles() {
+    if (_sf2LoadPromise) return _sf2LoadPromise;
+    if (typeof fetch !== 'function') {
+        if (!_sf2Warned) {
+            console.warn('[MiauNoteBlock] 当前环境不支持 fetch，延音包络使用默认值');
+            _sf2Warned = true;
+        }
+        _sf2LoadPromise = Promise.resolve(null);
+        return _sf2LoadPromise;
+    }
+    _sf2LoadPromise = fetch(_sf2ProfileUrl()).then(function (res) {
+        if (!res || !res.ok) throw new Error('HTTP ' + (res ? res.status : 'unknown'));
+        return res.json();
+    }).then(function (data) {
+        var programs = (data && data.programs) ? data.programs : data;
+        _sf2ProfileData = programs || null;
+        _refreshSustainProgramsFromSf2(_sf2ProfileData);
+        return _sf2ProfileData;
+    }).catch(function (err) {
+        if (!_sf2Warned) {
+            console.warn('[MiauNoteBlock] 加载 SF2 音色包络失败，延音使用默认包络:', err && err.message ? err.message : err);
+            _sf2Warned = true;
+        }
+        _sf2ProfileData = null;
+        return null;
+    });
+    return _sf2LoadPromise;
+}
+
+// 获取指定 GM program 的包络 (未加载/缺失时返回默认包络)
+function getSf2Profile(gmProgram) {
+    if (!_sf2ProfileData && !_sf2LoadPromise) preloadSf2Profiles();
+    var idx = parseInt(gmProgram, 10);
+    if (isFinite(idx) && _sf2ProfileData) {
+        var prof = _sf2ProfileData[String(idx)];
+        if (prof && Array.isArray(prof.env) && prof.env.length > 1) return prof;
+    }
+    return SF2_DEFAULT_PROFILE;
+}
+
+// 12 点包络线性插值: t ∈ [0,1], 返回该进度处归一化音量
+function sf2EnvAt(profile, t) {
+    var env = profile && profile.env ? profile.env : null;
+    if (!env || env.length === 0) return 1;
+    if (env.length === 1) return env[0];
+    if (!(t > 0)) return env[0];
+    if (t >= 1) return env[env.length - 1];
+    var pos = t * (env.length - 1);
+    var i = Math.floor(pos);
+    var f = pos - i;
+    var a = Number(env[i]);
+    var b = Number(env[Math.min(i + 1, env.length - 1)]);
+    if (!isFinite(a)) a = 1;
+    if (!isFinite(b)) b = a;
+    return a + (b - a) * f;
+}
+
+// 按曲线类型计算延音增益:
+//   sustained  → 前 80% 保持 >=0.75, 尾部 20% 快速降到 0.2
+//   linear     → 线性衰减 (持续音保留 0.35, 衰减音降到 0.02)
+//   exponential→ 直接使用 SF2 采样包络
+function sf2SustainGainAt(profile, t) {
+    if (!profile) return 1;
+    if (!(t > 0)) t = 0;
+    if (t > 1) t = 1;
+    var curve = profile.curve || 'exponential';
+    if (curve === 'sustained') {
+        if (t < 0.8) return Math.max(0.75, sf2EnvAt(profile, t));
+        var u = (t - 0.8) / 0.2;
+        return 0.75 + (0.2 - 0.75) * Math.min(1, u);
+    }
+    var tail = (profile.is_sustained === true) ? 0.35 : 0.02;
+    if (curve === 'linear') {
+        return 1 - (1 - tail) * t;
+    }
+    return sf2EnvAt(profile, t);
+}
 
 // 补充: 音色本身不属于持续型, 但实际余音/拖尾很长, 也应按延音处理
 // (电钢琴、颤音琴、管钟、电吉他、合成贝斯、钢鼓等)
@@ -1784,6 +1935,8 @@ function _convertMidiToNBS(arrayBuffer, settings) {
     var drumVolumes = fitting.drum_volumes || {};
 
     var sustainTracks = settings.sustain_tracks || [];
+    // 带音量变化的延音 (默认开启; 关闭时保持旧的等音量重复音符行为)
+    var sustainVolumeFade = settings.sustain_volume_fade !== false;
     var excludedTracks = settings.excluded_tracks || [];
 
     // 转 Set
@@ -2515,6 +2668,16 @@ function _convertMidiToNBS(arrayBuffer, settings) {
             shouldSustain = !!sustainTracksSet[trackIdx];
         }
 
+        // 延音包络: 仅在开关开启且该轨道被选入 sustain_tracks 时准备
+        // (keep_note_length='all' 时保持旧的等音量行为, 不套用包络; 打击乐无 GM 音色, 使用默认包络)
+        var sustainProfile = null;
+        var sustainMsPerTick = 0;
+        if (shouldSustain && sustainVolumeFade && keepNoteLength === 'sustain' && sustainTracksSet[trackIdx]) {
+            var sustainProgram = (ch === 9) ? -1 : (channelFirstProgram ? (channelFirstProgram[ch] || 0) : 0);
+            sustainProfile = getSf2Profile(sustainProgram);
+            sustainMsPerTick = 1000 / Math.max(1, songTempo);
+        }
+
         songNotes.push({
             id: 'note_' + nbsTick + '_' + layer,
             tick: nbsTick,
@@ -2619,12 +2782,22 @@ function _convertMidiToNBS(arrayBuffer, settings) {
                         _ch: ch,
                         _voice: e._voice
                     });
-                    // 保持音符长度也应用于 slot2/slot3
+                    // 保持音符长度也应用于 slot2/slot3 (按同一包络衰减音量)
                     if (shouldSustain) {
                         var effLen2 = Math.max(2, noteLength);
                         for (var st2 = 1; st2 < effLen2; st2++) {
                             var targetTick2 = nbsTick + st2;
                             if (targetTick2 > maxNbsTick + 100) break;
+                            var slotSustainVelocity = slotVelocity;
+                            if (sustainProfile) {
+                                var slotGain = sf2SustainGainAt(
+                                    sustainProfile,
+                                    (st2 * sustainMsPerTick) / Math.max(1, Number(sustainProfile.decay_ms) || 1)
+                                );
+                                slotSustainVelocity = Math.round(slotVelocity * slotGain);
+                                // 音量过低时停止生成后续静音音符
+                                if (slotSustainVelocity <= 0) break;
+                            }
                             var sKey2 = ch + ',' + targetTick2;
                             var usedS2 = layerCounters[sKey2] || 0;
                             var sLayer2 = baseLayer + usedS2;
@@ -2635,7 +2808,7 @@ function _convertMidiToNBS(arrayBuffer, settings) {
                                 layer: sLayer2,
                                 instrument: slotInst,
                                 key: slotNbsKey,
-                                velocity: slotVelocity,
+                                velocity: slotSustainVelocity,
                                 pan: 50,
                                 pitch: 0,
                                 _ch: ch,
@@ -2673,11 +2846,22 @@ function _convertMidiToNBS(arrayBuffer, settings) {
         }
 
         // ---- 保持音符长度: 后续 tick 重复放置 ----
+        // 开关开启时按 SF2 采样包络衰减每个重复音符的音量; 关闭时保持旧行为(等音量)
         if (shouldSustain) {
             var effectiveLength = Math.max(2, noteLength);
             for (var sustainTick = 1; sustainTick < effectiveLength; sustainTick++) {
                 var targetTick = nbsTick + sustainTick;
                 if (targetTick > maxNbsTick + 100) break;
+                var sustainVelocity = velocity;
+                if (sustainProfile) {
+                    var sustainGain = sf2SustainGainAt(
+                        sustainProfile,
+                        (sustainTick * sustainMsPerTick) / Math.max(1, Number(sustainProfile.decay_ms) || 1)
+                    );
+                    sustainVelocity = Math.round(velocity * sustainGain);
+                    // 音量过低时停止生成后续静音音符
+                    if (sustainVelocity <= 0) break;
+                }
                 var sustainKey = layerGroupKey2 + ',' + targetTick;
                 var sustainUsed = layerCounters[sustainKey] || 0;
                 var sustainLayer = baseLayer + sustainUsed;
@@ -2688,7 +2872,7 @@ function _convertMidiToNBS(arrayBuffer, settings) {
                     layer: sustainLayer,
                     instrument: instrument,
                     key: nbsKey,
-                    velocity: velocity,
+                    velocity: sustainVelocity,
                     pan: 50,
                     pitch: 0, // 延续音符
                     _ch: ch,
@@ -3086,7 +3270,15 @@ var NBSClient = {
     GM_PROGRAM_TABLE: GM_PROGRAM_TABLE,
     GM_FITTING_SLOTS: GM_FITTING_SLOTS,
     GM_SUSTAIN_PROGRAMS: GM_SUSTAIN_PROGRAMS,
+    GM_POSSIBLE_SUSTAIN_PROGRAMS: GM_POSSIBLE_SUSTAIN_PROGRAMS,
+    GM_LEGACY_SUSTAIN_PROGRAMS: GM_LEGACY_SUSTAIN_PROGRAMS,
     GM_LONG_TAIL_PROGRAMS: GM_LONG_TAIL_PROGRAMS,
+    // SF2 包络 API
+    preloadSf2Profiles: preloadSf2Profiles,
+    getSf2Profile: getSf2Profile,
+    sf2EnvAt: sf2EnvAt,
+    sf2SustainGainAt: sf2SustainGainAt,
+    SF2_DEFAULT_PROFILE: SF2_DEFAULT_PROFILE,
     DRUM_NOTE_TABLE: DRUM_NOTE_TABLE,
     INSTRUMENT_NAMES: INSTRUMENT_NAMES
 };

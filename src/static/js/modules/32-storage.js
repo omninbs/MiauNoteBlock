@@ -146,6 +146,10 @@
             // 歌词轨道 (额外轨道) 定义: 与 song.lyrics 配套, 顶层存一份便于增量读取
             lyricLanes: JSON.parse(JSON.stringify(state.lyricLanes || [])),
             lyrics: JSON.parse(JSON.stringify(state.lyrics || [])),
+            // 片段编辑数据: 轨道定义与片段内容原样保存 (允许同轨重叠, 不做去重/裁剪)
+            segments: JSON.parse(JSON.stringify(state.segments || [])),
+            segmentLanes: JSON.parse(JSON.stringify(state.segmentLanes || [])),
+            segmentsEdited: !!state._segmentsEdited,
             solo_layers: Array.isArray(songMeta.solo_layers) ? songMeta.solo_layers.slice() : []
         };
         var history = getHistoryFiles();
@@ -472,6 +476,18 @@
         state.undoStack = [];
         state.redoStack = [];
         updateUndoRedoButtons();
+        // 片段编辑数据: 原样恢复 (允许同轨重叠, 导入时不去重/不裁剪片段)
+        // 旧文件没有该字段时保持空数组, 由 segmentEnsure 兜底生成默认片段
+        state._segmentsEdited = !!data.segmentsEdited;
+        state.segmentLanes = Array.isArray(data.segmentLanes)
+            ? JSON.parse(JSON.stringify(data.segmentLanes)) : [];
+        state.segments = Array.isArray(data.segments)
+            ? JSON.parse(JSON.stringify(data.segments)) : [];
+        state._segmentIdSeq = 0;
+        for (var _si = 0; _si < state.segments.length; _si++) {
+            var _sid = state.segments[_si] ? state.segments[_si].id : null;
+            if (isFinite(_sid) && _sid > state._segmentIdSeq) state._segmentIdSeq = _sid;
+        }
         segmentEnsure();
         segmentSync();
         if (state.pianoRoll) state.pianoRoll.setNotes(state.notes);

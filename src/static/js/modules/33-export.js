@@ -194,10 +194,17 @@
                 layers = Object.keys(used).map(Number).sort(function(a, b) { return a - b; });
             }
             lanes.push({
+                name: (typeof ln.name === 'string' ? ln.name : undefined),
                 muted: !!ln.muted, solo: !!ln.solo,
                 volume: isFinite(ln.volume) ? ln.volume : 100,
                 height: isFinite(ln.height) ? ln.height : SEG_DEFAULT_LANE_H,
                 color: (typeof ln.color === 'string' ? ln.color : undefined),
+                // 片段轨道归属信息: 再次导入时按通道 / 单层 / 多层精确还原
+                channel: (isFinite(ln.channel) ? ln.channel : undefined),
+                voice: (ln.voice === undefined ? undefined : ln.voice),
+                isDrum: (ln.isDrum === undefined ? undefined : !!ln.isDrum),
+                layerKey: (isFinite(ln.layerKey) ? ln.layerKey : undefined),
+                layerKeys: (Array.isArray(ln.layerKeys) && ln.layerKeys.length ? ln.layerKeys.slice() : undefined),
                 layers: layers
             });
         }

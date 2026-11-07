@@ -228,23 +228,42 @@
     --accent-tertiary: #cdd7df;
 }
 
-/* 设置界面 - UI 配色选择网格 (预设色卡) */
+/* 设置界面 - UI 配色选择网格 (预设色卡, 单行横向滚动) */
 .settings-theme-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-    gap: 8px;
+    grid-auto-flow: column;
+    grid-auto-columns: 62px;
+    gap: 6px;
     width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+    /* 横向滚动色卡, 同时允许纵向滚动设置内容 */
+    touch-action: pan-x pan-y;
+}
+.settings-theme-grid::-webkit-scrollbar {
+    height: 4px;
+}
+.settings-theme-grid::-webkit-scrollbar-thumb {
+    background: var(--ctrl-stroke-hover);
+    border-radius: 2px;
 }
 .settings-theme-card {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 5px;
-    padding: 8px 4px 6px;
-    border-radius: 8px;
+    gap: 3px;
+    padding: 4px 2px 3px;
+    border-radius: 6px;
     border: 1px solid var(--ctrl-stroke-default);
     background: var(--ctrl-fill-default);
     cursor: pointer;
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
     transition: border-color var(--anim-fast), background var(--anim-fast);
 }
 .settings-theme-card:hover {
@@ -256,19 +275,240 @@
     background: var(--ctrl-fill-secondary);
 }
 .settings-theme-card .theme-swatch {
-    width: 34px;
-    height: 34px;
+    position: relative;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
     background: var(--theme-color, var(--accent));
-    box-shadow: inset 0 -6px 10px rgba(0, 0, 0, 0.22);
+    box-shadow: inset 0 -4px 8px rgba(0, 0, 0, 0.22);
+}
+/* 自定义主题色卡片: 色块外圈加虚线环, 与预设区分 */
+.settings-theme-card.settings-theme-custom .theme-swatch {
+    box-shadow: inset 0 -4px 8px rgba(0, 0, 0, 0.22), 0 0 0 2px var(--ctrl-stroke-hover);
 }
 .settings-theme-card .theme-name {
-    font-size: 11px;
+    font-size: 10px;
+    line-height: 1.2;
     color: var(--text-secondary);
     white-space: nowrap;
 }
 .settings-theme-card.active .theme-name {
     color: var(--text-primary);
+}
+@media (max-width: 768px) {
+    .settings-theme-grid {
+        grid-auto-columns: 54px;
+        gap: 5px;
+    }
+    .settings-theme-card {
+        padding: 3px 1px 2px;
+    }
+    .settings-theme-card .theme-swatch {
+        width: 19px;
+        height: 19px;
+    }
+    .settings-theme-card .theme-name {
+        font-size: 9px;
+    }
+}
+
+/* 设置弹窗内滑块: 去掉外层容器的底色 / 描边 / 内阴影, 只保留滑块本身 */
+.popup-content .settings-range-wrap {
+    padding: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    min-width: 0;
+}
+
+/* ==================================================================
+   统一取色器浮层 (iro.js) — 片段轨道颜色 / 主题自定义色
+   层级高于设置弹窗与片段右键菜单, 低于系统级 tooltip
+   ================================================================== */
+.wn-cp-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100480;
+    background: rgba(0, 0, 0, 0.18);
+}
+.wn-cp-overlay.is-mobile {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+}
+.wn-cp-panel {
+    position: absolute;
+    width: 220px;
+    padding: 10px;
+    border-radius: 12px;
+    background: var(--mica-acrylic, #1d2126);
+    border: 1px solid var(--ctrl-stroke-default);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+    color: var(--text-primary);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.wn-cp-overlay.is-mobile .wn-cp-panel,
+.wn-cp-panel.is-mobile {
+    position: relative;
+    left: auto;
+    top: auto;
+    width: min(92vw, 340px);
+    max-height: 88svh;
+    overflow-y: auto;
+    border-radius: 16px 16px 0 0;
+    padding: 12px 14px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+    align-items: stretch;
+}
+.wn-cp-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.wn-cp-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.wn-cp-close {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+}
+.wn-cp-close:hover {
+    background: var(--ctrl-fill-hover);
+    color: var(--text-primary);
+}
+.wn-cp-wheel {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    touch-action: none;
+    user-select: none;
+}
+.wn-cp-wheel * {
+    touch-action: none;
+}
+/* 控件层禁止长按选中 / 系统菜单; 输入框保持可选可编辑 */
+.wn-cp-head,
+.wn-cp-actions,
+.wn-cp-wheel {
+    -webkit-touch-callout: none;
+}
+.wn-cp-close,
+.wn-cp-btn {
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
+}
+.wn-cp-hex-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-tertiary);
+}
+.wn-cp-hex-row > span {
+    flex: 0 0 auto;
+}
+.wn-cp-hex {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 28px;
+    padding: 0 8px;
+    font-family: Consolas, monospace;
+    font-size: 12px;
+    text-transform: uppercase;
+    border-radius: 6px;
+    border: 1px solid var(--ctrl-stroke-default);
+    background: var(--ctrl-fill-default);
+    color: var(--text-primary);
+}
+.wn-cp-hex:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+.wn-cp-rgb {
+    display: flex;
+    gap: 6px;
+}
+.wn-cp-rgb > label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1 1 0;
+    min-width: 0;
+    font-size: 11px;
+    color: var(--text-tertiary);
+}
+.wn-cp-rgb > label > span {
+    flex: 0 0 auto;
+}
+.wn-cp-rgb input {
+    width: 100%;
+    min-width: 0;
+    height: 28px;
+    padding: 0 4px;
+    font-size: 12px;
+    text-align: center;
+    border-radius: 6px;
+    border: 1px solid var(--ctrl-stroke-default);
+    background: var(--ctrl-fill-default);
+    color: var(--text-primary);
+}
+.wn-cp-rgb input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+/* 触屏: 文本/数值输入框抬高到 36px, 便于点按 (需放在基础高度规则之后) */
+@media (pointer: coarse) {
+    .wn-cp-hex,
+    .wn-cp-rgb input {
+        height: 36px;
+    }
+    .wn-cp-rgb > label {
+        min-height: 36px;
+    }
+}
+.wn-cp-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 2px;
+}
+.wn-cp-btn {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0 14px;
+    font-size: 12px;
+    border-radius: 6px;
+    border: 1px solid var(--ctrl-stroke-default);
+    background: var(--ctrl-fill-default);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+.wn-cp-btn:hover {
+    background: var(--ctrl-fill-hover);
+    border-color: var(--ctrl-stroke-hover);
+}
+.wn-cp-btn.wn-cp-ok {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-on-accent, #fff);
+}
+.wn-cp-btn.wn-cp-ok:hover {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
 }
 
 html, body {
@@ -1151,6 +1391,8 @@ body.segment-edit-mode .tool-bar {
     overflow: hidden;
     font-size: 11px;
     user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
 }
 .seg-lane-row {
     position: absolute;
@@ -1229,6 +1471,9 @@ body.segment-edit-mode .tool-bar {
     border-radius: 50%;
     flex-shrink: 0;
     cursor: ns-resize;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
     background:
         radial-gradient(circle, #22272d 0 62%, transparent 63%),
         conic-gradient(from 225deg,
@@ -1282,62 +1527,40 @@ body.segment-edit-mode .tool-bar {
     font-variant-numeric: tabular-nums;
     min-width: 22px;
 }
-/* 轨道颜色弹层: 原生调色盘 (整块点击打开系统取色器) + HEX 输入 */
-.seg-lane-color-pop {
-    position: fixed;
-    z-index: 4000;
-    width: 116px;
-    padding: 8px;
-    border-radius: 10px;
-    background: #1d2126;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-.seg-lane-color-wheel {
+/* 轨道实时电平条: 填充 = 当前电平, 细线 = 峰值保持标记 */
+.seg-lane-meter {
     position: relative;
-    display: block;
-    height: 56px;
-    border-radius: 7px;
-    cursor: pointer;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+    flex: 1 1 auto;
+    min-width: 16px;
+    height: 5px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+    pointer-events: none;
 }
-.seg-lane-color-wheel input[type="color"] {
+.seg-lane-meter-fill {
     position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    opacity: 0;
-    border: none;
-    padding: 0;
-    cursor: pointer;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 0;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--accent), var(--accent-red, #ff6b6b));
 }
-.seg-lane-color-hexrow {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    color: var(--text-tertiary);
-    font-size: 11px;
+.seg-lane-meter-peak {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 2px;
+    border-radius: 1px;
+    background: var(--accent-tertiary, #b8b8ff);
+    opacity: 0.9;
 }
-.seg-lane-color-hex {
-    flex: 1;
-    min-width: 0;
-    height: 22px;
-    padding: 0 6px;
-    font-size: 11px;
-    font-family: Consolas, monospace;
-    border-radius: 5px;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    background: rgba(255, 255, 255, 0.05);
-    color: #e4e8ec;
-    text-transform: uppercase;
+.seg-lane-meter.muted {
+    opacity: 0.35;
 }
-.seg-lane-color-hex:focus {
-    outline: none;
-    border-color: rgba(255, 255, 255, 0.4);
-}
+/* 轨道颜色点已改用统一取色器浮层 (36-color-picker.js) */
 .seg-lane-resize {
     position: absolute;
     left: 0;
@@ -1345,6 +1568,52 @@ body.segment-edit-mode .tool-bar {
     bottom: -3px;
     height: 7px;
     cursor: ns-resize;
+    touch-action: none;
+}
+/* 触屏: 面板宽度固定 120px, 不放大视觉尺寸, 用伪元素把色点 / M / S / 旋钮
+   的命中区扩到约 36×36 (行高只有 52px, 直接放大控件会挤压电平表) */
+@media (pointer: coarse) {
+    .seg-lane-row .seg-lane-color {
+        position: relative;
+        touch-action: manipulation;
+    }
+    .seg-lane-row .seg-lane-color::after {
+        content: '';
+        position: absolute;
+        /* 上 -4 / 下 -22: 垂直命中 36px, 下半段与旋钮重叠处由后者优先命中 */
+        inset: -4px -13px -22px -13px;
+    }
+    .seg-lane-title > span:last-child {
+        display: inline-flex;
+        gap: 12px;
+    }
+    .seg-lane-btn {
+        position: relative;
+        width: 24px;
+        touch-action: manipulation;
+    }
+    .seg-lane-btn::after {
+        content: '';
+        position: absolute;
+        /* 左右各 -6 与 12px 间距刚好相接, 相邻按钮热区不互相覆盖 */
+        inset: -4px -6px -16px -6px;
+    }
+    .seg-lane-name {
+        max-width: 30px;
+    }
+    .seg-lane-knob::after {
+        content: '';
+        position: absolute;
+        inset: -6px;
+        border-radius: 50%;
+    }
+    .seg-lane-resize {
+        /* 避开旋钮及其热区 (x≈6-36), 只覆盖电平表/数值一侧 */
+        left: 38px;
+        right: 0;
+        bottom: 0;
+        height: 14px;
+    }
 }
 
 /* ===== 片段编辑: 右键菜单 ===== */
@@ -2160,6 +2429,9 @@ body.segment-edit-mode .tool-bar {
     cursor: grab;
     -webkit-user-select: none;
     user-select: none;
+    /* 横向平移由 JS 拖拽处理, 只放行纵向页面手势, 避免触屏拖动被浏览器抢走 */
+    touch-action: pan-y;
+    -webkit-touch-callout: none;
     /* 背景使用面板透明度 + 表面材质 (与工具栏/状态栏一致, 可透出背景图) */
     background-color: rgba(20, 20, 34, var(--surface-bg-alpha));
     backdrop-filter: var(--surface-blur);
@@ -3683,8 +3955,21 @@ body.segment-edit-mode .tool-bar {
     position: sticky;
     top: 0;
     z-index: 3;
+    /* 窄屏 / 长语种: 标签页横向滚动, 不挤压也不换行 */
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    /* 横向滑动标签页, 同时保留纵向滚动静止区外的默认行为 */
+    touch-action: pan-x pan-y;
+}
+.settings-tabs::-webkit-scrollbar {
+    display: none;
 }
 .settings-tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    touch-action: manipulation;
     transition: all 0.15s;
     padding: 5px 12px;
     font-size: 12px;
@@ -8484,6 +8769,8 @@ textarea:disabled {
     .settings-header h4 { font-size: 12.5px; line-height: 1.2; }
     .settings-header i { font-size: 11px; }
     .settings-close-btn { width: 18px; height: 18px; font-size: 11px; }
+    /* 触屏热区补偿: 视觉仍为 18px, 伪元素扩到 18+22=40px */
+    .popup-content .settings-close-btn::after { inset: -11px; }
     .settings-body { padding: 6px 8px; gap: 8px; }
     .settings-tabs { padding: 0 6px; }
     .settings-row { padding: 1px 0; }
@@ -8743,8 +9030,20 @@ textarea:disabled {
     .popup-content .settings-control {
         min-width: 112px;
     }
+    /* 窄屏: 背景图片行 (文件框 + 文件名 + 清除) 允许换行, 避免被 overflow-x:hidden 裁掉 */
     .popup-content .settings-control-wide {
         min-width: 140px;
+        flex-wrap: wrap;
+    }
+    .popup-content .settings-control-wide .settings-file-input {
+        flex: 1 1 100%;
+        max-width: 100%;
+        min-width: 0;
+    }
+    .popup-content .settings-control-wide .settings-file-name {
+        flex: 1 1 auto;
+        max-width: 100%;
+        min-width: 0;
     }
     .popup-content .midi-settings {
         padding: 4px 8px 10px;
@@ -9048,6 +9347,21 @@ textarea:disabled {
     #midi-popup .midi-control-sm { min-width: 72px; }
     #midi-popup .midi-file-info { padding: 6px 10px; gap: 3px 12px; }
 }
+/* 触屏: 延音处理下拉 / 带音量变化延音开关的可点高度抬高到 36px */
+@media (pointer: coarse) {
+    #midi-popup .midi-control,
+    #midi-popup .midi-check,
+    #midi-popup .midi-settings-row select,
+    #midi-popup .midi-settings-row input[type="number"],
+    #sustain-tracks-popup .cdd-trigger,
+    #sustain-tracks-popup .settings-header select {
+        min-height: 36px;
+    }
+    #sustain-tracks-popup .cdd-trigger,
+    #sustain-tracks-popup .settings-header select {
+        touch-action: manipulation;
+    }
+}
 
 /* ==================================================================
    片段浮动钢琴卷帘窗口 (FL Studio 风格, NBS 优化)
@@ -9065,8 +9379,14 @@ textarea:disabled {
     overflow: hidden;
     color: var(--text-primary);
     font-family: var(--font-family);
-    animation: spw-in 160ms cubic-bezier(0.2, 0.9, 0.25, 1);
     transform-origin: center;
+}
+/* 入场动画只在首次创建时播放 (类由 JS 添加, 动画结束后移除, resize 不会重播) */
+.spw.spw-in {
+    animation: spw-in 160ms cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+.spw:focus {
+    outline: none;
 }
 @keyframes spw-in {
     from { opacity: 0; transform: scale(0.97); }
@@ -9086,6 +9406,8 @@ textarea:disabled {
     border-bottom: 1px solid var(--ctrl-stroke-default);
     cursor: default;
     user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
 }
 .spw-glyph {
     width: 16px;
@@ -9106,6 +9428,19 @@ textarea:disabled {
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 45%;
+    min-width: 0;
+}
+/* 「测试版」标签: 不抢占标题宽度 */
+.spw-beta {
+    flex: none;
+    font-size: 9px;
+    line-height: 1;
+    padding: 2px 5px;
+    border-radius: 4px;
+    background: rgba(76, 194, 255, 0.13);
+    color: #8fd3ff;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
 }
 .spw-sub {
     font-size: 10.5px;
@@ -9226,7 +9561,7 @@ textarea:disabled {
     font-size: 10.5px;
     letter-spacing: 0.2px;
 }
-.spw-grid, .spw-ref {
+.spw-grid {
     width: auto;
     min-width: 24px;
     padding: 0 6px;
@@ -9245,6 +9580,7 @@ textarea:disabled {
     position: absolute;
     inset: 0;
     display: block;
+    touch-action: none;
 }
 .spw-vel {
     flex: none;
@@ -9266,10 +9602,9 @@ textarea:disabled {
 .spw-rz-se { bottom: 0; right: 0; width: 12px; height: 12px; cursor: nwse-resize; }
 .spw-rz-sw { bottom: 0; left: 0; width: 12px; height: 12px; cursor: nesw-resize; }
 
-/* 拖动/缩放期间关闭过渡, 保证跟手 */
+/* 拖动/缩放期间保证跟手 (不触碰入场动画, 避免结束后重播) */
 .spw.spw-dragging,
 .spw.spw-resizing {
-    animation: none;
     will-change: left, top, width, height;
 }
 
@@ -9286,6 +9621,35 @@ textarea:disabled {
     height: 26px;
     border-bottom: none;
 }
+
+/* 触屏: 按钮最小可点 36px */
+@media (pointer: coarse) {
+    .spw-titlebar {
+        height: 36px;
+    }
+    .spw-titlebar .spw-btn {
+        width: 36px;
+        height: 32px;
+    }
+    .spw-toolbar {
+        height: 40px;
+        gap: 5px;
+    }
+    .spw-toolbar .spw-btn {
+        width: 36px;
+        height: 34px;
+    }
+    .spw-toolbar .spw-grid {
+        width: auto;
+        min-width: 40px;
+    }
+    .spw-toolbar .spw-switch {
+        height: 32px;
+    }
+    .spw-min .spw-titlebar {
+        height: 36px;
+    }
+}
 .spw-min .spw-glyph,
 .spw-min .spw-sub {
     display: none;
@@ -9301,30 +9665,80 @@ textarea:disabled {
     width: 22px;
     height: 20px;
 }
+@media (pointer: coarse) {
+    .spw-min .spw-btn {
+        width: 36px;
+        height: 32px;
+    }
+}
 
-/* 参考片段下拉 (挂载到 body, fixed 定位, 避免被窗口裁剪) */
-.spw-menu {
-    position: fixed;
-    min-width: 150px;
-    max-height: 220px;
-    overflow-y: auto;
-    padding: 4px;
-    background: var(--mica-acrylic, rgba(44, 44, 46, 0.96));
-    border: 1px solid var(--ctrl-stroke-secondary);
-    border-radius: 6px;
-    box-shadow: var(--shadow-flyout);
-    z-index: 2000;
-}
-.spw-menu-item {
-    padding: 5px 8px;
-    font-size: 11.5px;
-    border-radius: 4px;
-    cursor: pointer;
-    white-space: nowrap;
+/* 全屏钢琴卷帘 (手机 / 小平板): 隐藏浮窗手柄, 顶部只留返回按钮 */
+body.spw-fullscreen-open {
     overflow: hidden;
-    text-overflow: ellipsis;
 }
-.spw-menu-item:hover {
-    background: var(--ctrl-fill-hover);
-    color: var(--accent);
+.spw-back {
+    display: none;
+}
+.spw.spw-fs {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+.spw-fs .spw-resize {
+    display: none;
+}
+.spw-fs .spw-glyph,
+.spw-fs .spw-actions {
+    display: none;
+}
+.spw-fs .spw-back {
+    display: inline-flex;
+    width: 40px;
+    height: 40px;
+    font-size: 14px;
+}
+.spw-fs .spw-titlebar {
+    height: 46px;
+    padding: 0 8px;
+    gap: 8px;
+    cursor: default;
+}
+.spw-fs .spw-title {
+    max-width: 52%;
+    font-size: 13px;
+}
+.spw-fs .spw-sub {
+    font-size: 11px;
+}
+/* 工具栏允许换行与横向滚动, 不被裁剪 */
+.spw-fs .spw-toolbar {
+    height: auto;
+    min-height: 44px;
+    flex-wrap: wrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 4px 6px;
+    gap: 4px;
+}
+.spw-fs .spw-toolbar .spw-spacer {
+    display: none;
+}
+.spw-fs .spw-body {
+    width: 100%;
+    min-height: 0;
+}
+.spw-fs .spw-vel {
+    height: 64px;
+}
+@media (pointer: coarse) {
+    .spw-fs .spw-titlebar {
+        height: 50px;
+    }
+    .spw-fs .spw-back {
+        width: 40px;
+        height: 40px;
+    }
+    .spw-fs .spw-toolbar {
+        min-height: 48px;
+    }
 }

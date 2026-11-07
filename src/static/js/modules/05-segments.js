@@ -996,6 +996,8 @@
         panel.style.top = top + 'px';
         panel.style.height = availH + 'px';
         panel.style.width = (pr.getSegmentPanelWidth ? pr.getSegmentPanelWidth() : 120) + 'px';
+        // 底部固定「添加音轨」按钮占用 26px, 轨道行不与它重叠
+        var laneVisibleH = Math.max(0, availH - 26);
         var colors = (N.SEG_LANE_COLORS) || ['#4fc3f7'];
         var html = '';
         var renderedRows = 0;
@@ -1003,7 +1005,7 @@
             var ln = state.segmentLanes[i];
             var relY = pr.getSegmentLaneRelTop ? pr.getSegmentLaneRelTop(i) : 0;
             var rh = ln.height;
-            if (relY + rh < 0 || relY > availH) continue;
+            if (relY + rh < 0 || relY > laneVisibleH) continue;
             renderedRows++;
             var lc = (typeof ln.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(ln.color))
                 ? ln.color : colors[i % colors.length];
@@ -1027,6 +1029,9 @@
                 + '<div class="seg-lane-resize" data-lane="' + i + '"></div>'
                 + '</div>';
         }
+        // 侧栏底部固定「添加音轨」入口: 始终贴住面板底边, 不随轨道滚动移动
+        html += '<button class="seg-lane-add" data-act="add-lane" title="' + i18nText('添加音轨') + '">'
+            + '<i class="fa-solid fa-plus"></i><span>' + i18nText('添加音轨') + '</span></button>';
         panel.innerHTML = html;
         ensureLaneMeterLoop();
 
@@ -1139,6 +1144,12 @@
         if (!panel || panel._bound) return;
         panel._bound = true;
         panel.addEventListener('click', function(e) {
+            // 底部「添加音轨」按钮
+            var addBtn = e.target.closest ? e.target.closest('.seg-lane-add') : null;
+            if (addBtn) {
+                segmentAddLane();
+                return;
+            }
             // 颜色点: 打开色板弹层
             var cd = e.target.closest ? e.target.closest('.seg-lane-color') : null;
             if (cd) {

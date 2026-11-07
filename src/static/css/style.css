@@ -1413,6 +1413,29 @@ body.segment-edit-mode .tool-bar {
     -webkit-user-select: none;
     -webkit-touch-callout: none;
 }
+/* 侧栏底部固定「添加音轨」入口 */
+.seg-lane-add {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 0;
+    border: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.10);
+    background: rgba(22, 27, 32, 0.98);
+    color: var(--text-secondary, #9aa7b2);
+    font-size: 11px;
+    font-family: inherit;
+    cursor: pointer;
+}
+.seg-lane-add i { font-size: 10px; }
+.seg-lane-add:hover { background: rgba(76, 194, 255, 0.14); color: #cfe9ff; }
+.seg-lane-add:active { background: rgba(76, 194, 255, 0.22); }
 .seg-lane-row {
     position: absolute;
     left: 0;

@@ -11,4 +11,10 @@ blbl-toy/
 packaging/src-tauri/target/
 packaging/dist/
 packaging/*.log
-.codegraph
+.codegraph/
+.screenshots/
+.trae-html-share-packages/
+.trae/
+tools/
+test/
+__pycache__/

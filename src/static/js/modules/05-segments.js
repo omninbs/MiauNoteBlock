@@ -1042,27 +1042,84 @@
     }
 
     // 轨道颜色: 使用统一取色器浮层 (36-color-picker.js)
-    // 拖动色轮时实时应用到 lane.color 并重绘, 点「确定」后才持久化 markDirty
+    // 拖动色轮时实时应用到 lane.color 并重绘;
+    // 点「确定」才持久化 (支持 Ctrl+Z 撤回), 取消/遮罩关闭则自动还原原色。
     function openLaneColorPop(idx, anchorEl) {
         var ln = state.segmentLanes[idx];
         if (!ln || !N.openColorPicker) return;
-        var cur = (/^#[0-9a-fA-F]{6}$/.test(ln.color || '') ? ln.color : '#4fc3f7');
+        var prevColor = (/^#[0-9a-fA-F]{6}$/.test(ln.color || '') ? ln.color : '');
+        var cur = prevColor || (N.SEG_LANE_COLORS && N.SEG_LANE_COLORS[idx % N.SEG_LANE_COLORS.length]) || '#4fc3f7';
         N.openColorPicker({
             color: cur,
             anchorEl: anchorEl,
             title: i18nText('轨道颜色'),
+            // 预设色板: 轨道原始配色 (FL Studio 风格)
+            swatches: (N.SEG_LANE_COLORS || []).slice(),
             onInput: function(hex) {
                 ln.color = hex;
                 if (state.pianoRoll) state.pianoRoll.render();
                 renderSegmentSidePanel();
             },
             onCommit: function(hex) {
+                if (prevColor && hex === prevColor) return;
+                // 撤回支持: 先还原旧值再快照, 保证 undo 回到改动前状态
+                if (prevColor) ln.color = prevColor;
+                else delete ln.color;
+                pushUndo();
                 ln.color = hex;
                 if (state.pianoRoll) state.pianoRoll.render();
                 renderSegmentSidePanel();
                 markDirty();
+            },
+            onCancel: function() {
+                if (!prevColor) {
+                    delete ln.color;
+                } else {
+                    ln.color = prevColor;
+                }
+                if (state.pianoRoll) state.pianoRoll.render();
+                renderSegmentSidePanel();
             }
         });
+    }
+
+    // 轨道重命名: 双击名称进入行内编辑, Enter/失焦提交, Esc 取消
+    function startLaneRename(idx, nameEl) {
+        var ln = state.segmentLanes[idx];
+        if (!ln || !nameEl || nameEl.querySelector('input')) return;
+        var old = typeof ln.name === 'string' ? ln.name : '';
+        var input = document.createElement('input');
+        input.className = 'seg-lane-name-input';
+        input.type = 'text';
+        input.maxLength = 32;
+        input.value = old;
+        input.spellcheck = false;
+        nameEl.textContent = '';
+        nameEl.appendChild(input);
+        input.focus();
+        input.select();
+        var done = false;
+        function finish(commit) {
+            if (done) return;
+            done = true;
+            var v = input.value.trim();
+            if (commit && v !== old) {
+                // 撤回支持: 先还原旧名再快照, 保证 undo 回到改名前
+                ln.name = old;
+                pushUndo();
+                ln.name = v;
+                markDirty();
+            }
+            renderSegmentSidePanel();
+        }
+        input.addEventListener('keydown', function(e) {
+            // 防止全局快捷键/按键控制干扰行内编辑
+            e.stopPropagation();
+            if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+            else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+        });
+        input.addEventListener('blur', function() { finish(true); });
+        input.addEventListener('pointerdown', function(e) { e.stopPropagation(); });
     }
 
     var _segLaneResize = null;
@@ -1100,6 +1157,14 @@
             if (act === 'mute') ln.muted = !ln.muted;
             else if (act === 'solo') ln.solo = !ln.solo;
             segmentAfterEdit();
+        });
+        // 轨道名称: 双击进入行内重命名
+        panel.addEventListener('dblclick', function(e) {
+            var nameEl = e.target.closest ? e.target.closest('.seg-lane-name') : null;
+            if (!nameEl) return;
+            var row = nameEl.closest('.seg-lane-row');
+            if (!row) return;
+            startLaneRename(parseInt(row.getAttribute('data-lane'), 10), nameEl);
         });
         // 音量旋钮: Pointer Events 统一鼠标与触屏, 按住上下拖动 (向上增大),
         // 灵敏度约 40 音量 / 100px; 滚轮微调; 双击恢复 100

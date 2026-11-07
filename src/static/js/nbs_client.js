@@ -36,15 +36,17 @@ window.NBS_EXPORT_VERSION = 5;
 //   持续弦乐→Harp(0, 重复触发 + 包络淡出), 合唱/管乐→Flute(6), 铜管→CopperHorn(16),
 //   合成Pad→Harp/Bit/Flute/Bell(延音), 迪吉/风笛→Didgeridoo(12), 木鱼/音效→Click(4) 等。
 var GM_TIMBRE_MAP = [
-    // Piano (0-7): 明亮钢琴优先映射到电钢琴 Pling(15), 古钢琴/击弦键盘保留竖琴拨弦
+    // Piano (0-7): 钢琴族映射到电钢琴 Pling(15) — 音频特征匹配 (tools/analyze_nbs.py)
+    // 显示 Acoustic Grand Piano 的 rank1 主音色为 Pling; 羽管键琴/击弦键盘同为明亮拨弦
     ["Acoustic Grand Piano", 15, 0, 7, 1, 0],
     ["Bright Acoustic Piano", 15, 0, 7, 1, 0],
     ["Electric Grand Piano", 15, 0, 7, 1, 0],
     ["Honky-tonk Piano", 15, 0, 7, 1, 0],
     ["Electric Piano 1", 15, 0, 7, 1, 0],
     ["Electric Piano 2", 15, 0, 7, 1, 0],
-    ["Harpsichord", 0, 1, 7, 1, 0],
-    ["Clavinet", 0, 0, 7, 1, 0],
+    // 羽管键琴/击弦古钢琴: 数据匹配显示 Harp 排名靠后 (rank 9~15), 明亮拨弦更贴近 Pling
+    ["Harpsichord", 15, 1, 7, 1, 0],
+    ["Clavinet", 15, 0, 7, 1, 0],
     // Chromatic Percussion (8-15)
     ["Celesta", 7, -2, -1, 0, 0],
     ["Glockenspiel", 7, -2, -1, 0, 0],
@@ -71,7 +73,8 @@ var GM_TIMBRE_MAP = [
     ["Electric Guitar (muted)", 5, 2, 0, 1, 0],
     ["Overdriven Guitar", 5, 2, 0, 1, 0],
     ["Distortion Guitar", 5, 2, 0, 1, 0],
-    ["Guitar Harmonics", 0, 3, 7, 1, 0],
+    // 吉他泛音: 数据匹配 rank1 为 Bell (泛音铃音感); Bell 偏移 +24, oct 相应降 2
+    ["Guitar Harmonics", 7, 1, -1, 0, 0],
     // Bass (32-39)
     ["Acoustic Bass", 1, 2, 0, -1, 0],
     ["Electric Bass (finger)", 1, 2, 0, -1, 0],
@@ -98,7 +101,8 @@ var GM_TIMBRE_MAP = [
     ["Choir Aahs", 6, -1, 7, 1, 1],
     ["Voice Oohs", 6, -1, 7, 1, 1],
     ["Synth Voice", 6, -1, 7, 1, 1],
-    ["Orchestra Hit", 2, -1, -1, -1, 0],
+    // 乐队强奏: 数据匹配 top3 均为铜号角族 (铜管刺音), 由低音鼓改为 Copper Horn
+    ["Orchestra Hit", 16, 0, 7, 1, 0],
     // Brass (56-63)
     ["Trumpet", 16, -1, 7, 1, 1],
     ["Trombone", 16, -1, 7, 1, 1],
@@ -158,7 +162,8 @@ var GM_TIMBRE_MAP = [
     ["Banjo", 14, 0, 7, 1, 0],
     ["Shamisen", 14, 0, 7, 1, 0],
     ["Koto", 0, 1, 7, 1, 0],
-    ["Kalimba", 8, 0, -1, 0, 0],
+    // 卡林巴: 数据匹配 rank1 为 Pling (明亮拨击), Chime 偏移 +24 改 Pling 偏移 0, oct 相应降 2
+    ["Kalimba", 15, -2, -1, 0, 0],
     ["Bag pipe", 12, -1, 0, -1, 1],
     ["Fiddle", 0, -1, 6, 1, 1],
     ["Shanai", 6, -1, 7, 1, 1],
@@ -210,7 +215,7 @@ var GM_SF2_OBVIOUS_SUSTAIN_IDS = [
 var GM_SF2_POSSIBLE_SUSTAIN_IDS = [
     0, 1, 2, 3, 4, 5, 6, 7, 8, 11, 16, 17, 18, 19, 20, 21, 22, 23, 25, 26, 27, 29, 30, 31, 33, 34, 35, 36, 37, 38, 39, 40,
     41, 42, 43, 44, 46, 48, 49, 50, 51, 52, 53, 54, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72,
-    73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 100, 101,
+    73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 100, 101,
     102, 103, 106, 109, 110, 111, 122, 124, 125, 126
 ];
 function _makeProgramSet(ids) {

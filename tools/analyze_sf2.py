@@ -383,16 +383,19 @@ def analyze_pcm(pcm: np.ndarray, sr: int, looped: bool,
     peak_idx = int(np.argmax(rms))
     duration_ms = pcm.size * 1000.0 / sr
 
-    # 峰值后首次降到 10% 的时间；未降到则按分析窗口长度（封顶 8000ms）
+    peak_time_ms = peak_idx * BUCKET_MS
+
+    # 峰值后首次降到 10% 的时间；未降到则按峰值之后的剩余时长（封顶 8000ms）
     after = norm[peak_idx:]
     below = np.nonzero(after <= 0.1)[0]
     if below.size:
         decay_ms = int(below[0] * BUCKET_MS)
     else:
-        decay_ms = int(min(MAX_ANALYSIS_MS, duration_ms))
+        decay_ms = int(min(MAX_ANALYSIS_MS, duration_ms - peak_time_ms))
     decay_ms = min(decay_ms, DECAY_CAP_MS)
 
-    v20 = _value_at(norm, 2000)
+    # 延音判定: 峰值 2s 后能量仍 >= 80%（从峰值起算, 与 decay 口径一致）
+    v20 = _value_at(norm, peak_time_ms + 2000)
     # 循环段相对峰值的 RMS：FluidR3 的钢琴虽有 loop，但循环点位于衰减尾部，
     # 实际听感已接近结束；只保留能量可观的循环采样才算持续音
     loop_frac = 0.0
@@ -404,7 +407,6 @@ def analyze_pcm(pcm: np.ndarray, sr: int, looped: bool,
     curve = "sustained" if is_sustained else _classify_curve(norm, peak_idx)
 
     # 包络：从峰值开始、覆盖最多 4s，等距取 12 点，首点归一化为 1
-    peak_time_ms = peak_idx * BUCKET_MS
     window_ms = min(ENV_WINDOW_MS, max(0.0, duration_ms - peak_time_ms))
     window_ms = max(window_ms, BUCKET_MS)
     ts = np.linspace(0.0, window_ms, ENV_POINTS)

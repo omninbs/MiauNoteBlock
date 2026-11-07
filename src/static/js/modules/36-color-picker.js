@@ -1,7 +1,10 @@
 /* ==================================================================
    36-color-picker.js — 统一取色器浮层 (基于 iro.js)
    提供 WebNBS.openColorPicker(opts), 供片段轨道颜色 / 设置配色等复用。
-   opts = { color, anchorEl, title, onInput(hex), onCommit(hex) }
+   opts = { color, anchorEl, title, swatches: ['#hex',...],
+            onInput(hex), onCommit(hex), onCancel() }
+   - swatches: 预设色板 (如片段轨道原始配色), 点击即选中
+   - onCancel: 未点「确定」而关闭 (取消/遮罩/Esc) 时回调, 供调用方撤回预览
    ================================================================== */
 (function() {
     'use strict';
@@ -23,6 +26,8 @@
     var _bEl = null;
     var _picker = null;
     var _opts = null;
+    var _swatchEl = null;   // 预设色板容器
+    var _committed = false; // 本次打开是否通过「确定」关闭
     var _currentHex = '#4cc2ff';
     var _syncing = false;
 
@@ -127,6 +132,7 @@
             + '<button type="button" class="wn-cp-close" aria-label="' + i18nText('关闭') + '">&times;</button>'
             + '</div>'
             + '<div class="wn-cp-wheel" aria-label="' + i18nText('色相') + '"></div>'
+            + '<div class="wn-cp-swatches" hidden></div>'
             + '<div class="wn-cp-fields">'
             + '<label class="wn-cp-hex-row"><span>' + i18nText('十六进制') + '</span>'
             + '<input class="wn-cp-hex" type="text" maxlength="7" spellcheck="false" autocomplete="off"></label>'
@@ -145,6 +151,7 @@
 
         _panel = _root.querySelector('.wn-cp-panel');
         _wheelEl = _root.querySelector('.wn-cp-wheel');
+        _swatchEl = _root.querySelector('.wn-cp-swatches');
         _titleEl = _root.querySelector('.wn-cp-title');
         _hexEl = _root.querySelector('.wn-cp-hex');
         _rEl = _root.querySelector('.wn-cp-r');
@@ -157,7 +164,15 @@
         });
         _root.querySelector('.wn-cp-close').addEventListener('click', closeColorPicker);
         _root.querySelector('.wn-cp-cancel').addEventListener('click', closeColorPicker);
+        // 预设色板: 点击即选中该色 (走 applyHex 触发实时预览)
+        _swatchEl.addEventListener('click', function(e) {
+            var chip = e.target.closest ? e.target.closest('.wn-cp-swatch') : null;
+            if (!chip) return;
+            applyHex(chip.getAttribute('data-hex'), 'swatch');
+        });
+
         _root.querySelector('.wn-cp-ok').addEventListener('click', function() {
+            _committed = true;
             var cb = _opts && _opts.onCommit;
             var hex = _currentHex;
             closeColorPicker();
@@ -243,8 +258,23 @@
         }
         ensureDom();
         _opts = opts;
+        _committed = false;
         _currentHex = normalizeHex(opts.color) || '#4cc2ff';
         if (_titleEl) _titleEl.textContent = opts.title || i18nText('选择颜色');
+        // 预设色板: 有则显示色块行, 无则隐藏
+        if (_swatchEl) {
+            var sw = Array.isArray(opts.swatches) ? opts.swatches.filter(function(c) { return normalizeHex(c); }) : [];
+            if (sw.length) {
+                _swatchEl.innerHTML = sw.map(function(c) {
+                    var hex = normalizeHex(c);
+                    return '<button type="button" class="wn-cp-swatch" data-hex="' + hex + '" title="' + hex.toUpperCase() + '" style="background:' + hex + '"></button>';
+                }).join('');
+                _swatchEl.hidden = false;
+            } else {
+                _swatchEl.innerHTML = '';
+                _swatchEl.hidden = true;
+            }
+        }
         _root.classList.toggle('is-mobile', isMobile());
         _root.style.display = isMobile() ? 'flex' : 'block';
         // 先显示以便测量尺寸, 再创建 iro 并定位
@@ -260,10 +290,16 @@
 
     function closeColorPicker() {
         if (!_root) return;
+        var wasOpen = _root.style.display !== 'none';
         _root.style.display = 'none';
+        var cb = _opts && !_committed && wasOpen ? _opts.onCancel : null;
         _opts = null;
         if (_picker) {
             try { _picker.off('color:change'); } catch (e) {}
+        }
+        // 未确认关闭 → 通知调用方撤回实时预览
+        if (typeof cb === 'function') {
+            try { cb(); } catch (e) { console.warn('取色器 onCancel 回调异常:', e); }
         }
     }
 

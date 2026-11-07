@@ -1461,9 +1461,10 @@
             }
         }
 
-        // 2) 黑键: 窄矩形右对齐覆盖, 右侧不再留白色条块
+        // 2) 黑键: 锚定键盘背面 (左侧), 正面前端留白露出白键
+        //    与主编辑器键盘 (piano_roll.js) 一致: 黑键从背面起, 不到达标签/正面侧
         var blackW = Math.round(KEYBAR_W * 0.62);
-        var blackX = KEYBAR_W - blackW;
+        var blackX = 0;
         for (var b = this.minKey; b <= this.maxKey; b++) {
             if (!isBlackKey(b)) continue;
             var by = this.keyToY(b);
@@ -1473,17 +1474,17 @@
             if (this._pressKey === b) bamt += pressAmt;
             ctx.fillStyle = shadeColor(C.keyBlack, bamt);
             ctx.fillRect(blackX, by, blackW, rowH - 1);
-            // 左侧与顶部细高光, 增强键位边界
+            // 前端(右)边缘与顶部细高光, 增强键位边界
             ctx.fillStyle = C.keyLine;
-            ctx.fillRect(blackX, by, 1, rowH - 1);
+            ctx.fillRect(blackX + blackW - 1, by, 1, rowH - 1);
             ctx.fillStyle = 'rgba(255,255,255,0.07)';
             ctx.fillRect(blackX, by, Math.max(0, blackW - 1), 1);
-            // 音名 (黑键文字置于窄条内)
+            // 音名 (置于黑键窄条内, 与白键一样右对齐到键面)
             ctx.font = '9px "Segoe UI", system-ui, sans-serif';
             ctx.textAlign = 'right';
             ctx.textBaseline = 'middle';
             ctx.fillStyle = C.keyTextLight;
-            ctx.fillText(pitchName(b), KEYBAR_W - 4, by + rowH / 2);
+            ctx.fillText(pitchName(b), blackX + blackW - 4, by + rowH / 2);
         }
 
         // 右侧分隔线

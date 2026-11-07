@@ -1608,6 +1608,49 @@
         document.addEventListener('touchstart', onFirstInteract);
         document.addEventListener('keydown', onFirstInteract);
 
+        // 全局禁用键盘控制 HTML 控件 (标准程序设计: 控件只响应鼠标/触摸)
+        // - 按钮/复选框/滑块: 屏蔽 Space/Enter 触发与方向键调节
+        // - 下拉框: 屏蔽方向键/字母选中等全部按键控制
+        // - Tab 焦点移动: 全局屏蔽
+        // - 文本输入框 (input text/textarea): 允许正常打字与光标移动, 不算控件控制
+        // 只 preventDefault 不 stopPropagation, 应用自身快捷键 (播放/暂停等) 不受影响。
+        function isTextEntryEl(el) {
+            if (!el || !el.tagName) return false;
+            var tag = el.tagName;
+            if (tag === 'TEXTAREA') return true;
+            if (el.isContentEditable) return true;
+            if (tag === 'INPUT') {
+                var t = (el.type || 'text').toLowerCase();
+                return t === 'text' || t === 'search' || t === 'password'
+                    || t === 'email' || t === 'url' || t === 'tel';
+            }
+            return false;
+        }
+        document.addEventListener('keydown', function(e) {
+            var t = e.target;
+            if (!t || !t.tagName) return;
+            var tag = t.tagName;
+            var key = e.key;
+            // Tab 一律禁止 (不做键盘焦点导航)
+            if (key === 'Tab') {
+                e.preventDefault();
+                return;
+            }
+            if (tag === 'SELECT') {
+                e.preventDefault();
+                return;
+            }
+            if (tag === 'BUTTON' || (tag === 'INPUT' && !isTextEntryEl(t))) {
+                if (key === ' ' || key === 'Enter'
+                    || key === 'ArrowUp' || key === 'ArrowDown'
+                    || key === 'ArrowLeft' || key === 'ArrowRight') {
+                    e.preventDefault();
+                }
+                return;
+            }
+            // 文本输入: 放行 (打字/光标键), 仅 Tab 已在上方拦截
+        }, true);
+
         // 加载乐器
         loadInstruments();
 

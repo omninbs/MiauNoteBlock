@@ -1064,20 +1064,6 @@
         }
     }
 
-    // 计算通道试听音符: 取平均音高，四舍五入到最近八度，返回该八度的 C-D-E-F (MIDI note)
-    function getChannelPreviewNotes(ch) {
-        var minNote = ch.min_note;
-        var maxNote = ch.max_note;
-        if (minNote === undefined || maxNote === undefined || minNote === null || maxNote === null) {
-            return [60, 62, 64, 65]; // 默认 C4-D4-E4-F4
-        }
-        var avg = Math.round((minNote + maxNote) / 2);
-        // 四舍五入到最近八度的 C (12 的倍数，C-1=0)
-        var baseOctave = Math.round(avg / 12);
-        var base = baseOctave * 12;
-        return [base, base + 2, base + 4, base + 5];
-    }
-
     function buildPitchSelect(currentValue, note) {
         var html = '<select class="midi-pitch-select" data-note="' + note + '">';
         for (var i = 0; i < 88; i++) {
@@ -1333,6 +1319,7 @@
     }
 
     function stopMidiPreview() {
+        stopChannelPreview();
         if (_midiPreviewTimeout) {
             clearTimeout(_midiPreviewTimeout);
             _midiPreviewTimeout = null;
@@ -1362,193 +1349,196 @@
         };
     }
 
-    function getFittingSlotsForChannel(channel) {
-        // 从音色拟合表中查找该通道的 slot 设置
-        var row = document.querySelector('#midi-timbre-melody-rows tr[data-type="melody"][data-channel="' + channel + '"]');
-        if (!row) return null;
-        var slots = row.querySelectorAll('.timbre-slot');
-        var result = [];
-        for (var i = 0; i < slots.length; i++) {
-            result.push(parseInt(slots[i].value));
-        }
-        return result;
-    }
-
     function midiNoteToFreq(note) {
         return 440 * Math.pow(2, (note - 69) / 12);
     }
 
-    // GM program → 试听用 NBS 乐器（Web MIDI 不可用时作为 TinySynth 回退）
-    function gmProgramToNbsInstrument(program) {
-        // 与后端 GM_PROGRAM_TABLE 保持一致，仅列出常见映射
-        var map = {
-            0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0,
-            8:7, 9:7, 10:7, 11:10, 12:10, 13:9, 14:7, 15:5,
-            16:6, 17:10, 18:6, 19:6, 20:6, 21:6, 22:6, 23:6,
-            24:5, 25:5, 26:0, 27:5, 28:1, 29:5, 30:5, 31:5,
-            32:1, 33:1, 34:1, 35:1, 36:1, 37:1, 38:1, 39:1,
-            40:6, 41:6, 42:6, 43:6, 44:1, 45:6, 46:6, 47:6,
-            48:6, 49:6, 50:6, 51:6, 52:6, 53:6, 54:6, 55:6,
-            56:6, 57:6, 58:12, 59:12, 60:12, 61:12, 62:6, 63:6,
-            64:6, 65:6, 66:6, 67:6, 68:6, 69:6, 70:6, 71:6,
-            72:6, 73:6, 74:6, 75:6, 76:6, 77:6, 78:6, 79:6,
-            80:13, 81:13, 82:13, 83:13, 84:5, 85:15, 86:5, 87:5,
-            88:8, 89:6, 90:8, 91:6, 92:8, 93:6, 94:6, 95:8,
-            96:8, 97:6, 98:8, 99:6, 100:15, 101:6, 102:6, 103:5,
-            104:14, 105:14, 106:14, 107:5, 108:10, 109:6, 110:6, 111:6,
-            112:8, 113:11, 114:10, 115:9, 116:2, 117:3, 118:3, 119:8,
-            120:5, 121:6, 122:8, 123:6, 124:7, 125:7, 126:7, 127:3
-        };
-        return map[program] !== undefined ? map[program] : 0;
-    }
+    // ========== 通道试听 (播放通道真实音符) ==========
+    // 点击行内试听按钮 → 解析 MIDI 文件, 过滤该通道的事件并按真实时间播放:
+    //   midi 模式: Web MIDI / TinySynth 原音 (含 programChange)
+    //   nbs  模式: 走 playNoteAsNbs 完整拟合转换链 (音色与实际导入一致)
+    // 再次点击同一按钮停止; 播放前自动跳过通道开头的空白。
+    var _channelPreview = { playing: false, channel: -1, mode: null, btn: null };
 
-    function playMidiPreviewWithWebMidi(notes, channel, program, onUnavailable) {
-        if (!navigator.requestMIDIAccess) {
-            if (onUnavailable) onUnavailable();
-            return false;
-        }
-        try {
-            navigator.requestMIDIAccess().then(function(access) {
-                var outputs = access.outputs;
-                if (!outputs || outputs.size === 0) {
-                    if (onUnavailable) onUnavailable();
-                    return;
-                }
-                var output = outputs.values().next().value;
-                var ch = (channel || 0) & 0x0F;
-                // 先发送 bank select (GM bank 0) + program change，再延迟发音，
-                // 确保合成器在收到 note-on 前已完成音色切换（避免听到上一个音色）
-                if (ch !== 9) {
-                    try { output.send([0xB0 | ch, 0, 0]); } catch(e) {}
-                    try { output.send([0xB0 | ch, 32, 0]); } catch(e) {}
-                }
-                try {
-                    output.send([0xC0 | ch, program & 0x7F]);
-                } catch(e) {}
-                notes.forEach(function(note, index) {
-                    var t = 80 + index * 200;
-                    var timeoutOn = setTimeout(function() {
-                        try {
-                            output.send([0x90 | ch, note & 0x7F, 100]);
-                        } catch(e) {}
-                    }, t);
-                    var timeoutOff = setTimeout(function() {
-                        try {
-                            output.send([0x80 | ch, note & 0x7F, 0]);
-                        } catch(e) {}
-                    }, t + 180);
-                    _midiPreviewNotes.push({ timeout: timeoutOn });
-                    _midiPreviewNotes.push({ timeout: timeoutOff });
-                });
-                var stopT = setTimeout(stopMidiPreview, 80 + notes.length * 200 + 300);
-                _midiPreviewTimeout = stopT;
-            }).catch(function(err) {
-                console.warn('Web MIDI API 失败:', err);
-                if (onUnavailable) onUnavailable();
-            });
-            return true;
-        } catch(e) {
-            if (onUnavailable) onUnavailable();
-            return false;
+    function setChannelPreviewBtn(btn, playing) {
+        if (!btn) return;
+        var icon = btn.querySelector('i');
+        if (playing) {
+            btn.classList.add('playing');
+            if (icon) icon.className = 'fa-solid fa-stop';
+        } else {
+            btn.classList.remove('playing');
+            var isMidi = btn.classList.contains('midi-preview-midi');
+            if (icon) icon.className = isMidi ? 'fa-solid fa-music' : 'fa-solid fa-layer-group';
         }
     }
 
-    // Web MIDI 不可用时，使用 TinySynth 软合成器回退，严格遵循原 MIDI 乐器/音符
-    function playMidiPreviewFallback(notes, channel, program) {
+    function stopChannelPreview() {
+        // 清除调度 (与 stopMidiPreview 共用 _midiPreviewNotes, 由其统一清 timeout)
+        for (var ch16 = 0; ch16 < 16; ch16++) {
+            if (_midiTrackPlayback.output) {
+                try { _midiTrackPlayback.output.send([0xB0 | ch16, 0x7B, 0]); } catch (e) {}
+            }
+        }
+        if (_channelPreview.playing) setChannelPreviewBtn(_channelPreview.btn, false);
+        _channelPreview.playing = false;
+        _channelPreview.channel = -1;
+        _channelPreview.mode = null;
+        _channelPreview.btn = null;
+    }
+
+    // 通道试听主入口: mode = 'midi' | 'nbs'
+    function previewChannel(channel, mode, btn) {
+        // 再点同一按钮 → 停止
+        if (_channelPreview.playing && _channelPreview.channel === channel && _channelPreview.mode === mode) {
+            stopMidiPreview();
+            return;
+        }
+        stopMidiPreview();
+        if (!state._midiFile || !state._midiInfo) return;
+        _channelPreview.playing = true;
+        _channelPreview.channel = channel;
+        _channelPreview.mode = mode;
+        _channelPreview.btn = btn || null;
+        setChannelPreviewBtn(btn, true);
+
         // 真正需要播放 MIDI 音符时: 按设置触发音色库下载/询问
         ensureSoundfontOnDemand();
-        var synth = getTinySynth();
-        if (!synth) {
-            showMidiNotice('浏览器不支持 Web MIDI，且 TinySynth 未加载，无法试听原音色。', 'error');
-            return;
-        }
-        var ch = prepareTinySynthProgram(synth, channel, program);
-        notes.forEach(function(note, index) {
-            var tOn = setTimeout(function() {
-                try { synth.noteOn(ch, note & 0x7F, 100); } catch(e) {}
-            }, index * 200);
-            var tOff = setTimeout(function() {
-                try { synth.noteOff(ch, note & 0x7F); } catch(e) {}
-            }, index * 200 + 180);
-            _midiPreviewNotes.push({ timeout: tOn });
-            _midiPreviewNotes.push({ timeout: tOff });
-        });
-        var stopT = setTimeout(stopMidiPreview, notes.length * 200 + 300);
-        _midiPreviewTimeout = stopT;
-    }
 
-    function previewMidiChannel(channel) {
-        stopMidiPreview();
-        var info = state._midiInfo;
-        if (!info) return;
-        var chInfo = null;
-        var channels = info.channels || [];
-        for (var i = 0; i < channels.length; i++) {
-            if (channels[i].channel === channel) {
-                chInfo = channels[i];
-                break;
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            // 用户已切换/停止 → 丢弃结果
+            if (!_channelPreview.playing || _channelPreview.channel !== channel || _channelPreview.mode !== mode) return;
+            var allEvents = parseMidiFileForPlayback(e.target.result, state._midiInfo);
+            var channelEvents = [];
+            for (var i = 0; i < allEvents.length; i++) {
+                if (parseInt(allEvents[i].channel) === parseInt(channel)) channelEvents.push(allEvents[i]);
             }
-        }
-        if (!chInfo) return;
-        var notes = getChannelPreviewNotes(chInfo);
-        var program = chInfo.program || 0;
-
-        var started = playMidiPreviewWithWebMidi(notes, channel, program, function() {
-            // Web MIDI 不可用或失败时静默回退到 TinySynth
-            playMidiPreviewFallback(notes, channel, program);
-        });
-        if (!started) {
-            playMidiPreviewFallback(notes, channel, program);
-        }
-    }
-
-    function previewNbsChannel(channel) {
-        stopMidiPreview();
-        if (!window.AudioEngine || !AudioEngine.playNote) {
-            showAppAlert('无法试听：NBS 音频引擎未就绪。', {title: '试听失败', icon: 'fa-solid fa-volume-xmark'});
-            return;
-        }
-        var settings = getChannelSettings(channel);
-        var slots = getFittingSlotsForChannel(channel);
-        var info = state._midiInfo;
-        var chInfo = null;
-        if (info && info.channels) {
-            for (var i = 0; i < info.channels.length; i++) {
-                if (info.channels[i].channel === channel) {
-                    chInfo = info.channels[i];
-                    break;
-                }
-            }
-        }
-        var notes = chInfo ? getChannelPreviewNotes(chInfo) : [60, 62, 64, 65];
-
-        // 过滤出有效的 slot
-        var instruments = [];
-        if (slots) {
-            for (var s = 0; s < slots.length; s++) {
-                if (slots[s] >= 0) instruments.push(slots[s]);
-            }
-        }
-        if (instruments.length === 0) {
-            // 没有拟合设置时使用 GM 默认映射
-            instruments = [gmProgramToNbsInstrument(chInfo ? chInfo.program : 0)];
-        }
-
-        notes.forEach(function(midiNote, index) {
-            var nbsKey = midiNote - 21 + 12 * settings.octave + settings.keyShift;
-            if (nbsKey < 0 || nbsKey > 87) {
-                // 单个音符越界跳过，不影响其他音符
+            if (channelEvents.length === 0) {
+                stopMidiPreview();
+                showMidiNotice('该通道没有音符事件', 'error');
                 return;
             }
-            var t = setTimeout(function() {
-                for (var j = 0; j < instruments.length; j++) {
-                    AudioEngine.playNote(instruments[j], nbsKey, 85);
+            // 跳过开头空白: 第一个 noteOn 的时间
+            var skipTime = 0;
+            for (var k = 0; k < channelEvents.length; k++) {
+                if (channelEvents[k].type === 'noteOn') { skipTime = channelEvents[k].time; break; }
+            }
+            var endTime = 0;
+            for (var j = 0; j < channelEvents.length; j++) {
+                if (channelEvents[j].time > endTime) endTime = channelEvents[j].time;
+            }
+
+            if (mode === 'nbs') {
+                var nbsSettings = collectNbsPreviewSettings();
+                for (var a = 0; a < channelEvents.length; a++) {
+                    var evN = channelEvents[a];
+                    if (evN.type !== 'noteOn' || evN.time < skipTime) continue;
+                    var tN = setTimeout((function(evt) {
+                        return function() {
+                            if (!_channelPreview.playing) return;
+                            playNoteAsNbs(evt, nbsSettings);
+                        };
+                    })(evN), Math.max(0, (evN.time - skipTime) * 1000));
+                    _midiPreviewNotes.push({ timeout: tN });
                 }
-            }, index * 200);
-            _midiPreviewNotes.push({ timeout: t });
-        });
-        var stopT = setTimeout(stopMidiPreview, notes.length * 200 + 300);
-        _midiPreviewTimeout = stopT;
+            } else {
+                // GM 原音路径: Web MIDI 优先, 失败/不可用回退 TinySynth
+                var synth = getTinySynth();
+                var useWebMidi = false;
+                var output = null;
+                if (navigator.requestMIDIAccess) {
+                    navigator.requestMIDIAccess().then(function(access) {
+                        if (!_channelPreview.playing) return;
+                        var outputs = access.outputs;
+                        if (outputs && outputs.size > 0) {
+                            output = outputs.values().next().value;
+                            useWebMidi = true;
+                        }
+                        scheduleChannelGmEvents(channelEvents, synth, useWebMidi, output, skipTime, endTime);
+                    }).catch(function() {
+                        if (_channelPreview.playing) scheduleChannelGmEvents(channelEvents, synth, false, null, skipTime, endTime);
+                    });
+                } else {
+                    scheduleChannelGmEvents(channelEvents, synth, false, null, skipTime, endTime);
+                }
+            }
+
+            // 自动停止
+            var stopT = setTimeout(function() {
+                if (_channelPreview.playing) stopMidiPreview();
+            }, (endTime - skipTime + 1) * 1000);
+            _midiPreviewNotes.push({ timeout: stopT });
+        };
+        reader.onerror = function() {
+            stopMidiPreview();
+            showMidiNotice('读取 MIDI 文件失败，无法试听', 'error');
+        };
+        reader.readAsArrayBuffer(state._midiFile);
+    }
+
+    // 按真实时间调度 GM 原音事件 (含 programChange, 与延音轨道试听一致)
+    function scheduleChannelGmEvents(channelEvents, synth, useWebMidi, output, skipTime, endTime) {
+        var programsSent = {};
+        // 先发送 skipTime 之前的 programChange, 确保音色已切换
+        for (var pi = 0; pi < channelEvents.length; pi++) {
+            var pev = channelEvents[pi];
+            if (pev.time > skipTime) break;
+            if (pev.type === 'programChange' && !programsSent[pev.track + '-' + pev.channel]) {
+                sendGmProgramEvent(pev, useWebMidi, output, synth);
+                programsSent[pev.track + '-' + pev.channel] = true;
+            }
+        }
+        for (var i = 0; i < channelEvents.length; i++) {
+            var ev = channelEvents[i];
+            if (ev.time > endTime) break;
+            if (ev.time < skipTime) continue;
+            if (ev.type === 'programChange') {
+                var pKey = ev.track + '-' + ev.channel;
+                if (!programsSent[pKey]) {
+                    var tP = setTimeout((function(evt) {
+                        return function() {
+                            if (!_channelPreview.playing) return;
+                            sendGmProgramEvent(evt, useWebMidi, output, synth);
+                        };
+                    })(ev), Math.max(0, (ev.time - skipTime) * 1000));
+                    _midiPreviewNotes.push({ timeout: tP });
+                    programsSent[pKey] = true;
+                }
+                continue;
+            }
+            if (ev.type === 'noteOn' || ev.type === 'noteOff') {
+                var status = ev.type === 'noteOn' ? 0x90 : 0x80;
+                var velocity = ev.type === 'noteOn' ? (ev.velocity || 100) : 0;
+                var t = setTimeout((function(evt, st, vel) {
+                    return function() {
+                        if (!_channelPreview.playing) return;
+                        if (useWebMidi && output) {
+                            try { output.send([st | (evt.channel & 0x0F), evt.note & 0x7F, vel & 0x7F]); } catch (e) {}
+                        } else if (synth) {
+                            try { synth.send([st | (evt.channel & 0x0F), evt.note & 0x7F, vel & 0x7F]); } catch (e) {}
+                        }
+                    };
+                })(ev, status, velocity), Math.max(0, (ev.time - skipTime) * 1000));
+                _midiPreviewNotes.push({ timeout: t });
+            }
+        }
+    }
+
+    function sendGmProgramEvent(ev, useWebMidi, output, synth) {
+        if (useWebMidi && output) {
+            try { output.send([0xC0 | (ev.channel & 0x0F), ev.program & 0x7F]); } catch (e) {}
+        } else if (synth) {
+            try { synth.send([0xC0 | (ev.channel & 0x0F), ev.program & 0x7F]); } catch (e) {}
+        }
+    }
+
+    function previewMidiChannel(channel, btn) {
+        previewChannel(channel, 'midi', btn);
+    }
+
+    function previewNbsChannel(channel, btn) {
+        previewChannel(channel, 'nbs', btn);
     }
 
     function bindMidiPreviewButtons() {
@@ -1558,7 +1548,7 @@
                 btn.addEventListener('click', function(e) {
                     e.stopPropagation();
                     var ch = parseInt(btn.getAttribute('data-channel'));
-                    previewMidiChannel(ch);
+                    previewMidiChannel(ch, btn);
                 });
             })(midiBtns[i]);
         }
@@ -1568,7 +1558,7 @@
                 btn.addEventListener('click', function(e) {
                     e.stopPropagation();
                     var ch = parseInt(btn.getAttribute('data-channel'));
-                    previewNbsChannel(ch);
+                    previewNbsChannel(ch, btn);
                 });
             })(nbsBtns[j]);
         }
@@ -2916,7 +2906,6 @@
     N.getChannelRangeShort = getChannelRangeShort;
     N.getChannelRangeAfterText = getChannelRangeAfterText;
     N.fillChannelInstrumentNames = fillChannelInstrumentNames;
-    N.getChannelPreviewNotes = getChannelPreviewNotes;
     N.buildPitchSelect = buildPitchSelect;
     N.handleMidiOpen = handleMidiOpen;
     N.populateMidiDialog = populateMidiDialog;
@@ -2926,11 +2915,7 @@
     N.getEffectiveMidiSource = getEffectiveMidiSource;
     N.stopMidiPreview = stopMidiPreview;
     N.getChannelSettings = getChannelSettings;
-    N.getFittingSlotsForChannel = getFittingSlotsForChannel;
     N.midiNoteToFreq = midiNoteToFreq;
-    N.gmProgramToNbsInstrument = gmProgramToNbsInstrument;
-    N.playMidiPreviewWithWebMidi = playMidiPreviewWithWebMidi;
-    N.playMidiPreviewFallback = playMidiPreviewFallback;
     N.previewMidiChannel = previewMidiChannel;
     N.previewNbsChannel = previewNbsChannel;
     N.bindMidiPreviewButtons = bindMidiPreviewButtons;

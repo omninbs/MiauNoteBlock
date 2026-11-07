@@ -400,6 +400,25 @@
 .wn-cp-wheel * {
     touch-action: none;
 }
+/* 预设色板 (如片段轨道原始配色) */
+.wn-cp-swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 2px 0;
+}
+.wn-cp-swatch {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border-radius: 6px;
+    border: 1px solid var(--ctrl-stroke-default);
+    cursor: pointer;
+}
+.wn-cp-swatch:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+}
 /* 控件层禁止长按选中 / 系统菜单; 输入框保持可选可编辑 */
 .wn-cp-head,
 .wn-cp-actions,
@@ -1419,6 +1438,20 @@ body.segment-edit-mode .tool-bar {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+/* 轨道行内重命名输入框 (双击轨道名进入) */
+.seg-lane-name-input {
+    width: 100%;
+    max-width: 72px;
+    height: 18px;
+    padding: 0 4px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #e4e8ec;
+    background: var(--ctrl-fill-default, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--accent, #4cc2ff);
+    border-radius: 3px;
+    outline: none;
 }
 .seg-lane-btn {
     width: 18px;
@@ -3534,6 +3567,11 @@ body.segment-edit-mode .tool-bar {
 }
 .midi-preview-btn:active {
     transform: scale(0.95);
+}
+.midi-preview-btn.playing {
+    background: rgba(0, 255, 204, 0.18);
+    color: var(--accent-teal);
+    border-color: rgba(0, 255, 204, 0.5);
 }
 .midi-notice {
     position: absolute;
@@ -8330,7 +8368,8 @@ textarea:disabled {
 .welcome-link {
     margin-top: 6px;
     font-size: 12px;
-    color: var(--accent, #4cc2ff);
+    /* 欢迎界面链接不跟随个性化预设/主题色 (固定品牌色) */
+    color: #4cc2ff;
     text-decoration: none;
     word-break: break-all;
 }
@@ -8352,7 +8391,8 @@ textarea:disabled {
     margin: 0;
 }
 .welcome-social-row a {
-    color: var(--accent, #4cc2ff);
+    /* 欢迎界面链接不跟随个性化预设/主题色 (固定品牌色) */
+    color: #4cc2ff;
     text-decoration: none;
 }
 .welcome-social-row a:hover {
@@ -9220,11 +9260,14 @@ textarea:disabled {
 /* ==========================================================================
    MIDI 导入弹窗 · 紧凑单列布局
    层级: 弹窗标题 > 标签页 > 分组标题 > 选项行 > 行内控件
-   目标: 桌面端默认窗口一屏显示完整「基本设置」, 手机端允许滚动
+   桌面端固定标准尺寸 (宽高比 ≈ 黄金比例 1.618), 不随标签页/内容变化;
+   手机端转为整页显示 (与片段钢琴卷帘窗口一致)。
    ========================================================================== */
 #midi-popup .midi-import-dialog {
     width: min(780px, calc(100vw - 24px));
     max-width: min(780px, calc(100vw - 24px));
+    /* 黄金比例: 780 / 1.618 ≈ 482 */
+    height: min(482px, calc(100svh - 28px));
     max-height: calc(100svh - 28px);
     /* 只让内容区滚动, 标题/标签/底部按钮固定 */
     overflow: hidden;
@@ -9334,11 +9377,15 @@ textarea:disabled {
     border-color: var(--accent, #4a90d9);
 }
 
-/* 手机端: 允许滚动, 行高改为触控友好 */
+/* 手机端: 弹窗转为整页显示 (与片段钢琴卷帘窗口一致), 行高触控友好 */
 @media (max-width: 768px) {
     #midi-popup .midi-import-dialog {
-        width: calc(100vw - 16px);
-        max-height: calc(100svh - 16px);
+        width: 100vw;
+        max-width: 100vw;
+        height: 100svh;
+        max-height: 100svh;
+        border-radius: 0;
+        border: none;
     }
     .midi-settings { padding: 6px 10px 8px; gap: 8px; }
     .midi-row { min-height: 30px; gap: 6px 10px; font-size: 12px; }
@@ -9360,6 +9407,37 @@ textarea:disabled {
     #sustain-tracks-popup .cdd-trigger,
     #sustain-tracks-popup .settings-header select {
         touch-action: manipulation;
+    }
+}
+
+/* ==================================================================
+   设置弹窗 · 固定标准尺寸 + 移动端整页
+   桌面端: 总高固定 (标题/标签页/内容区/底部按钮四段), 切换标签页不改变窗口大小;
+   移动端 (≤768px): 转为整页显示, 与 MIDI 导入弹窗 / 片段钢琴卷帘窗口一致。
+   ================================================================== */
+#settings-popup .settings-dialog {
+    width: min(540px, calc(100vw - 32px));
+    height: min(566px, calc(100svh - 28px));
+    max-height: calc(100svh - 28px);
+}
+#settings-popup .settings-body {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+}
+@media (max-width: 768px) {
+    #settings-popup { --dialog-body-h: auto; }
+    #settings-popup .settings-dialog {
+        width: 100vw;
+        max-width: 100vw;
+        height: 100svh;
+        max-height: 100svh;
+        border-radius: 0;
+        border: none;
+    }
+    #settings-popup .settings-body {
+        flex: 1 1 auto;
+        height: auto;
     }
 }
 

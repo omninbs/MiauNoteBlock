@@ -94,7 +94,7 @@
       "name": "Honky Tonk"
     },
     "4": {
-      "decay_ms": 1454,
+      "decay_ms": 1434,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -182,7 +182,7 @@
       "name": "Clavinet"
     },
     "8": {
-      "decay_ms": 443,
+      "decay_ms": 403,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -226,7 +226,7 @@
       "name": "Glockenspiel"
     },
     "10": {
-      "decay_ms": 568,
+      "decay_ms": 508,
       "curve": "exponential",
       "is_sustained": false,
       "env": [
@@ -248,7 +248,7 @@
       "name": "Music Box"
     },
     "11": {
-      "decay_ms": 213,
+      "decay_ms": 153,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -358,7 +358,7 @@
       "name": "Dulcimer"
     },
     "16": {
-      "decay_ms": 1538,
+      "decay_ms": 1518,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -380,7 +380,7 @@
       "name": "DrawbarOrgan"
     },
     "17": {
-      "decay_ms": 2239,
+      "decay_ms": 2139,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -402,7 +402,7 @@
       "name": "Percussive Organ"
     },
     "18": {
-      "decay_ms": 3736,
+      "decay_ms": 2036,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -424,7 +424,7 @@
       "name": "Rock Organ"
     },
     "19": {
-      "decay_ms": 4099,
+      "decay_ms": 1859,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -446,7 +446,7 @@
       "name": "Church Organ"
     },
     "20": {
-      "decay_ms": 88,
+      "decay_ms": 28,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -490,7 +490,7 @@
       "name": "Accordian"
     },
     "22": {
-      "decay_ms": 383,
+      "decay_ms": 223,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -644,7 +644,7 @@
       "name": "Palm Muted Guitar"
     },
     "29": {
-      "decay_ms": 6674,
+      "decay_ms": 6254,
       "curve": "exponential",
       "is_sustained": false,
       "env": [
@@ -666,7 +666,7 @@
       "name": "Overdrive Guitar"
     },
     "30": {
-      "decay_ms": 2788,
+      "decay_ms": 2508,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -688,7 +688,7 @@
       "name": "Distortion Guitar"
     },
     "31": {
-      "decay_ms": 232,
+      "decay_ms": 92,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -732,7 +732,7 @@
       "name": "Acoustic Bass"
     },
     "33": {
-      "decay_ms": 2924,
+      "decay_ms": 2844,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -754,7 +754,7 @@
       "name": "Fingered Bass"
     },
     "34": {
-      "decay_ms": 3383,
+      "decay_ms": 3343,
       "curve": "exponential",
       "is_sustained": false,
       "env": [
@@ -776,7 +776,7 @@
       "name": "Picked Bass"
     },
     "35": {
-      "decay_ms": 1428,
+      "decay_ms": 1328,
       "curve": "exponential",
       "is_sustained": false,
       "env": [
@@ -864,7 +864,7 @@
       "name": "Synth Bass 1"
     },
     "39": {
-      "decay_ms": 133,
+      "decay_ms": 113,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -886,7 +886,7 @@
       "name": "Synth Bass 2"
     },
     "40": {
-      "decay_ms": 982,
+      "decay_ms": 302,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -908,7 +908,7 @@
       "name": "Violin"
     },
     "41": {
-      "decay_ms": 1329,
+      "decay_ms": 529,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -930,7 +930,7 @@
       "name": "Viola"
     },
     "42": {
-      "decay_ms": 1416,
+      "decay_ms": 196,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -952,7 +952,7 @@
       "name": "Cello"
     },
     "43": {
-      "decay_ms": 1213,
+      "decay_ms": 333,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -974,7 +974,7 @@
       "name": "Contrabass"
     },
     "44": {
-      "decay_ms": 2610,
+      "decay_ms": 2310,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1018,7 +1018,7 @@
       "name": "Pizzicato Section"
     },
     "46": {
-      "decay_ms": 703,
+      "decay_ms": 683,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1062,7 +1062,7 @@
       "name": "Timpani"
     },
     "48": {
-      "decay_ms": 2610,
+      "decay_ms": 2310,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1084,7 +1084,7 @@
       "name": "Strings"
     },
     "49": {
-      "decay_ms": 2610,
+      "decay_ms": 2310,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1106,7 +1106,7 @@
       "name": "Slow Strings"
     },
     "50": {
-      "decay_ms": 1040,
+      "decay_ms": 980,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1150,7 +1150,7 @@
       "name": "Synth Strings 2"
     },
     "52": {
-      "decay_ms": 2558,
+      "decay_ms": 1318,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1172,7 +1172,7 @@
       "name": "Ahh Choir"
     },
     "53": {
-      "decay_ms": 2174,
+      "decay_ms": 2074,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1194,7 +1194,7 @@
       "name": "Ohh Voices"
     },
     "54": {
-      "decay_ms": 1354,
+      "decay_ms": 1054,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1238,7 +1238,7 @@
       "name": "Orchestra Hit"
     },
     "56": {
-      "decay_ms": 416,
+      "decay_ms": 396,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1260,7 +1260,7 @@
       "name": "Trumpet"
     },
     "57": {
-      "decay_ms": 372,
+      "decay_ms": 192,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1282,7 +1282,7 @@
       "name": "Trombone"
     },
     "58": {
-      "decay_ms": 158,
+      "decay_ms": 78,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1304,7 +1304,7 @@
       "name": "Tuba"
     },
     "59": {
-      "decay_ms": 389,
+      "decay_ms": 349,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1326,7 +1326,7 @@
       "name": "Muted Trumpet"
     },
     "60": {
-      "decay_ms": 5027,
+      "decay_ms": 4767,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1348,7 +1348,7 @@
       "name": "French Horns"
     },
     "61": {
-      "decay_ms": 3704,
+      "decay_ms": 1044,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1414,7 +1414,7 @@
       "name": "Synth Brass 2"
     },
     "64": {
-      "decay_ms": 1199,
+      "decay_ms": 1179,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1436,7 +1436,7 @@
       "name": "Soprano Sax"
     },
     "65": {
-      "decay_ms": 1138,
+      "decay_ms": 578,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1458,7 +1458,7 @@
       "name": "Alto Sax"
     },
     "66": {
-      "decay_ms": 1817,
+      "decay_ms": 677,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1480,7 +1480,7 @@
       "name": "Tenor Sax"
     },
     "67": {
-      "decay_ms": 2701,
+      "decay_ms": 2601,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1502,7 +1502,7 @@
       "name": "Baritone Sax"
     },
     "68": {
-      "decay_ms": 871,
+      "decay_ms": 331,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1524,7 +1524,7 @@
       "name": "Oboe"
     },
     "69": {
-      "decay_ms": 1942,
+      "decay_ms": 1122,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1546,7 +1546,7 @@
       "name": "English Horn"
     },
     "70": {
-      "decay_ms": 723,
+      "decay_ms": 183,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1568,7 +1568,7 @@
       "name": "Bassoon"
     },
     "71": {
-      "decay_ms": 327,
+      "decay_ms": 87,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1590,7 +1590,7 @@
       "name": "Clarinet"
     },
     "72": {
-      "decay_ms": 755,
+      "decay_ms": 135,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1612,7 +1612,7 @@
       "name": "Piccolo"
     },
     "73": {
-      "decay_ms": 912,
+      "decay_ms": 132,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1634,7 +1634,7 @@
       "name": "Flute"
     },
     "74": {
-      "decay_ms": 565,
+      "decay_ms": 485,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1656,7 +1656,7 @@
       "name": "Recorder"
     },
     "75": {
-      "decay_ms": 898,
+      "decay_ms": 518,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1678,7 +1678,7 @@
       "name": "Pan Flute"
     },
     "76": {
-      "decay_ms": 595,
+      "decay_ms": 475,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1700,7 +1700,7 @@
       "name": "Bottle Chiff"
     },
     "77": {
-      "decay_ms": 1578,
+      "decay_ms": 1478,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1722,7 +1722,7 @@
       "name": "Shakuhachi"
     },
     "78": {
-      "decay_ms": 372,
+      "decay_ms": 332,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1744,7 +1744,7 @@
       "name": "Whistle"
     },
     "79": {
-      "decay_ms": 1369,
+      "decay_ms": 429,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1832,7 +1832,7 @@
       "name": "Calliope Lead"
     },
     "83": {
-      "decay_ms": 2932,
+      "decay_ms": 1052,
       "curve": "exponential",
       "is_sustained": false,
       "env": [
@@ -1876,7 +1876,7 @@
       "name": "Charang"
     },
     "85": {
-      "decay_ms": 1971,
+      "decay_ms": 671,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1942,7 +1942,7 @@
       "name": "Bass & Lead"
     },
     "88": {
-      "decay_ms": 3526,
+      "decay_ms": 2546,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1964,7 +1964,7 @@
       "name": "Fantasia"
     },
     "89": {
-      "decay_ms": 2152,
+      "decay_ms": 2032,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -1986,7 +1986,7 @@
       "name": "Warm Pad"
     },
     "90": {
-      "decay_ms": 1040,
+      "decay_ms": 740,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -2008,7 +2008,7 @@
       "name": "Polysynth"
     },
     "91": {
-      "decay_ms": 3526,
+      "decay_ms": 2546,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -2030,7 +2030,7 @@
       "name": "Space Voice"
     },
     "92": {
-      "decay_ms": 3526,
+      "decay_ms": 2546,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -2052,7 +2052,7 @@
       "name": "Bowed Glass"
     },
     "93": {
-      "decay_ms": 2152,
+      "decay_ms": 2032,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -2074,7 +2074,7 @@
       "name": "Metal Pad"
     },
     "94": {
-      "decay_ms": 1040,
+      "decay_ms": 740,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -2096,7 +2096,7 @@
       "name": "Halo Pad"
     },
     "95": {
-      "decay_ms": 1161,
+      "decay_ms": 501,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -2118,7 +2118,7 @@
       "name": "Sweep Pad"
     },
     "96": {
-      "decay_ms": 1040,
+      "decay_ms": 740,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -2140,7 +2140,7 @@
       "name": "Ice Rain"
     },
     "97": {
-      "decay_ms": 1161,
+      "decay_ms": 501,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -2162,7 +2162,7 @@
       "name": "Soundtrack"
     },
     "98": {
-      "decay_ms": 443,
+      "decay_ms": 403,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -2206,7 +2206,7 @@
       "name": "Atmosphere"
     },
     "100": {
-      "decay_ms": 2152,
+      "decay_ms": 2032,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -2228,7 +2228,7 @@
       "name": "Brightness"
     },
     "101": {
-      "decay_ms": 1532,
+      "decay_ms": 1192,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -2250,7 +2250,7 @@
       "name": "Goblin"
     },
     "102": {
-      "decay_ms": 2558,
+      "decay_ms": 1318,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -2294,7 +2294,7 @@
       "name": "Star Theme"
     },
     "104": {
-      "decay_ms": 671,
+      "decay_ms": 651,
       "curve": "exponential",
       "is_sustained": false,
       "env": [
@@ -2338,7 +2338,7 @@
       "name": "Banjo"
     },
     "106": {
-      "decay_ms": 179,
+      "decay_ms": 159,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -2404,7 +2404,7 @@
       "name": "Kalimba"
     },
     "109": {
-      "decay_ms": 3845,
+      "decay_ms": 1265,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -2426,7 +2426,7 @@
       "name": "BagPipe"
     },
     "110": {
-      "decay_ms": 982,
+      "decay_ms": 302,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -2448,7 +2448,7 @@
       "name": "Fiddle"
     },
     "111": {
-      "decay_ms": 89,
+      "decay_ms": 29,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -2668,7 +2668,7 @@
       "name": "Fret Noise"
     },
     "121": {
-      "decay_ms": 191,
+      "decay_ms": 151,
       "curve": "linear",
       "is_sustained": false,
       "env": [
@@ -2690,7 +2690,7 @@
       "name": "Breath Noise"
     },
     "122": {
-      "decay_ms": 1616,
+      "decay_ms": 1336,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -2756,7 +2756,7 @@
       "name": "Telephone"
     },
     "125": {
-      "decay_ms": 664,
+      "decay_ms": 464,
       "curve": "sustained",
       "is_sustained": true,
       "env": [
@@ -2778,7 +2778,7 @@
       "name": "Helicopter"
     },
     "126": {
-      "decay_ms": 2914,
+      "decay_ms": 1594,
       "curve": "sustained",
       "is_sustained": true,
       "env": [

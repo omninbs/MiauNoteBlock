@@ -17,4 +17,6 @@ packaging/*.log
 .trae/
 tools/
 test/
-__pycache__/
+# 大体积音色库 (SoundFont) 不入库, 避免仓库膨胀导致无法推送
+*.sf2
+*.sf3

@@ -1,8 +1,0 @@
-﻿python : en keys: 482
-At line:15 char:1955
-+ ... pgrep\bin'; python "d:\软件开发项目\NoteBlockWeb\_scan_i18n_tmp.py" 1> "d:\ ...
-+                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (en keys: 482:String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
- 
-en patterns: 46

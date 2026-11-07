@@ -117,19 +117,24 @@
         return 'rgb(' + r + ',' + g + ',' + b + ')';
     }
 
-    // 统一文档级拖动监听: 支持 Pointer Events, 不支持时回退鼠标
+    // 统一文档级拖动监听: 支持 Pointer Events, 不支持时回退鼠标。
+    // 必须同时监听 pointercancel: 长按/系统手势 (如触屏长按、浏览器接管滚动)
+    // 会以 pointercancel 结束指针序列, 若不处理会导致按下状态永远卡住。
     function docDrag(moveFn, upFn) {
         var usePointer = !!window.PointerEvent;
         var mv = usePointer ? 'pointermove' : 'mousemove';
         var ue = usePointer ? 'pointerup' : 'mouseup';
+        var ce = usePointer ? 'pointercancel' : null;
         function onMove(e) { moveFn(e); }
         function onUp(e) {
             document.removeEventListener(mv, onMove);
             document.removeEventListener(ue, onUp);
+            if (ce) document.removeEventListener(ce, onUp);
             if (upFn) upFn(e);
         }
         document.addEventListener(mv, onMove);
         document.addEventListener(ue, onUp);
+        if (ce) document.addEventListener(ce, onUp);
     }
 
     function octaveLabelsEnabled() {
@@ -2046,8 +2051,7 @@
             self._sceneDirty = true;
         }
         function up() {
-            document.removeEventListener('mousemove', move);
-            document.removeEventListener('mouseup', up);
+            // 监听移除由 docDrag 统一处理 (pointer/pointerup 或 mouse/mouseup)
             if (self._pressKey >= 0) {
                 self._pressHold = false;
                 self._pressReleaseAt = performance.now();
@@ -2224,8 +2228,7 @@
         var self = this;
         function onMove(e) { moveFn(e); }
         function onUp(e) {
-            document.removeEventListener('mousemove', onMove);
-            document.removeEventListener('mouseup', onUp);
+            // 监听移除由 docDrag 统一处理
             self.dragging = null;
             if (upFn) upFn(e);
         }

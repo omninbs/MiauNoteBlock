@@ -72,10 +72,17 @@
                 layers = Object.keys(used).map(Number).sort(function(a, b) { return a - b; });
             }
             lanes.push({
+                name: (typeof ln.name === 'string' ? ln.name : undefined),
                 muted: !!ln.muted, solo: !!ln.solo,
                 volume: isFinite(ln.volume) ? ln.volume : 100,
                 height: isFinite(ln.height) ? ln.height : SEG_DEFAULT_LANE_H,
                 color: (typeof ln.color === 'string' ? ln.color : undefined),
+                // 片段轨道归属信息: 再次导入时按通道 / 单层 / 多层精确还原
+                channel: (isFinite(ln.channel) ? ln.channel : undefined),
+                voice: (ln.voice === undefined ? undefined : ln.voice),
+                isDrum: (ln.isDrum === undefined ? undefined : !!ln.isDrum),
+                layerKey: (isFinite(ln.layerKey) ? ln.layerKey : undefined),
+                layerKeys: (Array.isArray(ln.layerKeys) && ln.layerKeys.length ? ln.layerKeys.slice() : undefined),
                 layers: layers
             });
         }
@@ -114,14 +121,21 @@
             if (data && Array.isArray(data.lanes)) {
                 for (var li = 0; li < data.lanes.length; li++) {
                     var ld = data.lanes[li] || {};
-                    var laneKeys = Array.isArray(ld.layers) ? ld.layers.filter(isFinite).map(Number) : [];
+                    var laneKeys = Array.isArray(ld.layerKeys) && ld.layerKeys.length
+                        ? ld.layerKeys.filter(isFinite).map(Number)
+                        : (Array.isArray(ld.layers) ? ld.layers.filter(isFinite).map(Number) : []);
                     state.segmentLanes.push({
                         id: li + 1,
+                        name: (typeof ld.name === 'string' ? ld.name : undefined),
                         muted: !!ld.muted, solo: !!ld.solo,
                         // 导出时音量已烘焙进音符, 导入后重置为 100 避免二次衰减
                         volume: 100,
                         height: isFinite(ld.height) ? ld.height : SEG_DEFAULT_LANE_H,
                         color: (typeof ld.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(ld.color)) ? ld.color : undefined,
+                        channel: (isFinite(ld.channel) ? ld.channel : undefined),
+                        voice: (ld.voice === undefined ? undefined : ld.voice),
+                        isDrum: (ld.isDrum === undefined ? undefined : !!ld.isDrum),
+                        layerKey: (isFinite(ld.layerKey) ? ld.layerKey : undefined),
                         layerKeys: laneKeys.length ? laneKeys : undefined
                     });
                     laneLayers.push(laneKeys);

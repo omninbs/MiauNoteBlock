@@ -273,7 +273,10 @@
         var anySolo = false;
         for (var a = 0; a < lanes.length; a++) if (lanes[a].solo) anySolo = true;
         var base = 0;
-        var out = [];
+        // 同 tick + 同最终 layer 的音符: 后写覆盖先写。
+        // 片段按 start 升序写入, 因此重叠区间由 start 更晚的片段盖住更早的片段。
+        var outMap = {};
+        var outOrder = [];
         var seq = 0;
         var layerChannelOut = null;   // 片段合成后的 layer -> MIDI 通道 (自动分轨工程用)
         var composeLayerMap = {};     // 原始 layer -> 合成后的 layer (声部映射同步用)
@@ -346,18 +349,22 @@
                     else vel = Math.max(0, Math.min(100, Math.round(vel * vol / 100)));
                     var lid = map[relLayer];
                     if (lid === undefined) lid = base;
-                    out.push({
+                    var ntick = Math.max(0, Math.floor(seg.start + (nn.rel || 0)));
+                    var noteKey = ntick + ':' + lid;
+                    if (outMap[noteKey] === undefined) outOrder.push(noteKey);
+                    outMap[noteKey] = {
                         id: 'sg' + seg.id + '_' + n2 + '_' + (seq++),
-                        tick: Math.max(0, Math.floor(seg.start + (nn.rel || 0))),
+                        tick: ntick,
                         layer: lid, instrument: nn.instrument, key: nn.key,
                         velocity: vel,
                         pan: isFinite(nn.pan) ? nn.pan : 100,
                         pitch: nn.pitch || 0
-                    });
+                    };
                 }
             }
             base += rels.length;
         }
+        var out = outOrder.map(function(k) { return outMap[k]; });
         state.notes = out;
         if (state.song) state.song.notes = out;
         if (layerChannelOut) state.layerChannelMap = layerChannelOut;
@@ -495,6 +502,7 @@
     }
 
     // 拖动片段提交: mode = 'body'(移动, 可换 lane) / 'left' / 'right'
+    // 允许同轨时间重叠 (后绘制的片段覆盖先绘制的): 这里只做 clamp, 不再因重叠回退/放弃
     function segmentCommitDrag(id, newStart, newEnd, newLane, mode) {
         var seg = segmentById(id);
         if (!seg) return;
@@ -502,8 +510,6 @@
         newEnd = Math.max(newStart + 1, Math.floor(newEnd));
         if (typeof newLane !== 'number' || !isFinite(newLane)) newLane = seg.lane;
         newLane = Math.max(0, Math.min(segmentLaneCount() - 1, newLane));
-        // 同一 lane 内不允许时间重叠: 非法落点直接放弃
-        if (segmentLaneOverlaps(newLane, newStart, newEnd, seg.id)) return;
         if (newStart === seg.start && newEnd === seg.end && newLane === seg.lane) return;
         pushUndo();
         state._segmentsEdited = true;

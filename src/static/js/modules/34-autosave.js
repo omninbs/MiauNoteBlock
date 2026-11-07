@@ -218,12 +218,26 @@
             if (Array.isArray(data.segmentLanes)) {
                 for (var _sli = 0; _sli < data.segmentLanes.length; _sli++) {
                     var _sld = data.segmentLanes[_sli] || {};
-                    state.segmentLanes.push({
+                    var _sln = {
                         id: _sli + 1,
                         muted: !!_sld.muted, solo: !!_sld.solo,
                         volume: isFinite(_sld.volume) ? _sld.volume : 100,
                         height: isFinite(_sld.height) ? _sld.height : SEG_DEFAULT_LANE_H
-                    });
+                    };
+                    // 轨道归属信息完整恢复: 缺了这些字段再次进入片段模式会无法按通道/层/声部归位
+                    if (typeof _sld.name === 'string') _sln.name = _sld.name;
+                    if (typeof _sld.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(_sld.color)) _sln.color = _sld.color;
+                    if (isFinite(_sld.channel)) _sln.channel = _sld.channel;
+                    if (_sld.voice !== undefined) _sln.voice = _sld.voice;
+                    if (_sld.isDrum !== undefined) _sln.isDrum = !!_sld.isDrum;
+                    if (isFinite(_sld.layerKey)) _sln.layerKey = _sld.layerKey;
+                    if (Array.isArray(_sld.layerKeys)) {
+                        _sln.layerKeys = _sld.layerKeys.filter(isFinite).map(Number);
+                    }
+                    if (_sld.layerChannels && typeof _sld.layerChannels === 'object') {
+                        _sln.layerChannels = JSON.parse(JSON.stringify(_sld.layerChannels));
+                    }
+                    state.segmentLanes.push(_sln);
                 }
             }
             state.segments = [];

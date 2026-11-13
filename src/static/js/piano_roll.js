@@ -292,6 +292,12 @@
         this._segLongPressAt = 0;
         this._segLongPressX = 0;
         this._segLongPressY = 0;
+        // 触屏长按时间栏打开时间栏菜单
+        this._timelineLongPressTimer = null;
+        this._timelineLongPressX = 0;
+        this._timelineLongPressY = 0;
+        // 片段模式空白区滑动: null / 'scroll' (上下滚动视图) / 'seek' (拖动播放头)
+        this._segBlankAxis = null;
         this._longPressTimer = null;
         this._longPressFired = false;
         this._pendingContextMenu = false;
@@ -2006,6 +2012,33 @@
         if (this._segLongPressTimer) {
             clearTimeout(this._segLongPressTimer);
             this._segLongPressTimer = null;
+        }
+    };
+
+    // 触屏长按时间栏: 等价于桌面右键, 打开时间栏菜单
+    PianoRoll.prototype._startTimelineLongPress = function(x, y, clientX, clientY) {
+        this._cancelTimelineLongPress();
+        var self = this;
+        this._timelineLongPressX = x;
+        this._timelineLongPressY = y;
+        this._timelineLongPressTimer = setTimeout(function() {
+            self._timelineLongPressTimer = null;
+            self._timelineLongPressFired = true;
+            // 长按已弹菜单: 不再按拖动播放头处理, 抬手也不跳转
+            self._isTimelineDrag = false;
+            self._touchMoved = true;
+            self._touchMode = 'none';
+            var tick = Math.max(0, Math.round(self._screenToTickFloat(self._timelineLongPressX)));
+            if (typeof self.onTimelineContextMenu === 'function') {
+                self.onTimelineContextMenu(clientX, clientY, tick);
+            }
+        }, 500);
+    };
+
+    PianoRoll.prototype._cancelTimelineLongPress = function() {
+        if (this._timelineLongPressTimer) {
+            clearTimeout(this._timelineLongPressTimer);
+            this._timelineLongPressTimer = null;
         }
     };
 
@@ -4676,6 +4709,7 @@
         if (e.touches.length === 2) {
             this._cancelLongPress();
             this._cancelSegLongPress();
+            this._cancelTimelineLongPress();
             this._fadeOutAnimation();
             // 双指落下: 取消单指片段拖动/长按, 只做缩放, 避免误移动片段
             if (this._segPointerActive) {
@@ -4711,15 +4745,26 @@
             var y = touch.clientY - rect.top;
             // 片段编辑模式: 片段绘画区交给片段时间线
             if (this.segmentsEditMode && this._segAreaContains(y)) {
-                this._segMouseDown({
-                    button: 0, ctrlKey: false, metaKey: false, shiftKey: false,
-                    preventDefault: function() {}
-                }, x, y);
-                // 触屏长按片段 (约 450ms): 进入全屏钢琴卷帘页面
-                var segHit = this._segHitTest(x, y);
-                if (segHit && segHit.seg) this._startSegLongPress(segHit.seg, x, y);
+                var segHitTouch = this._segHitTest(x, y);
+                this._touchStartX = x;
+                this._touchStartY = y;
                 this._lastTouchX = x;
                 this._lastTouchY = y;
+                this._touchMoved = false;
+                this._segBlankAxis = null;
+                if (segHitTouch && segHitTouch.seg) {
+                    this._segMouseDown({
+                        button: 0, ctrlKey: false, metaKey: false, shiftKey: false,
+                        preventDefault: function() {}
+                    }, x, y);
+                    // 触屏长按片段 (约 450ms): 进入全屏钢琴卷帘页面
+                    this._startSegLongPress(segHitTouch.seg, x, y);
+                } else {
+                    // 空白处: 先不 seek, 交给 touchmove 按主轴判定
+                    // 「垂直滑动 = 上下滚动轨道视图」/「水平滑动 = 拖动播放头」,
+                    // 未滑动就抬手才 seek (触屏需要靠滑动滚动视图)
+                    this._touchMode = 'seg-blank';
+                }
                 return;
             }
             // 同步 _lastMouseX/Y, 使粘贴功能可以使用最后触摸位置
@@ -4778,6 +4823,8 @@
                 this._timelineDragStartX = x;
                 this._timelineDragMoved = false;
                 this._timelineDragFloatTick = null;
+                // 触屏长按时间栏 = 打开时间栏右键菜单 (与桌面右键等价)
+                this._startTimelineLongPress(x, y, touch.clientX, touch.clientY);
                 return;
             }
 
@@ -4991,12 +5038,72 @@
                 this._lastTouchY = y;
                 return;
             }
+            // 片段模式空白区: 按主轴决定滚动视图 / 拖动播放头
+            if (this._touchMode === 'seg-blank') {
+                var sbDx = x - this._touchStartX;
+                var sbDy = y - this._touchStartY;
+                if (!this._segBlankAxis) {
+                    if (Math.abs(sbDy) > 12 && Math.abs(sbDy) > Math.abs(sbDx) * 1.2) {
+                        this._segBlankAxis = 'scroll';
+                        this._touchMoved = true;
+                    } else if (Math.abs(sbDx) > 10) {
+                        this._segBlankAxis = 'seek';
+                        this._touchMoved = true;
+                    }
+                }
+                if (this._segBlankAxis === 'scroll') {
+                    var sbPan = this._lastTouchY - y;
+                    if (sbPan) {
+                        this._setSegmentScrollY((this._segScrollY || 0) + sbPan);
+                        this._fullRedrawNeeded = true;
+                        this.requestRender();
+                    }
+                    this._lastTouchX = x;
+                    this._lastTouchY = y;
+                    return;
+                }
+                if (this._segBlankAxis === 'seek') {
+                    this._segSeekToX(x);
+                    this._lastTouchX = x;
+                    this._lastTouchY = y;
+                    this._fullRedrawNeeded = true;
+                    this.requestRender();
+                    return;
+                }
+                this._lastTouchX = x;
+                this._lastTouchY = y;
+                return;
+            }
+
             // 片段编辑模式: 拖动/框选 (进度条/标尺拖动时不走片段逻辑; 允许拖出区域继续)
             if (this.segmentsEditMode && this._segPointerActive && !this._isDraggingProgressBar) {
                 // 长按期间移动超过阈值即取消长按, 后续仍按普通拖动处理
                 if (this._segLongPressTimer &&
                     (Math.abs(x - this._segLongPressX) > 10 || Math.abs(y - this._segLongPressY) > 10)) {
                     this._cancelSegLongPress();
+                }
+                // 触屏: 单指垂直滑动 = 上下滚动轨道视图 (片段本身还没被拖动时才转义)。
+                // 否则手指落在片段上时永远只能拖片段, 无法滚动视图。
+                var segD = this._segDrag;
+                if (segD && !segD.moved && !this._segBlankAxis) {
+                    var segDx = x - this._touchStartX;
+                    var segDy = y - this._touchStartY;
+                    if (Math.abs(segDy) > 14 && Math.abs(segDy) > Math.abs(segDx) * 1.5) {
+                        this._segDrag = null;
+                        this._segSeekDrag = false;
+                        this._segMarquee = null;
+                        this._segPointerActive = false;
+                        this._mouseDown = false;
+                        this._segmentPreview = null;
+                        this._segBlankAxis = 'scroll';
+                        this._touchMode = 'seg-blank';
+                        this._touchMoved = true;
+                        this._lastTouchX = x;
+                        this._lastTouchY = y;
+                        this._fullRedrawNeeded = true;
+                        this.requestRender();
+                        return;
+                    }
                 }
                 this._segMouseMove({}, x, y);
                 this._lastTouchX = x;
@@ -5043,6 +5150,8 @@
                         return;
                     }
                     this._timelineDragMoved = true;
+                    // 已开始拖动 = 不是长按, 取消时间栏菜单计时
+                    this._cancelTimelineLongPress();
                 }
                 var tdragFloat = Math.max(0, this._screenToTickFloat(x));
                 this._timelineDragFloatTick = tdragFloat;
@@ -5156,7 +5265,13 @@
                 var pDy = this._lastTouchY - y;
                 if (Math.abs(pDx) > 0 || Math.abs(pDy) > 0) {
                     this.scrollX = Math.max(0, this.scrollX + pDx);
-                    this.scrollY = Math.max(0, this.scrollY + pDy);
+                    // 片段模式的纵向视图用独立变量 _segScrollY, 这里必须分流,
+                    // 否则片段模式下单指上下滑动没有任何效果
+                    if (this.segmentsEditMode) {
+                        this._setSegmentScrollY((this._segScrollY || 0) + pDy);
+                    } else {
+                        this.scrollY = Math.max(0, this.scrollY + pDy);
+                    }
                     this._lastTouchX = x;
                     this._lastTouchY = y;
                     this._fullRedrawNeeded = true;
@@ -5173,6 +5288,18 @@
     };
 
     PianoRoll.prototype._onTouchEnd = function(e) {
+        // 片段模式空白区: 未滑动就抬手 → seek 到按下位置
+        if (this._touchMode === 'seg-blank') {
+            if (!this._touchMoved && !this._segBlankAxis) {
+                this._segSeekToX(this._touchStartX);
+            }
+            this._touchMode = 'none';
+            this._segBlankAxis = null;
+            this._fullRedrawNeeded = true;
+            this.render();
+            return;
+        }
+        this._cancelTimelineLongPress();
         // 片段编辑模式: 提交拖动 / 结束框选
         if (this.segmentsEditMode && this._segPointerActive) {
             this._cancelSegLongPress();

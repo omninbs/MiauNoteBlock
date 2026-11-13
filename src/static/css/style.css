@@ -10296,11 +10296,6 @@ body.spw-fullscreen-open {
     color: var(--text-tertiary);
 }
 
-/* 底部状态栏的实际秒数: 仅手机横屏使用 (顶栏空间不够时下移) */
-.status-time-mobile {
-    display: none;
-}
-
 /* ---------- 抽屉条目 (竖屏 / 横屏共用, 抽屉面板本身只在移动端显示) ---------- */
 .drawer-group + .drawer-group {
     margin-top: var(--space-2);
@@ -10542,6 +10537,79 @@ body.spw-fullscreen-open {
         overscroll-behavior: contain;
         -webkit-overflow-scrolling: touch;
     }
+
+    /* ---------- 抽屉子页: 带菜单的按钮 (文件 / 功能) 在这里展开 ---------- */
+    .drawer-subpage {
+        flex: 1 1 auto;
+        min-height: 0;
+        padding: var(--space-2);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+    .drawer-subpage[hidden] {
+        display: none;
+    }
+    /* 从抽屉返回: header 左侧, 只在子页时出现 */
+    .landscape-drawer-back {
+        display: none;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        margin-right: var(--space-2);
+        padding: 0;
+        border: 0;
+        border-radius: var(--radius-sm);
+        background: transparent;
+        color: var(--text-primary);
+        font-size: 14px;
+        cursor: pointer;
+    }
+    .landscape-drawer.is-subpage .landscape-drawer-back {
+        display: inline-flex;
+    }
+    .landscape-drawer.is-subpage .landscape-drawer-body {
+        display: none;
+    }
+    .landscape-drawer-back:active {
+        background: var(--ctrl-fill-secondary);
+    }
+    /* 搬进抽屉的菜单: 取消浮层定位与阴影, 按列表铺满 */
+    .drawer-subpage .file-menu,
+    .drawer-subpage .functions-menu,
+    .drawer-subpage .toolbar-more-menu {
+        position: static !important;
+        left: auto !important;
+        top: auto !important;
+        right: auto !important;
+        bottom: auto !important;
+        width: 100% !important;
+        max-width: none !important;
+        max-height: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        overflow: visible !important;
+    }
+    .drawer-subpage .file-menu-item,
+    .drawer-subpage .functions-menu-item {
+        border-radius: var(--radius-sm);
+        padding: 10px var(--space-2);
+        font-size: 13px;
+    }
+    .drawer-subpage .file-menu-item:active,
+    .drawer-subpage .functions-menu-item:active {
+        background: var(--ctrl-fill-secondary);
+    }
+    .drawer-subpage .file-menu-divider {
+        margin: var(--space-1) 0;
+        background: var(--ctrl-stroke-default);
+    }
 }
 
 /* ==================================================================
@@ -10554,27 +10622,50 @@ body.spw-fullscreen-open {
 }
 
 /* ==================================================================
-   24c. 手机横屏: 顶栏按钮全部进抽屉, 实际秒数下移到状态栏
+   24c. 手机横屏: 隐藏顶栏, 进度信息移到底部工具栏, 抽屉按钮悬浮右上角
    ================================================================== */
 @media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
-    /* 旧横屏规则把整条顶栏藏掉; 这里保留顶栏, 只把按钮收进抽屉 */
+    /* 顶栏整条隐藏 (按钮全在抽屉里, 没有常驻按钮需要留在顶栏) */
     .toolbar {
-        display: flex !important;
-        box-sizing: border-box;
-        height: var(--toolbar-height);
-        min-height: var(--toolbar-height);
-        padding: 0 var(--space-2);
-        gap: var(--space-1);
-    }
-    .toolbar-section {
         display: none !important;
     }
+    /* 进度信息此时被 20-mobile.js 移入底部状态栏, 这里只控制排布 */
     .mobile-bar-progress {
-        justify-content: space-between;
+        flex: 0 1 auto;
+        justify-content: flex-end;
+        padding: 0;
+        gap: 6px;
+        overflow: visible;
     }
-    /* 实际秒数改到底部状态栏, 顶栏不再重复显示 */
+    /* 抽屉按钮: 横屏时被 JS 移到 body, 悬浮在右上角 */
+    .mbp-drawer-floating {
+        display: inline-flex !important;
+        position: fixed;
+        top: 6px;
+        right: 8px;
+        z-index: 9996;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 30px;
+        padding: 0;
+        border: 1px solid var(--ctrl-stroke-default);
+        border-radius: var(--radius-sm);
+        background: rgba(32, 32, 32, 0.82);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+        color: var(--text-primary);
+        font-size: 14px;
+        cursor: pointer;
+    }
+    /* 抽屉打开时隐藏悬浮按钮 (避免压在抽屉上) */
+    .mbp-drawer-floating.is-hidden {
+        display: none !important;
+    }
+    /* 时间/速度/节拍都在底栏, 保持可见 */
     .mbp-time {
-        display: none;
+        display: flex;
     }
     .mbp-chip {
         height: 24px;
@@ -10603,34 +10694,13 @@ body.spw-fullscreen-open {
         font-size: 14px;
     }
 
-    /* 底部状态栏: 略微加高以容纳两行时间显示 (原 28px) */
+    /* 底部状态栏: 略微加高, 容纳进度信息的两行时间 (原 28px) */
     :root {
-        --status-height: 34px;
+        --status-height: 38px;
     }
     .status-bar,
     #status-bar {
-        height: 34px !important;
-    }
-    .status-time-mobile {
-        display: flex;
-        flex: 0 0 auto;
-        flex-direction: column;
-        align-items: flex-end;
-        justify-content: center;
-        margin-right: var(--space-1);
-        font-family: var(--font-family-mono);
-        font-variant-numeric: tabular-nums;
-        line-height: 1.15;
-        white-space: nowrap;
-    }
-    .status-time-mobile .stm-current {
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--text-primary);
-    }
-    .status-time-mobile .stm-total {
-        font-size: 10px;
-        color: var(--text-tertiary);
+        height: 38px !important;
     }
 }
 

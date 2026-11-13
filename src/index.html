@@ -22,7 +22,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="static/css/style.css?v=20261206a">
+    <link rel="stylesheet" href="static/css/style.css?v=20261207a">
 </head>
 <body>
 
@@ -264,11 +264,6 @@
                 <span id="current-pos" style="font-size:11px;color:var(--text-tertiary);display:none;"></span>
             </div>
             <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
-                <!-- 移动端横屏: 顶栏高度紧张, 实际秒数改在这里显示 -->
-                <div class="status-time-mobile" id="status-time-mobile" title="实际时长 / 全长">
-                    <span class="stm-current" id="stm-time-current">00:00:00;000</span>
-                    <span class="stm-total" id="stm-time-total">/ 00:00:00;000</span>
-                </div>
                 <button class="status-control-btn" id="btn-instrument-selector" title="选择乐器" style="display:flex;align-items:center;gap:4px;background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:12px;padding:2px 6px;border-radius:4px;">
                     <span id="inst-color-dot" style="display:inline-block;width:16px;height:16px;border-radius:3px;background:#d4a96a;position:relative;overflow:hidden;vertical-align:middle;"></span>
                     <span id="inst-name-text" style="vertical-align:middle;">竖琴</span>
@@ -1889,10 +1884,18 @@
     <!-- 顶栏内只有一个按钮 (mobile-drawer-btn) 打开它; 内容由 20-mobile.js 生成 -->
     <div class="landscape-drawer" id="landscape-drawer" role="dialog" aria-modal="true" aria-label="菜单" aria-hidden="true">
         <div class="landscape-drawer-header">
+            <button class="landscape-drawer-back" id="landscape-drawer-back" type="button" title="返回" aria-label="返回">
+                <i class="fa-solid fa-chevron-left"></i>
+            </button>
             <span class="landscape-drawer-title" id="landscape-drawer-title">菜单</span>
             <button class="landscape-drawer-close" id="landscape-drawer-close" type="button" title="关闭" aria-label="关闭">&times;</button>
         </div>
-        <div class="landscape-drawer-body" id="landscape-drawer-body"></div>
+        <!-- 主列表 (一级) -->
+        <div class="landscape-drawer-body" id="landscape-drawer-body">
+            <div class="drawer-main-list" id="drawer-main-list"></div>
+        </div>
+        <!-- 子页 (二级): 带菜单的按钮在这里展开, 左上角返回 -->
+        <div class="drawer-subpage" id="drawer-subpage" hidden></div>
     </div>
     <div class="landscape-drawer-mask" id="landscape-drawer-mask"></div>
 
@@ -1916,14 +1919,14 @@
 <script src="static/js/compress_est.js?v=20260926b"></script>
 <script src="static/js/api_client.js?v=20260905a"></script>
 <script src="static/js/custom_dropdown.js?v=20261113a"></script>
-<script src="static/js/i18n.js?v=20261206a"></script>
+<script src="static/js/i18n.js?v=20261207a"></script>
 <script src="static/js/audio_engine.js?v=20261206a"></script>
 <script src="static/js/custom_instruments.js?v=20260905a"></script>
 <script src="static/js/audio_fix_utils.js?v=20260905a"></script>
 <script src="static/js/sf3_player.js?v=20260808a"></script>
 <script src="static/js/spessa_player.js?v=20260918a"></script>
 <script src="static/js/soundfont_loader.js?v=20260808b"></script>
-<script src="static/js/piano_roll.js?v=20261113a"></script>
+<script src="static/js/piano_roll.js?v=20261207a"></script>
 <!-- 本地化第三方库: ZIP 打包 (jszip) / MP3 编码 (lamejs) / 取色器 (iro.js) -->
 <script src="static/vendor/jszip.min.js?v=20260905a"></script>
 <script src="static/vendor/lame.min.js?v=20260905a"></script>
@@ -1944,19 +1947,19 @@
 <script src="static/js/modules/05-segments.js?v=20261206a"></script>
 <script src="static/js/modules/06-notes-index.js?v=20261113a"></script>
 <script src="static/js/modules/07-tabs.js?v=20261113a"></script>
-<script src="static/js/modules/08-app-init.js?v=20261206a"></script>
+<script src="static/js/modules/08-app-init.js?v=20261207a"></script>
 <script src="static/js/modules/09-piano-roll.js?v=20261113a"></script>
 <script src="static/js/modules/10-assist.js?v=20261113a"></script>
 <script src="static/js/modules/11-find.js?v=20261113a"></script>
-<script src="static/js/modules/12-keyboard.js?v=20261113a"></script>
+<script src="static/js/modules/12-keyboard.js?v=20261207a"></script>
 <script src="static/js/modules/13-clipboard.js?v=20261113a"></script>
-<script src="static/js/modules/14-playback.js?v=20261206a"></script>
+<script src="static/js/modules/14-playback.js?v=20261207a"></script>
 <script src="static/js/modules/15-tracks.js?v=20261113a"></script>
 <script src="static/js/modules/16-custom-inst.js?v=20261113a"></script>
 <script src="static/js/modules/17-instrument-ui.js?v=20261113a"></script>
 <script src="static/js/modules/18-toast.js?v=20261113a"></script>
 <script src="static/js/modules/19-soundfont.js?v=20261113a"></script>
-<script src="static/js/modules/20-mobile.js?v=20261206a"></script>
+<script src="static/js/modules/20-mobile.js?v=20261207a"></script>
 <script src="static/js/modules/21-lyrics.js?v=20261113a"></script>
 <script src="static/js/modules/22-segment-ui.js?v=20261113a"></script>
 <script src="static/js/modules/23-json-io.js?v=20261113a"></script>
@@ -1967,7 +1970,7 @@
 <script src="static/js/modules/28-midi-dialog.js?v=20261113a"></script>
 <script src="static/js/modules/29-midi-tracks.js?v=20261113a"></script>
 <script src="static/js/modules/30-timbre.js?v=20261113a"></script>
-<script src="static/js/modules/31-midi-config.js?v=20261113a"></script>
+<script src="static/js/modules/31-midi-config.js?v=20261207a"></script>
 <script src="static/js/modules/32-storage.js?v=20261113a"></script>
 <script src="static/js/modules/33-export.js?v=20261113a"></script>
 <script src="static/js/modules/34-autosave.js?v=20261113a"></script>

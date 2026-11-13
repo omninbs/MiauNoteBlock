@@ -932,7 +932,8 @@
                    'timbre-slot-menu', 'substitute-slot-menu', 'find-pick-pop'];
         for (var i = 0; i < ids.length; i++) {
             var el = document.getElementById(ids[i]);
-            if (el) el.style.display = 'none';
+            // 被移动端抽屉接管 (子页) 的菜单不在这里隐藏
+            if (el && !el.hasAttribute('data-drawer-embedded')) el.style.display = 'none';
         }
         var menus = document.querySelectorAll('.context-menu');
         for (var m = 0; m < menus.length; m++) menus[m].style.display = 'none';

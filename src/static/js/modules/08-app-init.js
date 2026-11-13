@@ -143,6 +143,8 @@
         createLandscapeDrawerDOM();
         initMobileTempoControl();
         updateMobileProgress(true);
+        // 手机横屏时把进度信息搬到底部工具栏 (竖屏/桌面搬回顶栏)
+        if (N.syncMobileProgressHost) N.syncMobileProgressHost();
         initPrivacyPopup();
 
         // 初始化钢琴卷帘
@@ -1498,6 +1500,8 @@
             var moreBtn = $('btn-toolbar-more');
             var moreMenu = $('toolbar-more-menu');
             if (!toolbar || !moreBtn || !moreMenu) return;
+            // 先把进度信息放到正确的宿主里 (手机横屏: 底部状态栏), 再测量宽度
+            if (N.syncMobileProgressHost) N.syncMobileProgressHost();
 
             // 只折叠带有 data-group="overflow" 的项; 不带这个属性的始终保留 (例如速度按钮)
             // 排除 btn-settings 和 btn-functions, 它们在移动端始终可见
@@ -1810,6 +1814,7 @@
             var historySub = document.getElementById('history-submenu');
             if (fileMenu && !fileMenu.contains(e.target)
                 && (!historySub || !historySub.contains(e.target))
+                && !fileMenu.hasAttribute('data-drawer-embedded')
                 && e.target.id !== 'btn-file') {
                 hideFileMenu();
             }

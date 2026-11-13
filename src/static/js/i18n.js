@@ -4476,6 +4476,7 @@
         '节拍进度: 全音 · 四分 · 十六分': 'Beat position: whole · quarter · sixteenth',
         '速度 (Tick/秒) — 上下拖动调整, 点击输入': 'Tempo (ticks/sec) — drag up/down to adjust, click to type',
         '菜单': 'Menu',
+        '返回': 'Back',
         // 设置: 时间栏 / 片段显示 / 布局 / 配色
         '时间栏': 'Timeline',
         '时间栏位置': 'Timeline position',

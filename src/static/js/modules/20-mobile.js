@@ -48,18 +48,27 @@
     function createLandscapeDrawerDOM() {
         var drawer = $('landscape-drawer');
         var closeBtn = $('landscape-drawer-close');
+        var backBtn = $('landscape-drawer-back');
         var mask = $('landscape-drawer-mask');
         var body = $('landscape-drawer-body');
+        var mainList = $('drawer-main-list');
+        var subpage = $('drawer-subpage');
         var openBtn = $('mobile-drawer-btn');
-        if (!drawer || !body) return;
+        if (!drawer || !body || !mainList) return;
 
         var titleEl = $('landscape-drawer-title');
-        if (titleEl) titleEl.textContent = N.i18nText('菜单');
+        var _drawerHomeTitle = N.i18nText('菜单');
+        if (titleEl) titleEl.textContent = _drawerHomeTitle;
+
+        // 会打开浮层菜单的按钮: 在抽屉里改为「子页」展开菜单内容, 避免浮层在抽屉里位置错乱
 
         function closeLandscapeDrawer() {
+            closeAllPages();
             drawer.classList.remove('visible');
             if (mask) mask.classList.remove('visible');
             drawer.setAttribute('aria-hidden', 'true');
+            var openBtnEl = $('mobile-drawer-btn');
+            if (openBtnEl) openBtnEl.classList.remove('is-hidden');
         }
 
         function makeDrawerItem(icon, label, disabled, onClick) {
@@ -78,6 +87,107 @@
             return item;
         }
 
+        // 带浮层菜单的按钮 -> 抽屉子页 (菜单内容搬进抽屉, 左上角返回)
+        // 用栈支持多级: 文件菜单里的「历史文件 / 导出为…」再展开一层
+        var _pageStack = [];
+
+        function clearSubpageDom() {
+            while (subpage && subpage.firstChild) subpage.removeChild(subpage.firstChild);
+        }
+
+        function pushDrawerPage(el, titleText) {
+            if (!subpage || !el) return false;
+            var parent = el.parentNode;
+            var next = el.nextSibling;
+            el.setAttribute('data-drawer-embedded', '1');
+            el.style.display = 'block';
+            clearSubpageDom();
+            subpage.appendChild(el);
+            subpage.hidden = false;
+            drawer.classList.add('is-subpage');
+            if (titleEl) titleEl.textContent = titleText;
+            _pageStack.push({ el: el, parent: parent, next: next, title: titleText });
+            subpage.scrollTop = 0;
+            return true;
+        }
+
+        function popDrawerPage() {
+            var info = _pageStack.pop();
+            if (!info) return;
+            clearSubpageDom();
+            if (info.el) {
+                info.el.removeAttribute('data-drawer-embedded');
+                var staysInDom = (info.el.id === 'functions-menu');
+                if (staysInDom) {
+                    // functions-menu 是 index.html 的常驻节点: 放回原位, 桌面端仍可用
+                    info.el.style.display = 'none';
+                    if (info.parent) {
+                        if (info.next && info.next.parentNode === info.parent) info.parent.insertBefore(info.el, info.next);
+                        else info.parent.appendChild(info.el);
+                    }
+                } else if (info.el.parentNode) {
+                    info.el.parentNode.removeChild(info.el);
+                }
+            }
+            var top = _pageStack[_pageStack.length - 1];
+            if (top) {
+                if (subpage) {
+                    subpage.appendChild(top.el);
+                    top.el.style.display = 'block';
+                }
+                if (titleEl) titleEl.textContent = top.title;
+            } else {
+                if (subpage) subpage.hidden = true;
+                drawer.classList.remove('is-subpage');
+                if (titleEl) titleEl.textContent = _drawerHomeTitle;
+            }
+        }
+
+        function closeAllPages() {
+            while (_pageStack.length) popDrawerPage();
+        }
+
+        function openDrawerMenuPage(entryId, titleText) {
+            var menuId = (entryId === 'btn-file') ? 'file-menu'
+                : (entryId === 'btn-functions') ? 'functions-menu' : null;
+            if (!menuId) return false;
+            closeAllPages();
+            var pre = $(menuId);
+            if (pre) {
+                if (menuId === 'file-menu') pre.remove();
+                else pre.style.display = 'none';
+            }
+            var trigger = $(entryId);
+            if (trigger) trigger.click();
+            var menu = $(menuId);
+            if (!menu) return false;
+            return pushDrawerPage(menu, N.i18nText(titleText || '菜单'));
+        }
+
+        // 子页内点击: 带子菜单的项再展开一层; 普通菜单项执行后收起抽屉
+        if (subpage) {
+            subpage.addEventListener('click', function(e) {
+                var target = e.target;
+                if (!target || !target.closest) return;
+                var subItem = target.closest('.file-menu-has-sub');
+                if (subItem) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    // 桌面端靠 mouseenter 展开子菜单, 触屏用点击代替
+                    subItem.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
+                    var submenu = document.getElementById('history-submenu')
+                        || document.getElementById('export-submenu');
+                    if (submenu) pushDrawerPage(submenu, (subItem.textContent || '').trim());
+                    return;
+                }
+                if (!target.closest('.file-menu-item, .functions-menu-item')) return;
+                // 普通项: 大多数会立刻执行并收起菜单, 这里把抽屉一并收起
+                setTimeout(function() {
+                    if (drawer.classList.contains('visible')) closeLandscapeDrawer();
+                }, 0);
+            });
+        }
+
         // 转发到原按钮: 原按钮仍在 DOM 中 (只是被 CSS 隐藏), 逻辑与桌面端完全一致
         function appendForwardingGroup(entries) {
             var groupEl = document.createElement('div');
@@ -90,6 +200,10 @@
                         entry.label,
                         !orig || orig.disabled,
                         function() {
+                            // 文件 / 功能: 菜单内容在抽屉子页显示 (左上角返回)
+                            if (entry.id === 'btn-file' || entry.id === 'btn-functions') {
+                                if (openDrawerMenuPage(entry.id, entry.label)) return;
+                            }
                             closeLandscapeDrawer();
                             var target = $(entry.id);
                             if (target) target.click();
@@ -97,12 +211,12 @@
                     ));
                 })(entries[i]);
             }
-            body.appendChild(groupEl);
+            mainList.appendChild(groupEl);
         }
 
         // 每次打开时重建: 方向变化后条目集合随之变化, 也顺带同步按钮的禁用状态
         function buildDrawerBody() {
-            body.innerHTML = '';
+            mainList.innerHTML = '';
             if (isMobileLandscapeLayout()) appendForwardingGroup(DRAWER_TOOLBAR_LEFT);
             appendForwardingGroup(DRAWER_TOOLBAR_RIGHT);
 
@@ -114,14 +228,18 @@
                 if (findPanelVisible()) closeFindPanel();
                 else openFindPanel();
             }));
-            body.appendChild(extraGroup);
+            mainList.appendChild(extraGroup);
         }
 
         function openLandscapeDrawer() {
+            closeAllPages();
             buildDrawerBody();
             drawer.classList.add('visible');
             if (mask) mask.classList.add('visible');
             drawer.setAttribute('aria-hidden', 'false');
+            // 悬浮的抽屉按钮在抽屉打开时隐藏, 避免压在抽屉上
+            var openBtnEl = $('mobile-drawer-btn');
+            if (openBtnEl) openBtnEl.classList.add('is-hidden');
         }
 
         if (openBtn) {
@@ -132,13 +250,14 @@
             });
         }
         if (closeBtn) closeBtn.addEventListener('click', closeLandscapeDrawer);
+        if (backBtn) backBtn.addEventListener('click', popDrawerPage);
         if (mask) mask.addEventListener('click', closeLandscapeDrawer);
 
-        // ESC 关闭
+        // ESC: 先退出子页, 再关闭抽屉
         document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && drawer.classList.contains('visible')) {
-                closeLandscapeDrawer();
-            }
+            if (e.key !== 'Escape' || !drawer.classList.contains('visible')) return;
+            if (drawer.classList.contains('is-subpage')) popDrawerPage();
+            else closeLandscapeDrawer();
         });
 
         N.openMobileDrawer = openLandscapeDrawer;
@@ -209,11 +328,46 @@
         var toolbar = $('toolbar');
         if (!bar || !toolbar) return;
         toolbar.classList.remove('mp-compact', 'mp-ultra');
-        // 桌面端进度信息是隐藏的, 不参与测量
         if (!bar.clientWidth) return;
         if (bar.scrollWidth <= bar.clientWidth + 1) return;
         toolbar.classList.add('mp-compact');
         if (bar.scrollWidth > bar.clientWidth + 1) toolbar.classList.add('mp-ultra');
+    }
+
+    // ---------- 进度信息的宿主: 竖屏/桌面在顶栏, 手机横屏在底部状态栏 ----------
+    // 横屏时顶栏整条隐藏, 进度信息 (时间/速度/节拍) 全部搬到底栏右侧, 抽屉按钮
+    // 由 CSS 悬浮到右上角。DOM 搬动而不是复制, 保证 id 与事件绑定只有一份。
+    function syncMobileProgressHost() {
+        var bar = $('mobile-bar-progress');
+        var toolbar = $('toolbar');
+        var statusBar = $('status-bar');
+        if (!bar || !toolbar || !statusBar) return;
+        var drawerBtn = $('mobile-drawer-btn');
+        var landscape = isMobileLandscapeLayout();
+        if (landscape) {
+            // 抽屉按钮移到 body 上悬浮到右上角: 状态栏带 backdrop-filter,
+            // 会让内部的 position:fixed 相对状态栏定位 (而不是视口)
+            if (drawerBtn && drawerBtn.parentNode !== document.body) {
+                document.body.appendChild(drawerBtn);
+                drawerBtn.classList.add('mbp-drawer-floating');
+            }
+            var instBtn = $('btn-instrument-selector');
+            var rightGroup = instBtn && instBtn.parentNode;
+            if (rightGroup && bar.parentNode !== rightGroup) {
+                rightGroup.insertBefore(bar, instBtn);
+            }
+        } else {
+            if (drawerBtn && drawerBtn.parentNode !== bar) {
+                bar.insertBefore(drawerBtn, bar.firstChild);
+                drawerBtn.classList.remove('mbp-drawer-floating');
+            }
+            if (bar.parentNode !== toolbar) {
+                var rightSection = toolbar.querySelector('.toolbar-right');
+                if (rightSection && rightSection.parentNode === toolbar) toolbar.insertBefore(bar, rightSection);
+                else toolbar.appendChild(bar);
+            }
+        }
+        refreshMobileProgressLayout();
     }
 
     function scheduleMobileProgressLayout() {
@@ -246,10 +400,8 @@
         if (clockCurrent !== _mobileProgressLastClock) {
             _mobileProgressLastClock = clockCurrent;
             setTextIfChanged($('mbp-time-current'), clockCurrent);
-            setTextIfChanged($('stm-time-current'), clockCurrent);
         }
         setTextIfChanged($('mbp-time-total'), clockTotal);
-        setTextIfChanged($('stm-time-total'), clockTotal);
         setTextIfChanged($('mbp-tempo-value'), tempoText);
         setTextIfChanged($('mbp-beat-whole'), String(beat.whole));
         setTextIfChanged($('mbp-beat-quarter'), String(beat.quarter));
@@ -747,6 +899,19 @@
         if (radioTempoDragState) radioTempoDragState = null;
     });
 
+    // 方向变化时立即校正进度信息宿主 (横屏 <-> 竖屏)
+    (function watchMobileProgressHost() {
+        var mq = window.matchMedia
+            ? window.matchMedia('(orientation: landscape) and (max-height: 500px) and (pointer: coarse)')
+            : null;
+        if (mq && mq.addEventListener) {
+            mq.addEventListener('change', function() { syncMobileProgressHost(); });
+        }
+        window.addEventListener('orientationchange', function() {
+            setTimeout(syncMobileProgressHost, 120);
+        });
+    })();
+
     // ---- 导出 ----
     N.createLandscapeDrawerDOM = createLandscapeDrawerDOM;
     N.createMobileFabBar = createMobileFabBar;
@@ -754,6 +919,7 @@
     N.initMobileTempoControl = initMobileTempoControl;
     N.updateMobileProgress = updateMobileProgress;
     N.refreshMobileProgressLayout = refreshMobileProgressLayout;
+    N.syncMobileProgressHost = syncMobileProgressHost;
     N.applyMobileTempo = applyMobileTempo;
     N.isMobileLandscapeLayout = isMobileLandscapeLayout;
     N.initRadioTempoSlider = initRadioTempoSlider;

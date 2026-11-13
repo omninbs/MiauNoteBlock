@@ -35,9 +35,20 @@
         } catch (e) { return def; }
     }
     if (state.followProgress === undefined) state.followProgress = readBoolSetting('noteblock.follow_progress', true);
-    if (!state.followMode) {
-        try { state.followMode = localStorage.getItem('noteblock.follow_mode') || 'frame'; } catch (e) { state.followMode = 'frame'; }
-    }
+    var _savedFollowMode = null;
+    try { _savedFollowMode = localStorage.getItem('noteblock.follow_mode'); } catch (e) { _savedFollowMode = null; }
+    if (!state.followMode) state.followMode = _savedFollowMode || 'frame';
+    // 手机 (窄屏 / 触屏) 首次进入默认「按页」翻页跟随:
+    // 居中跟随 (按刻/按帧) 会把播放头钉在视口 1/3 不动, 小屏上看起来像播放进度卡住;
+    // 按页模式下播放头在页内正常移动, 越过右边界才整页翻动。
+    // 用户手动选过跟随方式时 (已写入 localStorage) 一律尊重其选择。
+    (function () {
+        if (_savedFollowMode) return;
+        if (state.followMode !== 'frame' && state.followMode !== 'tick') return;
+        var narrow = window.innerWidth <= 768;
+        var coarse = window.matchMedia ? window.matchMedia('(pointer: coarse)').matches : false;
+        if (narrow || coarse) state.followMode = 'page';
+    })();
     // smoothScroll 不是独立开关, 只表示「是否居中跟随」= 跟随开启 且 非按页;
     // 「按页」是书本翻页, 播放头随播放移动, 不固定居中
     state.smoothScroll = state.followProgress !== false &&

@@ -480,6 +480,8 @@
         
         setTimeout(function() {
             document.addEventListener('click', function closeMenu(e) {
+                // 菜单被移动端抽屉接管时 (抽屉子页) 不按「点击外部关闭」处理
+                if (menu.hasAttribute('data-drawer-embedded')) return;
                 if (!menu.contains(e.target) && e.target.id !== 'btn-file') {
                     hideFileMenu();
                     document.removeEventListener('click', closeMenu);

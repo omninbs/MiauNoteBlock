@@ -1068,7 +1068,9 @@
         if (this.playheadTick === null || this.playheadTick === undefined) return;
 
         var displayTick = this._getDisplayTick();
-        var x = this.smoothScrollEnabled ? pw + (w - pw) / 3 : this._tickToScreen(displayTick);
+        // 居中跟随 (按刻/按帧且跟随开启) 时播放头固定 1/3; 按页/不跟随时按真实位置
+        var centered = this.isPlaying && this._followState().centered;
+        var x = centered ? pw + (w - pw) / 3 : this._tickToScreen(displayTick);
         if (x >= pw && x <= w) {
             this._drawPlayheadLine(ctx, x);
         }
@@ -1445,9 +1447,16 @@
             // 片段模式使用独立的左侧宽度 (侧边板 120px)
             this._segPrevPanelWidth = this._currentPanelWidth;
             this._currentPanelWidth = this.getSegmentPanelWidth();
-            this._segScrollY = 0;
+            // 切换模式保留各自视图: 暂存 NBS 的滚动位置, 恢复上次片段模式的滚动位置
+            this._viewSnapNbs = { scrollX: this.scrollX, scrollY: this.scrollY };
+            if (!this._viewSnapSeg) this._viewSnapSeg = { scrollX: 0, segScrollY: 0 };
+            this._segScrollY = this._viewSnapSeg.segScrollY || 0;
             this._segKeyDirty = true;
             this.initSegmentZoomDefault(true);
+            // initSegmentZoomDefault 会 clamp scrollX, 之后恢复片段视图位置
+            this.scrollX = this._viewSnapSeg.scrollX || 0;
+            this._segClampScroll();
+            this._clampScrollX();
             this._segBindEvents();
             // 应用片段模式的时间栏位置设置 (默认底部)
             var segPos = 'bottom';
@@ -1469,6 +1478,13 @@
                 this._currentPanelWidth = this._segPrevPanelWidth;
                 this._segPrevPanelWidth = null;
             }
+            // 暂存片段视图, 并恢复进入片段模式前的 NBS 视图位置
+            this._viewSnapSeg = { scrollX: this.scrollX, segScrollY: this._segScrollY || 0 };
+            if (this._viewSnapNbs) {
+                this.scrollX = this._viewSnapNbs.scrollX || 0;
+                this.scrollY = this._viewSnapNbs.scrollY || 0;
+            }
+            this._clampScrollX();
             this.canvas.style.cursor = 'crosshair';
             // 恢复 NBS 模式的时间栏位置设置 (默认顶部)
             var nbsPos = 'top';
@@ -1496,6 +1512,14 @@
             var rect = self.canvas.getBoundingClientRect();
             var x = ev.clientX - rect.left;
             var y = ev.clientY - rect.top;
+            // 时间栏 (进度条/刻度区) 右键: 与 NBS 模式共用同一套「区间 + 播放跟随」菜单
+            var tlRect = self._timelineRect();
+            if (y >= tlRect.top && y <= tlRect.bottom) {
+                if (x < self.getSegmentPanelWidth()) return;
+                var tlTick = Math.max(0, Math.round(self._screenToTick(x)));
+                if (self.onTimelineContextMenu) self.onTimelineContextMenu(ev.clientX, ev.clientY, tlTick);
+                return;
+            }
             if (y < self.getSegmentAreaTop()) return;
             var hit = self._segHitTest(x, y);
             if (!hit) return;
@@ -6596,9 +6620,11 @@
         return true;
     };
 
-    // 缩放后保证播放头仍在可视区 (平滑翻页由 render 自动跟随, 无需处理)
+    // 缩放后保证播放头仍在可视区 (居中跟随时由 render 自动跟随, 无需处理)
     PianoRoll.prototype._keepPlayheadVisible = function() {
-        if (!this.isPlaying || this.smoothScrollEnabled) return;
+        if (!this.isPlaying) return;
+        var fs = this._followState();
+        if (fs.centered) return;
         var t = this._getDisplayTick();
         if (t === null || t === undefined || !isFinite(t)) return;
         var cellW = this._cfg.cellW * this._zoomX();
@@ -7022,10 +7048,10 @@
 
         var displayTick = this._getDisplayTick();
 
-        // 平滑翻页模式: 播放头固定在屏幕左 1/3 处
-        // 非平滑模式使用插值后的 tick, 让播放头随 rAF 平滑移动
+        // 居中跟随 (按刻/按帧且跟随开启): 播放头固定在屏幕左 1/3 处
+        // 按页/不跟随: 使用插值后的 tick, 播放头随 rAF 平滑移动
         var x;
-        if (this.smoothScrollEnabled && this.isPlaying) {
+        if (this.isPlaying && this._followState().centered) {
             x = pw + (w - pw) / 3;
         } else {
             x = this._tickToScreen(displayTick);
@@ -7196,9 +7222,45 @@
         }
     };
 
-    // 播放自动翻页 (NBS / 片段共用)
-    // - 平滑翻页: 播放头固定在可视区左 1/3, 由面板滚动跟上
-    // - 普通模式: 播放头越过右边界时整页翻一屏 (书本翻页)
+    // ============ 播放跟随 (NBS / 片段共用) ============
+    // 三层模型:
+    //   state.followProgress : 是否「固定播放头居中跟随」
+    //                          false = 播放头自由移动, 但视图仍自动翻页, 不冻结
+    //   state.followMode     : 跟随方式 — page 按页 / tick 按刻 / frame 按帧
+    //   smoothScrollEnabled  : 派生值, 只表示「播放头固定居中」= 开启跟随 且 非按页
+    // 按页 = 书本翻页: 播放头在页内连续移动, 越过右边界时整页翻动, 播放头不固定
+    // 按刻 = 播放头固定视口左 1/3, scrollX 量化到整 tick (一格一跳)
+    // 按帧 = 播放头固定视口左 1/3, scrollX 连续逐帧平滑
+    // 关闭跟随 = 与按页相同的翻页行为, 只是不把播放头钉在视口位置
+    PianoRoll.prototype._followState = function() {
+        var st = (window.WebNBS && window.WebNBS.state) || {};
+        var enabled = st.followProgress !== false;
+        var mode = st.followMode;
+        if (mode !== 'page' && mode !== 'tick' && mode !== 'frame') mode = 'frame';
+        return { enabled: enabled, mode: mode, centered: enabled && mode !== 'page' };
+    };
+
+    // 居中跟随目标 scrollX: 播放头固定在可视区左 1/3
+    PianoRoll.prototype._followScrollTarget = function(tick, w, pw, cellW, mode) {
+        var visible = w - pw;
+        var playheadX = pw + visible / 3;
+        // 按刻量化到整 tick, 按帧连续
+        var t = (mode === 'tick') ? Math.floor(tick) : tick;
+        var target = t * cellW + pw - playheadX;
+        return Math.max(0, Math.min(target, this._getMaxScrollX()));
+    };
+
+    // 按页跟随目标 scrollX: 以可视内容宽度为一页做页对齐
+    // 播放头屏幕位置 = (tick*cellW) % pageW + pw, 始终落在 [pw, w) 内;
+    // 跨页时 scrollX 整体跳一页, 即书本翻页
+    PianoRoll.prototype._pageScrollTarget = function(tick, w, pw, cellW) {
+        var pageW = Math.max(1, w - pw);
+        var x = tick * cellW;
+        var target = pageW * Math.floor(x / pageW);
+        return Math.max(0, Math.min(target, this._getMaxScrollX()));
+    };
+
+    // 每帧调用: 按跟随开关 + 跟随方式决定 scrollX
     PianoRoll.prototype._applyPlaybackAutoScroll = function() {
         if (!this.isPlaying) return;
         // 播放中用户正在拖动查看 (平移/进度条): 暂停自动翻页, 由用户自由浏览
@@ -7207,31 +7269,42 @@
         var pw = this._editOriginX();
         var cellW = this._cfg.cellW * this._zoomX();
         if (!(w > 0) || !(cellW > 0)) return;
+        var fs = this._followState();
         var tick = this._getDisplayTick();
-        if (this.smoothScrollEnabled) {
-            var playheadX = pw + (w - pw) / 3;
-            this.scrollX = tick * cellW + pw - playheadX;
+        if (tick === null || tick === undefined || !isFinite(tick)) return;
+        // 关闭跟随: 视图不锁定, 允许用户在播放中自由翻页;
+        // 只有播放头越过可视区边界时才翻一次, 把它带回可视范围
+        if (!fs.enabled) {
+            var screenX = tick * cellW - this.scrollX + pw;
+            if (screenX < pw || screenX > w) {
+                this.scrollX = this._pageScrollTarget(tick, w, pw, cellW);
+                this._fullRedrawNeeded = true;
+            }
             return;
         }
-        var screenX = tick * cellW - this.scrollX + pw;
-        if (screenX > w || (screenX < pw && this.scrollX > 0)) {
-            this.scrollX = Math.max(0, tick * cellW);
+        // 开启跟随: 居中跟随 (按刻/按帧) 固定播放头; 按页走书本翻页
+        var target = fs.centered
+            ? this._followScrollTarget(tick, w, pw, cellW, fs.mode)
+            : this._pageScrollTarget(tick, w, pw, cellW);
+        if (Math.abs(target - this.scrollX) > 0.01) {
+            this.scrollX = target;
             this._fullRedrawNeeded = true;
         }
     };
 
-    // 播放翻页的目标 scrollX (与 _applyPlaybackAutoScroll 同一套规则)
+    // 播放中松手回位的目标 scrollX (与 _applyPlaybackAutoScroll 同一套规则)
     PianoRoll.prototype._playbackScrollTarget = function() {
         var w = this.displayWidth;
         var pw = this._editOriginX();
         var cellW = this._cfg.cellW * this._zoomX();
-        var tick = this._getDisplayTick();
         if (!(w > 0) || !(cellW > 0)) return this.scrollX;
-        if (this.smoothScrollEnabled) {
-            var playheadX = pw + (w - pw) / 3;
-            return Math.max(0, tick * cellW + pw - playheadX);
-        }
-        return Math.max(0, tick * cellW);
+        var fs = this._followState();
+        if (!fs.enabled) return this.scrollX;  // 关闭跟随: 保留用户手动翻到的位置
+        var tick = this._getDisplayTick();
+        if (tick === null || tick === undefined || !isFinite(tick)) return this.scrollX;
+        return fs.centered
+            ? this._followScrollTarget(tick, w, pw, cellW, fs.mode)
+            : this._pageScrollTarget(tick, w, pw, cellW);
     };
 
     // 开始"播放中拖动查看": 挂起自动翻页, 直到松手
@@ -7252,6 +7325,8 @@
         }
         this._playbackViewHold = false;
         if (!this.isPlaying) return;
+        // 关闭跟随时用户手动翻页的位置就是要看的位置, 不做回位
+        if (!this._followState().enabled) return;
         var self = this;
         var from = this.scrollX;
         var start = performance.now();
@@ -8266,7 +8341,8 @@
                 var pitchLabel = pitchClassLabel(pitchKey);
                 var isAnimatingLP = animNoteSet && animNoteSet[note.id];
 
-                var scale = isAnimatingLP ? animScale : (dragActive && isSelected ? 1.15 : 1);
+                // 拖拽移动中的音符保持原始尺寸, 不做放大
+                var scale = isAnimatingLP ? animScale : 1;
                 var drawX = nx + notePad;
                 var drawW = Math.max(2, cellW - notePad * 2);
 
@@ -8394,6 +8470,10 @@
     // 绘制动画中的音符块
     PianoRoll.prototype._drawNoteBlockAnim = function(ctx, x, y, w, h, color, pitchLabel, anim, scale, alpha, isDelete, pitchKey) {
         ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0)';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
         ctx.globalAlpha = alpha;
         var cx = x + w / 2, cy = y + h / 2;
         ctx.translate(cx, cy);
@@ -8499,6 +8579,11 @@
         var cx = x + w / 2, cy = y + h / 2;
 
         ctx.save();
+        // 音符块整体不绘制任何阴影 (底色/纹理/图标), 避免继承外部绘制状态
+        ctx.shadowColor = 'rgba(0,0,0,0)';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
         if (scale !== 1) {
             ctx.translate(cx, cy);
             ctx.scale(scale, scale);
@@ -8537,7 +8622,7 @@
             var ix = iconF[0] ? (bx + bw - iconSize - 2) : (bx + 2);
             var iy = iconF[1] ? (by + bh - iconSize - 2) : (by + 2);
             ctx.save();
-            ctx.shadowColor = 'transparent';
+            ctx.shadowColor = 'rgba(0,0,0,0)';
             ctx.shadowBlur = 0;
             ctx.shadowOffsetX = 0;
             ctx.shadowOffsetY = 0;

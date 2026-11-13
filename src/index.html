@@ -22,7 +22,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="static/css/style.css?v=20261113a">
+    <link rel="stylesheet" href="static/css/style.css?v=20261206a">
 </head>
 <body>
 
@@ -66,9 +66,36 @@
             </button>
         </div>
 
-        <div class="toolbar-section">
+        <!-- 移动端: 速度输入框被顶栏的进度信息 (中间的速度控件) 取代, 整块隐藏 -->
+        <div class="toolbar-section toolbar-tempo-section">
             <span style="font-size:12px;color:var(--text-secondary);margin-right:2px;white-space:nowrap;">速度</span>
             <input type="number" id="tempo-value" value="20" min="0" max="512" step="0.01" placeholder="t/s" style="width:60px;padding:2px 6px;font-size:12px;text-align:center;background:transparent;border:1px solid var(--ctrl-stroke-default);border-radius:4px;color:var(--text-primary);font-variant-numeric:tabular-nums;" title="速度 (Tick/秒)">
+        </div>
+
+        <!-- 进度信息 (全端可见): 实际秒数 + 速度 + 节拍进度
+             移动端: 抽屉按钮打开收纳柜, 速度控件取代原来的速度输入框
+             桌面端: 保留原速度输入框, 这里只显示时间与节拍进度 -->
+        <div class="mobile-bar-progress" id="mobile-bar-progress">
+            <button class="mbp-drawer-btn" id="mobile-drawer-btn" type="button" title="菜单" aria-label="菜单">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+            <div class="mbp-group">
+                <div class="mbp-time" id="mbp-time" title="实际时长 / 全长">
+                    <span class="mbp-time-current" id="mbp-time-current">00:00:00;000</span>
+                    <span class="mbp-time-total" id="mbp-time-total">/ 00:00:00;000</span>
+                </div>
+                <div class="mbp-chip mbp-tempo" id="mbp-tempo">
+                    <button type="button" class="mbp-tempo-readout" id="mbp-tempo-readout"
+                            title="速度 (Tick/秒) — 上下拖动调整, 点击输入">
+                        <span id="mbp-tempo-value">20.00</span><span class="mbp-tempo-unit">t/s</span>
+                    </button>
+                    <input type="number" class="mbp-tempo-input" id="mbp-tempo-input" min="0" max="512" step="0.01"
+                           inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="速度 (Tick/秒)">
+                </div>
+                <div class="mbp-chip mbp-beat" id="mbp-beat" title="节拍进度: 全音 · 四分 · 十六分">
+                    <span id="mbp-beat-whole">1</span><span class="mbp-beat-sep">·</span><span id="mbp-beat-quarter">1</span><span class="mbp-beat-sep">·</span><span id="mbp-beat-sixteenth">1</span>
+                </div>
+            </div>
         </div>
 
         <div class="toolbar-section toolbar-right">
@@ -237,6 +264,11 @@
                 <span id="current-pos" style="font-size:11px;color:var(--text-tertiary);display:none;"></span>
             </div>
             <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+                <!-- 移动端横屏: 顶栏高度紧张, 实际秒数改在这里显示 -->
+                <div class="status-time-mobile" id="status-time-mobile" title="实际时长 / 全长">
+                    <span class="stm-current" id="stm-time-current">00:00:00;000</span>
+                    <span class="stm-total" id="stm-time-total">/ 00:00:00;000</span>
+                </div>
                 <button class="status-control-btn" id="btn-instrument-selector" title="选择乐器" style="display:flex;align-items:center;gap:4px;background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:12px;padding:2px 6px;border-radius:4px;">
                     <span id="inst-color-dot" style="display:inline-block;width:16px;height:16px;border-radius:3px;background:#d4a96a;position:relative;overflow:hidden;vertical-align:middle;"></span>
                     <span id="inst-name-text" style="vertical-align:middle;">竖琴</span>
@@ -638,7 +670,17 @@
                         <div class="settings-group-title">播放</div>
                         <div class="settings-row">
                             <label class="settings-label">
-                                <input type="checkbox" id="settings-smooth-scroll"> 平滑滚动 (播放头居中)
+                                <input type="checkbox" id="settings-smooth-scroll"> 跟随播放指示器
+                            </label>
+                        </div>
+                        <div class="settings-row">
+                            <label class="settings-label">
+                                <input type="checkbox" id="settings-region-start-play"> 在区间时开始播放
+                            </label>
+                        </div>
+                        <div class="settings-row">
+                            <label class="settings-label">
+                                <input type="checkbox" id="settings-region-stop-after"> 在区间后停止播放
                             </label>
                         </div>
                         <div class="settings-row">
@@ -1843,18 +1885,16 @@
         </div>
     </div>
 
-    <!-- ========== 横屏抽屉 (移动端) ========== -->
-    <button id="landscape-menu-btn" class="landscape-menu-btn" style="position:fixed;top:4px;right:4px;z-index:1001;width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,0.08);border:1px solid var(--ctrl-stroke-default);color:var(--text-primary);cursor:pointer;font-size:16px;">
-        <i class="fa-solid fa-bars"></i>
-    </button>
-    <div class="landscape-drawer" id="landscape-drawer" style="position:fixed;top:0;right:0;width:50vw;height:100vh;z-index:10005;background:rgba(22,33,62,0.98);backdrop-filter:blur(16px);border-left:1px solid var(--ctrl-stroke-default);box-shadow:-4px 0 20px rgba(0,0,0,0.3);transform:translateX(100%);transition:transform 0.25s ease;">
-        <div style="display:flex;align-items:center;padding:8px;border-bottom:1px solid var(--ctrl-stroke-default);">
-            <span style="font-size:14px;font-weight:600;flex:1;">菜单</span>
-            <button id="landscape-drawer-close" style="background:none;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;padding:4px;">&times;</button>
+    <!-- ========== 移动端侧边抽屉 (顶栏按钮收纳) ========== -->
+    <!-- 顶栏内只有一个按钮 (mobile-drawer-btn) 打开它; 内容由 20-mobile.js 生成 -->
+    <div class="landscape-drawer" id="landscape-drawer" role="dialog" aria-modal="true" aria-label="菜单" aria-hidden="true">
+        <div class="landscape-drawer-header">
+            <span class="landscape-drawer-title" id="landscape-drawer-title">菜单</span>
+            <button class="landscape-drawer-close" id="landscape-drawer-close" type="button" title="关闭" aria-label="关闭">&times;</button>
         </div>
-        <div id="landscape-drawer-body" style="padding:8px;overflow-y:auto;height:calc(100vh - 44px);"></div>
+        <div class="landscape-drawer-body" id="landscape-drawer-body"></div>
     </div>
-    <div class="landscape-drawer-mask" id="landscape-drawer-mask" style="position:fixed;inset:0;z-index:10004;background:rgba(0,0,0,0.4);"></div>
+    <div class="landscape-drawer-mask" id="landscape-drawer-mask"></div>
 
     <!-- ========== 音色槽菜单 (由 JS 动态填充) ========== -->
     <div id="timbre-slot-menu" style="display:none;position:fixed;z-index:9999;background:rgba(22,33,62,0.96);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:4px 0;min-width:160px;box-shadow:0 8px 32px rgba(0,0,0,0.5);font-size:12px;color:#eaeaea;"></div>
@@ -1876,8 +1916,8 @@
 <script src="static/js/compress_est.js?v=20260926b"></script>
 <script src="static/js/api_client.js?v=20260905a"></script>
 <script src="static/js/custom_dropdown.js?v=20261113a"></script>
-<script src="static/js/i18n.js?v=20261113a"></script>
-<script src="static/js/audio_engine.js?v=20260919c"></script>
+<script src="static/js/i18n.js?v=20261206a"></script>
+<script src="static/js/audio_engine.js?v=20261206a"></script>
 <script src="static/js/custom_instruments.js?v=20260905a"></script>
 <script src="static/js/audio_fix_utils.js?v=20260905a"></script>
 <script src="static/js/sf3_player.js?v=20260808a"></script>
@@ -1901,22 +1941,22 @@
 <script src="static/js/modules/02-history.js?v=20261113a"></script>
 <script src="static/js/modules/03-segment-model.js?v=20261113a"></script>
 <script src="static/js/modules/04-segment-split.js?v=20261113a"></script>
-<script src="static/js/modules/05-segments.js?v=20261113a"></script>
+<script src="static/js/modules/05-segments.js?v=20261206a"></script>
 <script src="static/js/modules/06-notes-index.js?v=20261113a"></script>
 <script src="static/js/modules/07-tabs.js?v=20261113a"></script>
-<script src="static/js/modules/08-app-init.js?v=20261113a"></script>
+<script src="static/js/modules/08-app-init.js?v=20261206a"></script>
 <script src="static/js/modules/09-piano-roll.js?v=20261113a"></script>
 <script src="static/js/modules/10-assist.js?v=20261113a"></script>
 <script src="static/js/modules/11-find.js?v=20261113a"></script>
 <script src="static/js/modules/12-keyboard.js?v=20261113a"></script>
 <script src="static/js/modules/13-clipboard.js?v=20261113a"></script>
-<script src="static/js/modules/14-playback.js?v=20261113a"></script>
+<script src="static/js/modules/14-playback.js?v=20261206a"></script>
 <script src="static/js/modules/15-tracks.js?v=20261113a"></script>
 <script src="static/js/modules/16-custom-inst.js?v=20261113a"></script>
 <script src="static/js/modules/17-instrument-ui.js?v=20261113a"></script>
 <script src="static/js/modules/18-toast.js?v=20261113a"></script>
 <script src="static/js/modules/19-soundfont.js?v=20261113a"></script>
-<script src="static/js/modules/20-mobile.js?v=20261113a"></script>
+<script src="static/js/modules/20-mobile.js?v=20261206a"></script>
 <script src="static/js/modules/21-lyrics.js?v=20261113a"></script>
 <script src="static/js/modules/22-segment-ui.js?v=20261113a"></script>
 <script src="static/js/modules/23-json-io.js?v=20261113a"></script>

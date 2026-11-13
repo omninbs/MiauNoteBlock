@@ -315,7 +315,8 @@
 
             // 同步初始状态
             state.pianoRoll.trackCount = (state.song && state.song.layers) ? state.song.layers.length : 1;
-            state.pianoRoll.smoothScrollEnabled = state.smoothScroll;
+            // smoothScrollEnabled 只是派生值: 开启跟随且非按页时才固定播放头居中
+            state.pianoRoll.smoothScrollEnabled = state.followProgress !== false && state.followMode !== 'page';
             state.pianoRoll.setLyricLanes(ensureLyricLanes());
 
             state.pianoRoll.setNotes([]);

@@ -37,6 +37,8 @@
     function handleFileOpen() { return N.handleFileOpen.apply(this, arguments); }
     function handleMidiFilePick() { return N.handleMidiFilePick.apply(this, arguments); }
     function handlePlayToggle() { return N.handlePlayToggle.apply(this, arguments); }
+    function initMobileTempoControl() { return N.initMobileTempoControl.apply(this, arguments); }
+    function updateMobileProgress() { return N.updateMobileProgress.apply(this, arguments); }
     function handleStop() { return N.handleStop.apply(this, arguments); }
     function hideContextMenu() { return N.hideContextMenu.apply(this, arguments); }
     function hideFileMenu() { return N.hideFileMenu.apply(this, arguments); }
@@ -139,6 +141,8 @@
         createPianoKeyboardDOM();
         createTrackPanelDOM();
         createLandscapeDrawerDOM();
+        initMobileTempoControl();
+        updateMobileProgress(true);
         initPrivacyPopup();
 
         // 初始化钢琴卷帘
@@ -209,6 +213,7 @@
                 $('tempo-value').value = state.tempo;
                 markDirty();
                 if (state.isPlaying) restartPlayback();
+                if (N.updateMobileProgress) N.updateMobileProgress(true);
             });
         }
 
@@ -245,6 +250,7 @@
                 state.tempo = val;
                 markDirty();
                 if (state.isPlaying) restartPlayback();
+                if (N.updateMobileProgress) N.updateMobileProgress(true);
             });
             tempoValueInput.addEventListener('blur', function(e) {
                 var val = parseFloat(e.target.value);
@@ -316,15 +322,38 @@
             });
         }
 
-        // 平滑翻页开关 (在设置弹窗里)
+        // 跟随播放指示器开关 (在设置弹窗里, 与时间栏右键菜单「播放时跟随进度条」同步)
         var smoothScrollChk = $('settings-smooth-scroll');
         if (smoothScrollChk) {
+            smoothScrollChk.checked = state.followProgress !== false;
             smoothScrollChk.addEventListener('change', function(e) {
                 e.stopPropagation();
-                state.smoothScroll = this.checked;
-                if (state.pianoRoll) {
-                    state.pianoRoll.smoothScrollEnabled = state.smoothScroll;
-                }
+                state.followProgress = this.checked;
+                try { localStorage.setItem('noteblock.follow_progress', this.checked ? '1' : '0'); } catch (err) {}
+                // 是否居中平滑由「跟随方式」决定, 这里只切换是否跟随
+                if (N.syncFollowState) N.syncFollowState();
+                markDirty();
+            });
+        }
+
+        // 区间播放选项 (与时间栏右键菜单同一状态)
+        var regionStartChk = $('settings-region-start-play');
+        if (regionStartChk) {
+            regionStartChk.checked = !!state.regionStartPlay;
+            regionStartChk.addEventListener('change', function(e) {
+                e.stopPropagation();
+                state.regionStartPlay = this.checked;
+                try { localStorage.setItem('noteblock.region_start_play', this.checked ? '1' : '0'); } catch (err) {}
+                markDirty();
+            });
+        }
+        var regionStopChk = $('settings-region-stop-after');
+        if (regionStopChk) {
+            regionStopChk.checked = !!state.regionStopAfter;
+            regionStopChk.addEventListener('change', function(e) {
+                e.stopPropagation();
+                state.regionStopAfter = this.checked;
+                try { localStorage.setItem('noteblock.region_stop_after', this.checked ? '1' : '0'); } catch (err) {}
                 markDirty();
             });
         }
@@ -1302,11 +1331,10 @@
         var autoScrollBtn = $('btn-auto-scroll');
         if (autoScrollBtn) {
             autoScrollBtn.addEventListener('click', function() {
-                state.smoothScroll = !state.smoothScroll;
-                if (state.pianoRoll) {
-                    state.pianoRoll.smoothScrollEnabled = state.smoothScroll;
-                }
-                updateAutoScrollBtnIcon();
+                // 只切换「是否跟随」; 居中与否由跟随方式决定
+                state.followProgress = !(state.followProgress !== false);
+                try { localStorage.setItem('noteblock.follow_progress', state.followProgress ? '1' : '0'); } catch (err) {}
+                if (N.syncFollowState) N.syncFollowState();
                 markDirty();
             });
         }
@@ -1502,8 +1530,10 @@
             var toolbarW = toolbar.clientWidth;
             var leftSection = toolbar.querySelector('.toolbar-section');
             var usedW = (leftSection ? leftSection.offsetWidth : 0);
-            // 估算右侧"必须"宽度: undo/redo + 速度按钮 + margin
-            var minRightFixed = 200;
+            // 估算右侧"必须"宽度: undo/redo + 速度按钮 + 进度信息 + margin
+            var progressEl = $('mobile-bar-progress');
+            var progressW = (progressEl && progressEl.offsetWidth) ? progressEl.offsetWidth : 0;
+            var minRightFixed = 200 + progressW;
             var availableForOverflow = toolbarW - usedW - minRightFixed - 60;
 
             // 如果 collapsibles 总宽度超过可用空间，则逐个收起
@@ -1537,6 +1567,9 @@
                     }
                 }
             }
+
+            // 移动端顶栏进度信息: 折叠结果确定后再按实际宽度做一次逐级压缩
+            if (N.refreshMobileProgressLayout) N.refreshMobileProgressLayout();
         }
 
         function renderMoreMenu(items) {

@@ -340,7 +340,6 @@
                 }
                 lane.layerChannels = newChannels;
             }
-            var vol = Math.max(0, Math.min(100, isFinite(lane.volume) ? lane.volume : 100));
             for (var s2 = 0; s2 < segs.length; s2++) {
                 var seg = segs[s2];
                 var sn2 = seg.notes || [];
@@ -348,8 +347,7 @@
                     var nn = sn2[n2];
                     var relLayer = isFinite(nn.layer) ? nn.layer : 0;
                     var vel = isFinite(nn.velocity) ? nn.velocity : 100;
-                    // 静音/独奏只作用于轨道, 不改写音符力度 (否则会污染音符数据)
-                    vel = Math.max(0, Math.min(100, Math.round(vel * vol / 100)));
+                    // 轨道音量不烘焙进力度: 统一写 NBS 轨道 volume, 保证可逆且与轨道栏同步
                     var lid = map[relLayer];
                     if (lid === undefined) lid = base;
                     var ntick = Math.max(0, Math.floor(seg.start + (nn.rel || 0)));
@@ -373,6 +371,8 @@
         var out = outOrder.map(function(k) { return outMap[k]; });
         state.notes = out;
         if (state.song) state.song.notes = out;
+        // 供侧栏电平表按「轨道 -> 全局 layer」精确取电平 (与音符 layer 完全同步)
+        state.segmentLaneLayerRanges = laneLayerRanges;
         if (layerChannelOut) state.layerChannelMap = layerChannelOut;
         // 声部分离: layer 重排后同步 voice 映射, 否则再次进入片段模式无法按声部归位
         if (state.song && state.song.layer_voice_map) {
@@ -403,11 +403,14 @@
             for (var lm = 0; lm < lanes.length; lm++) {
                 var laneM = lanes[lm];
                 var lockVal = (laneM.muted || (anySolo && !laneM.solo)) ? 1 : 0;
+                var laneVol = Math.max(0, Math.min(100, isFinite(laneM.volume) ? Math.round(laneM.volume) : 100));
                 var rangeM = laneLayerRanges[lm] || [];
                 for (var rm = 0; rm < rangeM.length; rm++) {
                     var lidM = rangeM[rm];
                     if (!state.song.layers[lidM]) continue;
                     state.song.layers[lidM].lock = lockVal;
+                    // 片段轨道音量 = 它覆盖的每条 NBS 轨道音量 (播放时按 track.volume 生效)
+                    state.song.layers[lidM].volume = laneVol;
                     if (laneM.solo) soloOut.push(lidM);
                 }
             }
@@ -430,6 +433,8 @@
                 }
                 trk.muted = !!lanes[liOwner].muted;
                 trk.solo = !!lanes[liOwner].solo;
+                // 轨道音量同样跟随片段轨道音量, 播放循环直接读 track.volume
+                trk.volume = Math.max(0, Math.min(100, isFinite(lanes[liOwner].volume) ? Math.round(lanes[liOwner].volume) : 100));
             }
         }
         return out;
@@ -941,6 +946,7 @@
     var _meterTimer = null;
     var _meterValues = [];
     var _meterPeaks = [];
+    var _meterIdleDelay = 90;      // 空闲轮询间隔 (ms): 越短起播/停播越及时
 
     function stopLaneMeterLoop() {
         if (_meterRAF) {
@@ -960,6 +966,38 @@
         }
     }
 
+    // 播放/停止瞬间立即唤醒: 否则要等空闲轮询到点才切到 rAF, 起播时电平会慢半拍
+    function wakeLaneMeter() {
+        if (!state.segmentsEditMode) return;
+        if (_meterTimer) {
+            clearTimeout(_meterTimer);
+            _meterTimer = null;
+        }
+        if (!_meterRAF && typeof requestAnimationFrame === 'function') {
+            _meterRAF = requestAnimationFrame(laneMeterTick);
+        }
+    }
+
+    // 把当前电平值写到 DOM (重建侧栏后立即调用一次, 避免电平条闪回 0)
+    function paintLaneMeters(rows) {
+        if (!rows) return 0;
+        var lit = 0;
+        for (var i = 0; i < rows.length; i++) {
+            var idx = parseInt(rows[i].getAttribute('data-lane'), 10);
+            if (!isFinite(idx)) continue;
+            var cur = _meterValues[idx] || 0;
+            var peak = _meterPeaks[idx] || 0;
+            var fill = rows[i].querySelector('.seg-lane-meter-fill');
+            var peakEl = rows[i].querySelector('.seg-lane-meter-peak');
+            if (fill) fill.style.width = (cur * 100).toFixed(1) + '%';
+            if (peakEl) peakEl.style.left = Math.min(99.5, peak * 100).toFixed(1) + '%';
+            var lane = state.segmentLanes[idx];
+            rows[i].classList.toggle('muted', !!(lane && lane.muted));
+            if (cur > 0 || peak > 0) lit++;
+        }
+        return lit;
+    }
+
     function laneMeterTick() {
         _meterRAF = null;
         _meterTimer = null;
@@ -972,43 +1010,37 @@
         var playing = !!state.isPlaying;
         var levels = [];
         if (window.AudioEngine && AudioEngine.getTrackLevels) {
-            try { levels = AudioEngine.getTrackLevels(state.segmentLanes) || []; } catch (e) { levels = []; }
+            // 传入缝合时建立的「轨道 -> 全局 layer」映射: 比 lane 自带的 layerKeys 更准
+            try {
+                levels = AudioEngine.getTrackLevels(state.segmentLanes, state.segmentLaneLayerRanges) || [];
+            } catch (e) { levels = []; }
         }
         var rows = panel.querySelectorAll('.seg-lane-meter');
-        var keepRunning = false;
         for (var i = 0; i < rows.length; i++) {
             var idx = parseInt(rows[i].getAttribute('data-lane'), 10);
             if (!isFinite(idx)) continue;
-            var lane = state.segmentLanes[idx];
             var target = playing ? (isFinite(levels[idx]) ? levels[idx] : 0) : 0;
             var cur = _meterValues[idx] || 0;
-            if (target > cur) cur += (target - cur) * 0.45;
-            else cur += (target - cur) * (playing ? 0.18 : 0.35);
+            // 起音快 (0.62), 回落慢 (0.22): 电平条跟手又不会闪
+            if (target > cur) cur += (target - cur) * 0.62;
+            else cur += (target - cur) * (playing ? 0.22 : 0.34);
             if (cur < 0.004) cur = 0;
             _meterValues[idx] = cur;
 
             // 峰值保持: 播放时缓慢回落, 停止时快速跟随归零
             var peak = _meterPeaks[idx] || 0;
             if (cur > peak) peak = cur;
-            else peak = Math.max(cur, peak - (playing ? 0.008 : 0.025));
+            else peak = Math.max(cur, peak - (playing ? 0.02 : 0.05));
             if (peak < 0.004) peak = 0;
             _meterPeaks[idx] = peak;
-
-            var fill = rows[i].querySelector('.seg-lane-meter-fill');
-            var peakEl = rows[i].querySelector('.seg-lane-meter-peak');
-            if (fill) fill.style.width = (cur * 100).toFixed(1) + '%';
-            if (peakEl) peakEl.style.left = Math.min(99.5, peak * 100).toFixed(1) + '%';
-            rows[i].classList.toggle('muted', !!(lane && lane.muted));
-            if (cur > 0 || peak > 0) keepRunning = true;
         }
-        if (playing) {
-            _meterRAF = requestAnimationFrame(laneMeterTick);
-        } else if (keepRunning) {
-            // 停止后的淡出阶段继续用 rAF 平滑归零
+        var lit = paintLaneMeters(rows);
+        if (playing || lit > 0) {
+            // 播放中与淡出阶段都用 rAF 平滑跟进
             _meterRAF = requestAnimationFrame(laneMeterTick);
         } else {
-            // 空闲时低频轮询, 播放开始后自动切换到 rAF
-            _meterTimer = setTimeout(laneMeterTick, 150);
+            // 空闲时低频轮询, 播放开始后由 wakeLaneMeter() 立刻切回 rAF
+            _meterTimer = setTimeout(laneMeterTick, _meterIdleDelay);
         }
     }
 
@@ -1034,7 +1066,9 @@
         if (window.innerWidth <= 768) { panel.style.display = 'none'; stopLaneMeterLoop(); return; }
         panel.style.display = 'block';
         var top = pr.getSegmentAreaTop ? pr.getSegmentAreaTop() : 0;
-        var availH = Math.max(0, pr.displayHeight - top);
+        // 侧边板底部让位于片段模式的时间栏 (默认在底部), 否则「添加音轨」按钮会压在时间栏上
+        var areaBottom = pr._editAreaBottom ? pr._editAreaBottom() : pr.displayHeight;
+        var availH = Math.max(0, areaBottom - top);
         panel.style.top = top + 'px';
         panel.style.height = availH + 'px';
         panel.style.width = (pr.getSegmentPanelWidth ? pr.getSegmentPanelWidth() : 120) + 'px';
@@ -1075,6 +1109,9 @@
         html += '<button class="seg-lane-add" data-act="add-lane" title="' + i18nText('添加音轨') + '">'
             + '<i class="fa-solid fa-plus"></i><span>' + i18nText('添加音轨') + '</span></button>';
         panel.innerHTML = html;
+        // 重建 DOM 后立刻把当前电平画回去: 否则新的 fill 从 0 宽度开始, 要等下一帧才显示
+        // (拖动音量 / 改颜色 / 改行高都会重建侧栏, 不重画就会看到电平条闪一下)
+        paintLaneMeters(panel.querySelectorAll('.seg-lane-meter'));
         ensureLaneMeterLoop();
 
         // 有轨道但一条都没渲染出来 → 说明画布尺寸尚未就绪, 下一帧重试 (最多 3 次)
@@ -1170,7 +1207,7 @@
     }
 
     var _segLaneResize = null;
-    // 应用轨道音量: 缝合 + 刷新 (音量烘焙进 velocity)
+    // 应用轨道音量: 缝合 + 刷新 (音量写入该轨道覆盖的 N 个 NBS 轨道, 不改写音符力度)
     function applyLaneVolume(idx, v) {
         var ln = state.segmentLanes[idx];
         if (!ln) return;
@@ -1178,7 +1215,33 @@
         segmentCompose();
         if (state.pianoRoll) state.pianoRoll.setNotes(state.notes);
         rebuildFromNotes();
+        // 同步音轨栏显示的音量 (rebuildTracks 会保留已写入的 track.volume)
+        if (N.updateTrackPanelUI) N.updateTrackPanelUI();
         markDirty();
+    }
+
+    // 进入片段模式: 片段轨道音量取自它覆盖的 NBS 轨道音量,
+    // 避免把用户在 NBS 模式设置的轨道音量重置为 100
+    function segmentSyncLaneVolumeFromLayers() {
+        var lanes = state.segmentLanes || [];
+        var segs = state.segments || [];
+        var layers = (state.song && state.song.layers) || [];
+        for (var i = 0; i < lanes.length; i++) {
+            var used = {};
+            for (var s = 0; s < segs.length; s++) {
+                if (segs[s].lane !== i) continue;
+                var sn = segs[s].notes || [];
+                for (var n = 0; n < sn.length; n++) {
+                    if (isFinite(sn[n].layer)) used[sn[n].layer] = true;
+                }
+            }
+            var keys = Object.keys(used);
+            if (!keys.length) continue;
+            var layer0 = layers[Number(keys[0])];
+            if (layer0 && isFinite(layer0.volume)) {
+                lanes[i].volume = Math.max(0, Math.min(100, Math.round(layer0.volume)));
+            }
+        }
     }
 
     function bindSegmentSidePanel() {
@@ -1221,7 +1284,31 @@
         });
         // 音量旋钮: Pointer Events 统一鼠标与触屏, 按住上下拖动 (向上增大),
         // 灵敏度约 40 音量 / 100px; 滚轮微调; 双击恢复 100
-        // 拖动中直接改 DOM (不整体重绘侧边板, 否则拖拽元素会被销毁)
+        // 鼠标拖动时锁定指针 (Pointer Lock): 光标隐藏且不再移动, 但持续上报相对位移,
+        // 因此可以一直往上/往下拖而不会撞到屏幕边缘停住。
+        // 拖动中只改数值与旋钮外观, 松手时才烘焙进音符 (compose 很重, 每帧调用会卡顿)。
+        var _knobDrag = null;
+
+        function endKnobDrag(commit) {
+            var d = _knobDrag;
+            if (!d) return;
+            _knobDrag = null;
+            document.removeEventListener('mousemove', d.onLockMove, true);
+            document.removeEventListener('mouseup', d.onUp, true);
+            document.removeEventListener('pointermove', d.onPointerMove, true);
+            document.removeEventListener('pointerup', d.onUp, true);
+            document.removeEventListener('pointercancel', d.onUp, true);
+            document.removeEventListener('pointerlockchange', d.onLockChange);
+            if (document.pointerLockElement === d.knob) {
+                try { document.exitPointerLock(); } catch (er) {}
+            }
+            document.body.style.cursor = '';
+            document.body.classList.remove('knob-pointer-locked');
+            if (commit && d.ln.volume !== d.startV) {
+                applyLaneVolume(d.idx, d.ln.volume);
+            }
+        }
+
         panel.addEventListener('pointerdown', function(e) {
             var knob = e.target.closest ? e.target.closest('.seg-lane-knob') : null;
             if (!knob) return;
@@ -1229,32 +1316,92 @@
             // 阻止页面滚动与轨道行选择 / 重命名等其它点击行为
             e.preventDefault();
             e.stopPropagation();
+            if (_knobDrag) endKnobDrag(true);
             var idx = parseInt(knob.getAttribute('data-lane'), 10);
             var ln = state.segmentLanes[idx];
             if (!ln) return;
-            var startY = e.clientY;
+
             var startV = isFinite(ln.volume) ? ln.volume : 100;
-            var pointerId = e.pointerId;
-            try { knob.setPointerCapture(pointerId); } catch (er) {}
-            var move = function(ev) {
-                if (ev.pointerId !== pointerId) return;
-                ev.preventDefault();
-                var v = startV + (startY - ev.clientY) * 0.4;
+            var acc = startV;
+            var d = {
+                knob: knob,
+                idx: idx,
+                ln: ln,
+                startY: e.clientY,
+                startV: startV,
+                locked: false,
+                finished: false
+            };
+
+            var lastCommitAt = 0;
+            function setVolume(v) {
                 v = Math.max(0, Math.min(100, Math.round(v)));
+                acc = v;
                 if (v === ln.volume) return;
-                applyLaneVolume(idx, v);
+                ln.volume = v;
                 syncLaneKnobUI(panel, idx, v);
+                // 播放中低频烘焙一次 (220ms), 让音量变化能即时听到;
+                // 松手时再提交最终值, 避免每帧 compose 造成卡顿
+                var nowMs = Date.now();
+                if (state.isPlaying && nowMs - lastCommitAt >= 220) {
+                    lastCommitAt = nowMs;
+                    applyLaneVolume(idx, v);
+                }
+            }
+
+            // 无锁定 (触屏 / 不支持 Pointer Lock): 按指针在视口内的绝对位移调整
+            d.onPointerMove = function(ev) {
+                if (d.locked) return;
+                if (ev.pointerId !== e.pointerId) return;
+                if (ev.cancelable) ev.preventDefault();
+                setVolume(d.startV + (d.startY - ev.clientY) * 0.4);
             };
-            var up = function(ev) {
-                if (ev.pointerId !== pointerId) return;
-                knob.removeEventListener('pointermove', move);
-                knob.removeEventListener('pointerup', up);
-                knob.removeEventListener('pointercancel', up);
-                try { knob.releasePointerCapture(pointerId); } catch (er) {}
+            // 锁定后: clientX/clientY 冻结, 改用 movementY 累积相对位移
+            d.onLockMove = function(ev) {
+                if (!d.locked) return;
+                var my = ev.movementY || 0;
+                if (!my) return;
+                if (ev.cancelable) ev.preventDefault();
+                setVolume(acc - my * 0.4);
             };
-            knob.addEventListener('pointermove', move);
-            knob.addEventListener('pointerup', up);
-            knob.addEventListener('pointercancel', up);
+            d.onUp = function(ev) {
+                if (ev && ev.pointerId !== undefined && ev.type.indexOf('pointer') === 0
+                        && ev.pointerId !== e.pointerId) return;
+                endKnobDrag(true);
+            };
+            d.onLockChange = function() {
+                if (d.finished) return;
+                if (document.pointerLockElement === d.knob) {
+                    d.locked = true;
+                    // 光标由 Pointer Lock 隐藏; 再用 class 兜底 (部分 WebView 仍会画光标)
+                    document.body.classList.add('knob-pointer-locked');
+                    document.body.style.cursor = 'none';
+                } else if (d.locked) {
+                    // 用户按 Esc 退出锁定 → 直接结束拖动, 避免卡在无光标状态
+                    endKnobDrag(true);
+                }
+            };
+
+            _knobDrag = d;
+            // pointermove 挂到 document: 鼠标/手指移出旋钮范围后仍要继续拖动
+            document.addEventListener('pointermove', d.onPointerMove, true);
+            document.addEventListener('mousemove', d.onLockMove, true);
+            document.addEventListener('pointerup', d.onUp, true);
+            document.addEventListener('pointercancel', d.onUp, true);
+            document.addEventListener('mouseup', d.onUp, true);
+
+            // 仅鼠标尝试锁定指针 (触屏没有可隐藏的光标)
+            if (e.pointerType === 'mouse' && typeof knob.requestPointerLock === 'function') {
+                document.addEventListener('pointerlockchange', d.onLockChange);
+                try {
+                    // 新版 Chromium 返回 Promise: 锁定失败 (文档未聚焦等) 只是回落成普通拖动,
+                    // 必须吃掉 rejection, 否则控制台会抛出未处理的 WrongDocumentError
+                    var lockRequest = knob.requestPointerLock();
+                    if (lockRequest && typeof lockRequest.catch === 'function') {
+                        lockRequest.catch(function() {});
+                    }
+                } catch (er) {}
+            }
         });
         // 鼠标滚轮微调音量 (触屏不适用)
         panel.addEventListener('wheel', function(e) {
@@ -1329,7 +1476,14 @@
         segmentEnsure();
         // 进入片段模式前, 把 NBS 当前音符重新捕获进片段 (NBS 是唯一编辑音符的地方)
         if (!skipCapture) segmentCaptureFromSong();
+        // 片段轨道音量与 NBS 轨道音量对齐 (NBS 模式下调过的音量不能丢)
+        segmentSyncLaneVolumeFromLayers();
         state._segmentsTouched = true;
+        // 立即缝合一次: 建立「轨道 -> 全局 layer」映射 (轨道电平表据此精确取电平),
+        // 并让 lane 的层信息 layerKey(s) 与音符 layer 重新对齐。compose 是幂等的。
+        segmentCompose();
+        if (state.pianoRoll) state.pianoRoll.setNotes(state.notes);
+        rebuildFromNotes();
         if (state.pianoRoll && state.pianoRoll.playheadTick == null) {
             var pt = Math.max(0, Math.floor(state.currentTick || 0));
             state.pianoRoll.playheadTick = pt;
@@ -1454,6 +1608,8 @@
     N.segmentExportOne = segmentExportOne;
     N.renderSegmentSidePanel = renderSegmentSidePanel;
     N.bindSegmentSidePanel = bindSegmentSidePanel;
+    // 播放/停止瞬间立即唤醒轨道电平循环 (否则要等空闲轮询到点)
+    N.wakeLaneMeter = wakeLaneMeter;
     N.syncSegmentToolbarTop = syncSegmentToolbarTop;
     N.enterSegmentsEditMode = enterSegmentsEditMode;
     N.exitSegmentsEditMode = exitSegmentsEditMode;

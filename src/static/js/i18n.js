@@ -2005,7 +2005,7 @@
     var _settingsGroupI18n = {
         'en-US': {
             '播放': 'Playback', '显示': 'Display', '性能': 'Performance',
-            '平滑滚动 (播放头居中)': 'Smooth scrolling (center playhead)',
+            '跟随播放指示器': 'Follow playhead',
             '音符播放高亮': 'Note playback highlight',
             '音符触发时轨道高亮': 'Track highlight on note trigger',
             '高亮跟随音色颜色': 'Highlight follows timbre color',
@@ -2020,7 +2020,7 @@
         },
         'ja-JP': {
             '播放': '再生', '显示': '表示', '性能': 'パフォーマンス',
-            '平滑滚动 (播放头居中)': 'スムーズスクロール (再生ヘッドを中央に)',
+            '跟随播放指示器': '再生ヘッドに追従',
             '音符播放高亮': 'ノート再生ハイライト',
             '音符触发时轨道高亮': 'ノート発音時にトラックをハイライト',
             '高亮跟随音色颜色': 'ハイライトを音色の色に合わせる',
@@ -2035,7 +2035,7 @@
         },
         'ko-KR': {
             '播放': '재생', '显示': '표시', '性能': '성능',
-            '平滑滚动 (播放头居中)': '부드러운 스크롤 (재생 헤드 중앙)',
+            '跟随播放指示器': '재생 헤드 따라가기',
             '音符播放高亮': '노트 재생 하이라이트',
             '音符触发时轨道高亮': '노트 발음 시 트랙 하이라이트',
             '高亮跟随音色颜色': '하이라이트를 음색 색상으로',
@@ -2050,7 +2050,7 @@
         },
         'pt-BR': {
             '播放': 'Reprodução', '显示': 'Exibição', '性能': 'Desempenho',
-            '平滑滚动 (播放头居中)': 'Rolagem suave (cabeçote centralizado)',
+            '跟随播放指示器': 'Seguir cursor de reprodução',
             '音符播放高亮': 'Destaque de nota ao reproduzir',
             '音符触发时轨道高亮': 'Destacar a faixa ao disparar a nota',
             '高亮跟随音色颜色': 'Destaque na cor do timbre',
@@ -2065,7 +2065,7 @@
         },
         'id-ID': {
             '播放': 'Pemutaran', '显示': 'Tampilan', '性能': 'Performa',
-            '平滑滚动 (播放头居中)': 'Gulir halus (kepala putar di tengah)',
+            '跟随播放指示器': 'Ikuti kepala putar',
             '音符播放高亮': 'Sorotan not saat diputar',
             '音符触发时轨道高亮': 'Sorot trek saat not dipicu',
             '高亮跟随音色颜色': 'Sorotan mengikuti warna timbre',
@@ -2080,7 +2080,7 @@
         },
         'es-ES': {
             '播放': 'Reproducción', '显示': 'Visualización', '性能': 'Rendimiento',
-            '平滑滚动 (播放头居中)': 'Desplazamiento suave (cursor centrado)',
+            '跟随播放指示器': 'Seguir el cursor de reproducción',
             '音符播放高亮': 'Resaltado de notas al reproducir',
             '音符触发时轨道高亮': 'Resaltar la pista al sonar la nota',
             '高亮跟随音色颜色': 'El resaltado sigue el color del timbre',
@@ -2095,7 +2095,7 @@
         },
         'ru-RU': {
             '播放': 'Воспроизведение', '显示': 'Отображение', '性能': 'Производительность',
-            '平滑滚动 (播放头居中)': 'Плавная прокрутка (плейхед по центру)',
+            '跟随播放指示器': 'Следовать за плейхедом',
             '音符播放高亮': 'Подсветка нот при воспроизведении',
             '音符触发时轨道高亮': 'Подсветка дорожки при срабатывании ноты',
             '高亮跟随音色颜色': 'Подсветка по цвету тембра',
@@ -2110,7 +2110,7 @@
         },
         'de-DE': {
             '播放': 'Wiedergabe', '显示': 'Anzeige', '性能': 'Leistung',
-            '平滑滚动 (播放头居中)': 'Sanftes Scrollen (Kopf zentriert)',
+            '跟随播放指示器': 'Wiedergabekopf folgen',
             '音符播放高亮': 'Noten-Highlight bei Wiedergabe',
             '音符触发时轨道高亮': 'Spur-Highlight beim Auslösen einer Note',
             '高亮跟随音色颜色': 'Highlight folgt der Klangfarbe',
@@ -2125,7 +2125,7 @@
         },
         'fr-FR': {
             '播放': 'Lecture', '显示': 'Affichage', '性能': 'Performances',
-            '平滑滚动 (播放头居中)': 'Défilement fluide (curseur centré)',
+            '跟随播放指示器': 'Suivre la tête de lecture',
             '音符播放高亮': 'Surbrillance des notes à la lecture',
             '音符触发时轨道高亮': 'Surligner la piste au déclenchement de la note',
             '高亮跟随音色颜色': 'La surbrillance suit la couleur du timbre',
@@ -4464,6 +4464,75 @@
     for (_nl in _fpsI18n) {
         if (Object.prototype.hasOwnProperty.call(_fpsI18n, _nl)) Object.assign(UI_TEXT[_nl], _fpsI18n[_nl]);
     }
+
+    // ------------------------------------------------------------------
+    // 英文补齐 (en-US 是全语言的回退基底, 见 translate() 的 fallback 链):
+    // 顶栏进度信息 / 设置分组 / MIDI 后处理 / 轨道侧栏等界面上仍会露出中文的
+    // 词条集中补在这里。其它语言未单独翻译时自动回退到这批英文, 不再泄漏中文。
+    // ------------------------------------------------------------------
+    Object.assign(UI_TEXT['en-US'], {
+        // 顶栏进度信息 (实际秒数 / 速度 / 节拍进度)
+        '实际时长 / 全长': 'Elapsed / total',
+        '节拍进度: 全音 · 四分 · 十六分': 'Beat position: whole · quarter · sixteenth',
+        '速度 (Tick/秒) — 上下拖动调整, 点击输入': 'Tempo (ticks/sec) — drag up/down to adjust, click to type',
+        '菜单': 'Menu',
+        // 设置: 时间栏 / 片段显示 / 布局 / 配色
+        '时间栏': 'Timeline',
+        '时间栏位置': 'Timeline position',
+        '片段显示': 'Segment display',
+        '片段轨道分割线': 'Segment lane dividers',
+        '片段分割线': 'Segment dividers',
+        '布局': 'Layout',
+        'UI 配色': 'UI colors',
+        '开启后琴键显示为 Db / Eb / Gb / Ab / Bb': 'When enabled, keys are labeled Db / Eb / Gb / Ab / Bb',
+        '强调色应用于按钮、选中状态、焦点描边等界面元素': 'The accent color applies to buttons, selected states, focus outlines and other UI elements',
+        '背景图片覆盖整个网页; 透明度 100% 完全透明, 0% 不透明; 表面材质控制工具栏, 网格材质单独控制音符网格区域; 面板透明度控制工具栏透明程度, 音轨栏透明度单独控制左侧音轨信息栏':
+            'The background image covers the whole page; opacity 100% is fully transparent and 0% is opaque; surface material controls the toolbar, grid material controls only the note grid area; panel opacity controls toolbar transparency, and track panel opacity controls the left track list',
+        // 主题预设名
+        '云青': 'Cloud teal',
+        '薄荷': 'Mint',
+        '紫罗兰': 'Violet',
+        '落日': 'Sunset',
+        '玫瑰': 'Rose',
+        '森绿': 'Forest',
+        '石墨': 'Graphite',
+        // 创作辅助面板
+        '开': 'On',
+        '关': 'Off',
+        '单独擦除': 'Erase only',
+        '点击或拖动以删除单个音符': 'Click or drag to delete a single note',
+        '留空': 'Leave empty',
+        '方式': 'Mode',
+        '偏移量': 'Offset',
+        '规律': 'Pattern',
+        // 片段侧栏
+        '添加轨道': 'Add track',
+        '片段名称': 'Segment name',
+        // MIDI 导入: 后处理 / 延音 / 片段结构
+        '后处理': 'Post-processing',
+        '按小节重复规律把轨道切成循环片段': 'Split tracks into loop segments by the repeating bar pattern',
+        '命名依据': 'Naming basis',
+        '通道名': 'Channel name',
+        '处理方式': 'Handling',
+        '溢出强制归位': 'Force back into range',
+        '拍子': 'Beat',
+        '歌曲精度': 'Song precision',
+        '延音': 'Sustain',
+        '延音处理': 'Sustain handling',
+        '带音量变化的延音': 'Sustain with volume changes',
+        '片段结构': 'Segment structure',
+        '自动分割片段': 'Auto-split segments',
+        '查找并分割重复片段': 'Find and split repeated segments',
+        '颗粒度等级': 'Granularity level',
+        '小 · 最小 1 小节': 'Small · min 1 bar',
+        '中 · 最小 2 小节': 'Medium · min 2 bars',
+        '大 · 最小 4 小节': 'Large · min 4 bars',
+        '后处理按小节对齐切割；长音符不会被从中间断开；配置按文件内容记忆，刷新后恢复默认':
+            'Post-processing cuts on bar boundaries; long notes are never split in the middle; settings are remembered per file content and reset after a refresh',
+        // 关于
+        '支持 NBS 格式导入/导出、MIDI 导入和钢琴卷帘编辑': 'Supports NBS import/export, MIDI import and piano roll editing',
+        'QQ群:': 'QQ group:'
+    });
 
     // has(key): 当前语言是否已有该词条 (不含回退)。供覆盖率自检用。
     function has(key) {

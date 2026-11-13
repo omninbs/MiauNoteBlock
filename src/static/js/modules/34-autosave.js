@@ -81,6 +81,8 @@
                 scrollY: state.pianoRoll ? state.pianoRoll.scrollY : 0,
                 trackInfo: state.pianoRoll ? state.pianoRoll.trackInfo : {},
                 smoothScroll: state.smoothScroll,
+                followProgress: state.followProgress !== false,
+                followMode: state.followMode || 'frame',
                 selectedPianoKey: state.selectedPianoKey,
                 song: state.song ? {
                     name: state.song.name || state.song.song_name,
@@ -136,12 +138,24 @@
             state.currentFileId = data.currentFileId || null;
             // 恢复 layer -> 通道映射 (片段轨道按通道/声部归位依赖它)
             state.layerChannelMap = JSON.parse(JSON.stringify((data.song && data.song.layer_channel_map) || {}));
-            // 兼容旧版 autoScrollMode 数据: 非 0 视为开启
-            if (data.smoothScroll !== undefined) {
-                state.smoothScroll = !!data.smoothScroll;
+            // 跟随播放指示器: 开关与跟随方式分开恢复
+            // - 新数据: followProgress + followMode 直接读取
+            // - 旧数据: smoothScroll 仅表示「播放头是否居中」, true→按帧, false→按页
+            if (data.followProgress !== undefined) {
+                state.followProgress = !!data.followProgress;
+            } else if (data.smoothScroll !== undefined) {
+                state.followProgress = true;
             } else if (data.autoScrollMode !== undefined) {
-                state.smoothScroll = data.autoScrollMode !== 0;
+                state.followProgress = data.autoScrollMode !== 0;
             }
+            if (data.followMode === 'page' || data.followMode === 'tick' || data.followMode === 'frame') {
+                state.followMode = data.followMode;
+            } else if (data.smoothScroll !== undefined) {
+                state.followMode = data.smoothScroll ? 'frame' : 'page';
+            }
+            // smoothScroll 为派生值, 不再独立保存语义
+            state.smoothScroll = state.followProgress !== false &&
+                (state.followMode === 'frame' || state.followMode === 'tick');
             // A refresh always returns to C4 so drawing has a predictable default.
             state.selectedPianoKey = 39;
             if (data.song) {

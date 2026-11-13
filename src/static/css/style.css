@@ -1688,6 +1688,12 @@ body.segment-edit-mode .tool-bar {
     cursor: ns-resize;
     touch-action: none;
 }
+/* 音量旋钮拖动中: 指针已被 Pointer Lock 捕获, 光标一并隐藏
+   (部分 WebView 在锁定期间仍会画光标, 这里用 !important 兜底) */
+body.knob-pointer-locked,
+body.knob-pointer-locked * {
+    cursor: none !important;
+}
 /* 触屏: 面板宽度固定 120px, 不放大视觉尺寸, 用伪元素把色点 / M / S / 旋钮
    的命中区扩到约 36×36 (行高只有 52px, 直接放大控件会挤压电平表) */
 @media (pointer: coarse) {
@@ -4181,8 +4187,10 @@ body.segment-edit-mode .tool-bar {
     padding: 0 10px;
     border-bottom: 1px solid var(--ctrl-stroke-default);
     background: rgba(255, 255, 255, 0.02);
-    position: sticky;
-    top: 0;
+    /* 标签栏不参与 flex 收缩: 弹窗变矮时不能被压扁, 否则文字会被裁掉并与下方子标签重叠 */
+    flex: 0 0 auto;
+    min-height: 30px;
+    position: relative;
     z-index: 3;
     /* 窄屏 / 长语种: 标签页横向滚动, 不挤压也不换行 */
     overflow-x: auto;
@@ -4553,7 +4561,8 @@ body.segment-edit-mode .tool-bar {
     padding: 4px 10px;
     border-bottom: 1px solid var(--ctrl-stroke-default);
     background: transparent;
-    min-height: 0;
+    flex: 0 0 auto;
+    min-height: 26px;
 }
 .settings-header h4 {
     flex: 1;
@@ -10202,4 +10211,494 @@ body.spw-fullscreen-open {
     opacity: 0.45;
     cursor: default;
 }
+
+/* ==================================================================
+   24. 移动端顶栏: 进度信息 + 侧边抽屉
+   ------------------------------------------------------------------
+   竖屏 / 窄屏 (max-width: 768px):
+     顶栏左侧保留 文件 / 保存 / 撤销 / 重做, 右侧改为进度信息
+     (实际秒数 · 速度 · 节拍进度); 原右侧按钮全部收进抽屉, 只留一个按钮打开。
+   手机横屏 (orientation: landscape + max-height: 500px + 触屏):
+     视口高度紧张, 顶栏按钮按从左到右顺序全部收进抽屉, 顶栏只剩
+     抽屉按钮 + 速度 + 节拍; 实际秒数移到底部状态栏 (状态栏略微加高)。
+   顶栏原有的绝对 tick 进度 (状态栏 #progress-time) 不变。
+   ================================================================== */
+
+/* ---------- 进度信息 (全端可见) ----------
+   桌面端: 时间 + 节拍 (速度由顶栏原有的速度输入框承担)
+   移动端: 时间 + 速度芯片 + 节拍 (速度输入框收进抽屉) */
+.mobile-bar-progress {
+    display: flex;
+    flex: 0 1 auto;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 0 var(--space-1) 0 var(--space-2);
+    overflow: hidden;
+}
+.mbp-group {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 6px;
+}
+/* 抽屉按钮与速度芯片只在移动端出现 (带父选择器提高特异性, 否则会被 .mbp-chip 的 display 覆盖) */
+.mobile-bar-progress .mbp-drawer-btn,
+.mobile-bar-progress .mbp-tempo {
+    display: none;
+}
+
+/* 实际秒数: 当前时间为主, 全长弱一档 (两级文字色承载层级) */
+.mbp-time {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    font-family: var(--font-family-mono);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.15;
+    white-space: nowrap;
+}
+.mbp-time-current {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.mbp-time-total {
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--text-tertiary);
+}
+
+/* 速度 / 节拍: 同一套小方框 */
+.mbp-chip {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    box-sizing: border-box;
+    height: 26px;
+    padding: 0 var(--space-2);
+    border: 1px solid var(--ctrl-stroke-default);
+    border-radius: var(--radius-sm);
+    background: var(--ctrl-fill-default);
+    color: var(--text-primary);
+    font-family: var(--font-family-mono);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    white-space: nowrap;
+}
+.mbp-beat-sep {
+    margin: 0 1px;
+    color: var(--text-tertiary);
+}
+
+/* 底部状态栏的实际秒数: 仅手机横屏使用 (顶栏空间不够时下移) */
+.status-time-mobile {
+    display: none;
+}
+
+/* ---------- 抽屉条目 (竖屏 / 横屏共用, 抽屉面板本身只在移动端显示) ---------- */
+.drawer-group + .drawer-group {
+    margin-top: var(--space-2);
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--ctrl-stroke-default);
+}
+.drawer-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 40px;
+    padding: 0 var(--space-2);
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1.2;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color var(--anim-fast);
+}
+/* 图标覆盖面积大于文字, 用更浅的一档颜色与文字配平 */
+.drawer-item .drawer-icon {
+    flex: 0 0 auto;
+    width: 18px;
+    font-size: 15px;
+    text-align: center;
+    color: var(--text-secondary);
+}
+.drawer-item:hover {
+    background: var(--ctrl-fill-secondary);
+}
+.drawer-item:active {
+    background: var(--ctrl-fill-pressed);
+}
+.drawer-item:disabled {
+    color: var(--text-disabled);
+    pointer-events: none;
+}
+.drawer-item:disabled .drawer-icon {
+    color: var(--text-disabled);
+}
+
+/* ==================================================================
+   24a. 移动端共用样式 (竖屏 + 手机横屏)
+   ================================================================== */
+@media (max-width: 768px), (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
+    /* 速度输入框与右侧按钮组收进抽屉 (抽屉内容由 20-mobile.js 生成) */
+    .toolbar-tempo-section,
+    .toolbar-right {
+        display: none !important;
+    }
+
+    /* 顶栏左侧按钮: 紧凑一档, 把宽度让给进度信息 */
+    .toolbar .toolbar-section .toolbar-btn {
+        min-width: 28px;
+        min-height: 28px;
+        padding: 7px;
+        font-size: 13px;
+    }
+    .toolbar .toolbar-section .toolbar-btn .icon {
+        font-size: 15px;
+    }
+
+    /* 进度信息: 占满剩余宽度并靠右 (样式主体在基础层, 这里只覆盖布局与移动端专属控件) */
+    .mobile-bar-progress {
+        flex: 1 1 auto;
+        gap: var(--space-1);
+        padding-left: var(--space-1);
+        justify-content: flex-end;
+    }
+
+    /* 移动端顶栏的竖分隔线在窄屏是噪声 (标题已隐藏, 线后面没有内容), 同时让出宽度 */
+    .toolbar > .toolbar-section > .toolbar-divider {
+        display: none;
+    }
+
+    .mobile-bar-progress .mbp-drawer-btn {
+        display: inline-flex;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border: 0;
+        border-radius: var(--radius-sm);
+        background: transparent;
+        color: var(--text-primary);
+        font-size: 14px;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+    }
+    .mobile-bar-progress .mbp-drawer-btn:active {
+        background: var(--ctrl-fill-secondary);
+    }
+
+    /* 速度控件: 上下拖动调整, 点击就地在框内输入 */
+    .mobile-bar-progress .mbp-tempo {
+        display: inline-flex;
+        padding: 0;
+        cursor: ns-resize;
+        touch-action: none;
+        transition: border-color var(--anim-fast);
+    }
+    .mbp-tempo.is-dragging,
+    .mbp-tempo.is-editing {
+        border-color: var(--accent);
+    }
+    .mbp-tempo-readout {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        box-sizing: border-box;
+        width: 100%;
+        height: 100%;
+        padding: 0 var(--space-2);
+        border: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        font-variant-numeric: inherit;
+        line-height: 1;
+        cursor: ns-resize;
+        touch-action: none;
+    }
+    .mbp-tempo-unit {
+        font-size: 10px;
+        color: var(--text-secondary);
+    }
+    .mbp-tempo.is-editing .mbp-tempo-readout {
+        display: none;
+    }
+    .mbp-tempo-input {
+        display: none;
+        box-sizing: border-box;
+        width: 100%;
+        height: 100%;
+        padding: 0 6px;
+        border: 0;
+        background: transparent;
+        color: var(--text-primary);
+        font-family: var(--font-family-mono);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        text-align: center;
+        outline: none;
+        -moz-appearance: textfield;
+    }
+    .mbp-tempo.is-editing .mbp-tempo-input {
+        display: block;
+    }
+    .mbp-tempo-input::-webkit-outer-spin-button,
+    .mbp-tempo-input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    /* ---------- 侧边抽屉 ---------- */
+    .landscape-drawer {
+        display: flex;
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 10005;
+        flex-direction: column;
+        box-sizing: border-box;
+        width: min(320px, 82vw);
+        background: var(--mica-base);
+        backdrop-filter: var(--surface-blur);
+        -webkit-backdrop-filter: var(--surface-blur);
+        border-left: 1px solid var(--ctrl-stroke-default);
+        box-shadow: -12px 0 32px rgba(0, 0, 0, 0.36);
+        transform: translateX(101%);
+        transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+        pointer-events: none;
+    }
+    .landscape-drawer.visible {
+        transform: translateX(0);
+        pointer-events: auto;
+    }
+    .landscape-drawer-mask {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 10004;
+        background: rgba(0, 0, 0, 0.45);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.22s ease;
+    }
+    .landscape-drawer-mask.visible {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    .landscape-drawer-header {
+        display: flex;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: space-between;
+        padding: var(--space-2) var(--space-3);
+        border-bottom: 1px solid var(--ctrl-stroke-default);
+    }
+    .landscape-drawer-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+    .landscape-drawer-close {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border: 0;
+        border-radius: var(--radius-sm);
+        background: transparent;
+        color: var(--text-secondary);
+        font-size: 18px;
+        line-height: 1;
+        cursor: pointer;
+    }
+    .landscape-drawer-close:active {
+        background: var(--ctrl-fill-secondary);
+    }
+    .landscape-drawer-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        padding: var(--space-2);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
+/* ==================================================================
+   24b. 手机竖屏 / 窄屏: 顶栏左侧保留按钮, 进度信息靠右
+   ================================================================== */
+@media (max-width: 768px) {
+    .mobile-bar-progress {
+        justify-content: flex-end;
+    }
+}
+
+/* ==================================================================
+   24c. 手机横屏: 顶栏按钮全部进抽屉, 实际秒数下移到状态栏
+   ================================================================== */
+@media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
+    /* 旧横屏规则把整条顶栏藏掉; 这里保留顶栏, 只把按钮收进抽屉 */
+    .toolbar {
+        display: flex !important;
+        box-sizing: border-box;
+        height: var(--toolbar-height);
+        min-height: var(--toolbar-height);
+        padding: 0 var(--space-2);
+        gap: var(--space-1);
+    }
+    .toolbar-section {
+        display: none !important;
+    }
+    .mobile-bar-progress {
+        justify-content: space-between;
+    }
+    /* 实际秒数改到底部状态栏, 顶栏不再重复显示 */
+    .mbp-time {
+        display: none;
+    }
+    .mbp-chip {
+        height: 24px;
+    }
+    .mbp-chip,
+    .mbp-tempo-input {
+        font-size: 11px;
+    }
+
+    /* 抽屉在矮视口里要能一屏放下全部条目 (10 项), 因此比竖屏更紧凑 */
+    .landscape-drawer-header {
+        padding: 6px var(--space-3);
+    }
+    .landscape-drawer-body {
+        padding: 6px;
+    }
+    .drawer-group + .drawer-group {
+        margin-top: var(--space-1);
+        padding-top: var(--space-1);
+    }
+    .drawer-item {
+        min-height: 32px;
+        font-size: 12.5px;
+    }
+    .drawer-item .drawer-icon {
+        font-size: 14px;
+    }
+
+    /* 底部状态栏: 略微加高以容纳两行时间显示 (原 28px) */
+    :root {
+        --status-height: 34px;
+    }
+    .status-bar,
+    #status-bar {
+        height: 34px !important;
+    }
+    .status-time-mobile {
+        display: flex;
+        flex: 0 0 auto;
+        flex-direction: column;
+        align-items: flex-end;
+        justify-content: center;
+        margin-right: var(--space-1);
+        font-family: var(--font-family-mono);
+        font-variant-numeric: tabular-nums;
+        line-height: 1.15;
+        white-space: nowrap;
+    }
+    .status-time-mobile .stm-current {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+    .status-time-mobile .stm-total {
+        font-size: 10px;
+        color: var(--text-tertiary);
+    }
+}
+
+/* 极窄屏: 再压一档, 保证三块进度信息不换行 */
+@media (max-width: 360px) {
+    .mbp-time-current {
+        font-size: 12px;
+    }
+    .mbp-time-total {
+        font-size: 9px;
+    }
+    .mbp-chip {
+        font-size: 11px;
+        padding: 0 6px;
+    }
+    .mbp-tempo-unit {
+        display: none;
+    }
+    .mbp-tempo-readout {
+        padding: 0 6px;
+    }
+}
+
+/* ==================================================================
+   24d. 顶栏溢出逐级压缩
+   由 20-mobile.js 的 refreshMobileProgressLayout() 按实际测量结果切换,
+   与项目既有的 .toolbar-compact 同一套思路: 先牺牲装饰 (单位/内边距),
+   再牺牲字号, 最后才是左侧按钮的触控尺寸。两级都不够时才会真的溢出。
+   ================================================================== */
+/* 第一级: 只压进度信息自身, 桌面/移动都适用 */
+.toolbar.mp-compact .mbp-group {
+    gap: 4px;
+}
+.toolbar.mp-compact .mbp-chip {
+    padding: 0 6px;
+    font-size: 11px;
+}
+.toolbar.mp-compact .mbp-tempo-readout {
+    padding: 0 6px;
+}
+.toolbar.mp-compact .mbp-tempo-unit {
+    display: none;
+}
+.toolbar.mp-compact .mbp-time-current {
+    font-size: 12px;
+}
+.toolbar.mp-compact .mbp-time-total {
+    font-size: 9px;
+}
+
+/* 第二级: 连顶栏按钮一起压 (仅移动端, 不干扰桌面顶栏) */
+@media (max-width: 768px), (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
+    .toolbar.mp-ultra .mbp-time-current {
+        font-size: 11px;
+    }
+    .toolbar.mp-ultra .mbp-chip {
+        padding: 0 5px;
+        font-size: 10px;
+    }
+    .toolbar.mp-ultra .toolbar-section .toolbar-btn {
+        min-width: 24px;
+        min-height: 24px;
+        padding: 4px;
+    }
+    .toolbar.mp-ultra .toolbar-section .toolbar-btn .icon {
+        font-size: 13px;
+    }
+}
+
+
 

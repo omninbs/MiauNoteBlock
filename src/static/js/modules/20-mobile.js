@@ -20,75 +20,116 @@
     function showMidiNotice() { return N.showMidiNotice.apply(this, arguments); }
     function switchTool() { return N.switchTool.apply(this, arguments); }
 
+    // ============ 移动端侧边抽屉 ============
+    // 竖屏: 顶栏右侧按钮 (设置/关于/创作辅助/自定义音色/功能) 收进抽屉;
+    // 横屏: 视口高度紧张, 顶栏按钮按【从左到右】的顺序全部收进抽屉。
+    // 条目不使用 cloneNode 复制原按钮: 克隆会把 id 一起复制下来
+    // (例如速度输入框 #tempo-value), 造成重复 id 并让 $('tempo-value') 取错节点。
+    var DRAWER_TOOLBAR_LEFT = [
+        { id: 'btn-file', icon: 'fa-file', label: '文件' },
+        { id: 'btn-save', icon: 'fa-floppy-disk', label: '保存' },
+        { id: 'btn-undo', icon: 'fa-rotate-left', label: '撤销' },
+        { id: 'btn-redo', icon: 'fa-rotate-right', label: '重做' }
+    ];
+    var DRAWER_TOOLBAR_RIGHT = [
+        { id: 'btn-settings', icon: 'fa-gear', label: '设置' },
+        { id: 'btn-about', icon: 'fa-circle-info', label: '关于' },
+        { id: 'btn-assist', icon: 'fa-wand-magic-sparkles', label: '创作辅助' },
+        { id: 'btn-custom-instruments', icon: 'fa-wave-square', label: '自定义音色' },
+        { id: 'btn-functions', icon: 'fa-table-cells-large', label: '功能' }
+    ];
+
+    // 与 CSS 中「手机横屏」的媒体条件保持一致
+    function isMobileLandscapeLayout() {
+        if (!window.matchMedia) return false;
+        return window.matchMedia('(orientation: landscape) and (max-height: 500px) and (pointer: coarse)').matches;
+    }
+
     function createLandscapeDrawerDOM() {
-        var btn = $('landscape-menu-btn');
         var drawer = $('landscape-drawer');
         var closeBtn = $('landscape-drawer-close');
         var mask = $('landscape-drawer-mask');
         var body = $('landscape-drawer-body');
-        if (!btn || !drawer || !body) return;
+        var openBtn = $('mobile-drawer-btn');
+        if (!drawer || !body) return;
 
-        // 把主工具栏的所有按钮克隆到抽屉
-        var toolbar = $('toolbar');
-        if (toolbar) {
-            var sections = toolbar.querySelectorAll('.toolbar-section');
-            sections.forEach(function(section) {
-                var clone = section.cloneNode(true);
-                // 给按钮添加文字标签 (如果只有图标)
-                clone.querySelectorAll('.toolbar-btn').forEach(function(b) {
-                    var icon = b.querySelector('i');
-                    if (icon && !b.querySelector('.label')) {
-                        var labelText = b.title || b.id || '';
-                        if (labelText && b.id !== 'btn-toolbar-more') {
-                            var label = document.createElement('span');
-                            label.className = 'label';
-                            label.textContent = labelText;
-                            b.appendChild(label);
-                        }
-                    }
-                    // 绑定事件 - 通过 id 触发原按钮
-                    var origId = b.id;
-                    if (origId) {
-                        b.addEventListener('click', function(e) {
-                            // 关闭抽屉, 触发原按钮点击
-                            closeLandscapeDrawer();
-                            var orig = $(origId);
-                            if (orig) orig.click();
-                        });
-                    }
-                });
-                body.appendChild(clone);
-            });
+        var titleEl = $('landscape-drawer-title');
+        if (titleEl) titleEl.textContent = N.i18nText('菜单');
+
+        function closeLandscapeDrawer() {
+            drawer.classList.remove('visible');
+            if (mask) mask.classList.remove('visible');
+            drawer.setAttribute('aria-hidden', 'true');
         }
 
-        // 附加: 查找音符入口 (顶栏无对应按钮, 手动添加)
-        if (body && !body.querySelector('[data-landscape-find]')) {
-            var findEntry = document.createElement('button');
-            findEntry.setAttribute('data-landscape-find', '1');
-            findEntry.className = 'toolbar-btn drawer-find-entry';
-            findEntry.title = '查找音符 (Ctrl+F)';
-            findEntry.style.cssText = 'display:flex;align-items:center;gap:8px;width:100%;';
-            findEntry.innerHTML = '<i class="fa-solid fa-magnifying-glass icon"></i><span class="label">查找音符</span>';
-            findEntry.addEventListener('click', function() {
+        function makeDrawerItem(icon, label, disabled, onClick) {
+            var item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'drawer-item';
+            item.disabled = !!disabled;
+            var iconEl = document.createElement('i');
+            iconEl.className = 'fa-solid ' + icon + ' drawer-icon';
+            iconEl.setAttribute('aria-hidden', 'true');
+            var textEl = document.createElement('span');
+            textEl.textContent = N.i18nText(label);
+            item.appendChild(iconEl);
+            item.appendChild(textEl);
+            item.addEventListener('click', onClick);
+            return item;
+        }
+
+        // 转发到原按钮: 原按钮仍在 DOM 中 (只是被 CSS 隐藏), 逻辑与桌面端完全一致
+        function appendForwardingGroup(entries) {
+            var groupEl = document.createElement('div');
+            groupEl.className = 'drawer-group';
+            for (var i = 0; i < entries.length; i++) {
+                (function(entry) {
+                    var orig = $(entry.id);
+                    groupEl.appendChild(makeDrawerItem(
+                        entry.icon,
+                        entry.label,
+                        !orig || orig.disabled,
+                        function() {
+                            closeLandscapeDrawer();
+                            var target = $(entry.id);
+                            if (target) target.click();
+                        }
+                    ));
+                })(entries[i]);
+            }
+            body.appendChild(groupEl);
+        }
+
+        // 每次打开时重建: 方向变化后条目集合随之变化, 也顺带同步按钮的禁用状态
+        function buildDrawerBody() {
+            body.innerHTML = '';
+            if (isMobileLandscapeLayout()) appendForwardingGroup(DRAWER_TOOLBAR_LEFT);
+            appendForwardingGroup(DRAWER_TOOLBAR_RIGHT);
+
+            // 附加: 查找音符 (顶栏没有对应按钮)
+            var extraGroup = document.createElement('div');
+            extraGroup.className = 'drawer-group';
+            extraGroup.appendChild(makeDrawerItem('fa-magnifying-glass', '查找音符', false, function() {
                 closeLandscapeDrawer();
                 if (findPanelVisible()) closeFindPanel();
                 else openFindPanel();
-            });
-            body.appendChild(findEntry);
+            }));
+            body.appendChild(extraGroup);
         }
 
-        // 打开抽屉
-        btn.addEventListener('click', function() {
+        function openLandscapeDrawer() {
+            buildDrawerBody();
             drawer.classList.add('visible');
-            mask.classList.add('visible');
+            if (mask) mask.classList.add('visible');
             drawer.setAttribute('aria-hidden', 'false');
-        });
+        }
 
-        // 关闭抽屉
-        function closeLandscapeDrawer() {
-            drawer.classList.remove('visible');
-            mask.classList.remove('visible');
-            drawer.setAttribute('aria-hidden', 'true');
+        if (openBtn) {
+            openBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                openLandscapeDrawer();
+            });
         }
         if (closeBtn) closeBtn.addEventListener('click', closeLandscapeDrawer);
         if (mask) mask.addEventListener('click', closeLandscapeDrawer);
@@ -97,6 +138,243 @@
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape' && drawer.classList.contains('visible')) {
                 closeLandscapeDrawer();
+            }
+        });
+
+        N.openMobileDrawer = openLandscapeDrawer;
+        N.closeMobileDrawer = closeLandscapeDrawer;
+    }
+
+    // ============ 移动端顶栏进度信息 ============
+    // 左: 实际秒数 (当前 / 全长), 中: 速度 (可拖动/输入), 右: 节拍进度
+    // 绝对 tick 进度仍由状态栏 #progress-time 显示, 两者互不影响
+    var NBS_TICKS_PER_BEAT = 4;                         // NBS 标准: 1 拍 (四分) = 4 tick
+    var NBS_TICKS_PER_WHOLE = NBS_TICKS_PER_BEAT * 4;   // 1 全音 = 4 拍 = 16 tick
+    var MOBILE_PROGRESS_MIN_INTERVAL_MS = 60;           // 播放时本函数每帧都会调用, 略作节流
+    var _mobileProgressLastRun = -1;
+    var _mobileProgressLastClock = -1;
+
+    function padNumber(value, width) {
+        var text = String(value);
+        while (text.length < width) text = '0' + text;
+        return text;
+    }
+
+    // NBS 的 tempo 单位就是 tick/秒 (t/s), 因此秒数 = tick / tempo
+    function ticksToSeconds(ticks) {
+        var tps = parseFloat(state.tempo);
+        if (!isFinite(tps) || tps <= 0) return 0;
+        var value = parseFloat(ticks);
+        if (!isFinite(value) || value < 0) value = 0;
+        return value / tps;
+    }
+
+    // "00:02:11;187" —— 时:分:秒;毫秒
+    function formatClock(seconds) {
+        var totalMs = Math.round(Math.max(0, seconds) * 1000);
+        var ms = totalMs % 1000;
+        var totalSec = (totalMs - ms) / 1000;
+        return padNumber(Math.floor(totalSec / 3600), 2) + ':' +
+            padNumber(Math.floor(totalSec / 60) % 60, 2) + ':' +
+            padNumber(totalSec % 60, 2) + ';' + padNumber(ms, 3);
+    }
+
+    // 节拍进度: 全音 · 四分 · 十六分, 三段都从 1 开始计数
+    function formatBeatProgress(tick) {
+        var t = Math.floor(Math.max(0, tick));
+        return {
+            whole: Math.floor(t / NBS_TICKS_PER_WHOLE) + 1,
+            quarter: Math.floor((t % NBS_TICKS_PER_WHOLE) / NBS_TICKS_PER_BEAT) + 1,
+            sixteenth: (t % NBS_TICKS_PER_BEAT) + 1
+        };
+    }
+
+    function formatTempoValue(value) {
+        var v = parseFloat(value);
+        if (!isFinite(v) || v < 0) v = 0;
+        return (Math.round(v * 100) / 100).toFixed(2);
+    }
+
+    function setTextIfChanged(el, text) {
+        if (el && el.textContent !== text) el.textContent = text;
+    }
+
+    // 顶栏溢出逐级压缩 (mp-compact → mp-ultra): 与 refreshToolbarLayout 的
+    // toolbar-compact 同一套思路 —— 按实际测量结果切换, 而不是写死断点。
+    var _mobileProgressLayoutTimer = null;
+    var _mobileProgressLayoutKey = '';
+
+    function refreshMobileProgressLayout() {
+        var bar = $('mobile-bar-progress');
+        var toolbar = $('toolbar');
+        if (!bar || !toolbar) return;
+        toolbar.classList.remove('mp-compact', 'mp-ultra');
+        // 桌面端进度信息是隐藏的, 不参与测量
+        if (!bar.clientWidth) return;
+        if (bar.scrollWidth <= bar.clientWidth + 1) return;
+        toolbar.classList.add('mp-compact');
+        if (bar.scrollWidth > bar.clientWidth + 1) toolbar.classList.add('mp-ultra');
+    }
+
+    function scheduleMobileProgressLayout() {
+        if (_mobileProgressLayoutTimer) return;
+        _mobileProgressLayoutTimer = setTimeout(function() {
+            _mobileProgressLayoutTimer = null;
+            refreshMobileProgressLayout();
+        }, 60);
+    }
+
+    function updateMobileProgress(force) {
+        var currentEl = $('mbp-time-current');
+        if (!currentEl) return;
+
+        var now = (window.performance && performance.now) ? performance.now() : Date.now();
+        if (!force && _mobileProgressLastRun >= 0 && (now - _mobileProgressLastRun) < MOBILE_PROGRESS_MIN_INTERVAL_MS) {
+            return;
+        }
+        _mobileProgressLastRun = now;
+
+        var currentTick = state.currentTick || 0;
+        var totalTicks = N.getSongLengthTicks ? N.getSongLengthTicks() : 0;
+
+        var clockCurrent = formatClock(ticksToSeconds(currentTick));
+        var clockTotal = '/ ' + formatClock(ticksToSeconds(totalTicks));
+        var tempoText = formatTempoValue(state.tempo);
+        var beat = formatBeatProgress(currentTick);
+
+        // 当前时间只在毫秒位真的变化时写 DOM, 避免每帧触发顶栏重排
+        if (clockCurrent !== _mobileProgressLastClock) {
+            _mobileProgressLastClock = clockCurrent;
+            setTextIfChanged($('mbp-time-current'), clockCurrent);
+            setTextIfChanged($('stm-time-current'), clockCurrent);
+        }
+        setTextIfChanged($('mbp-time-total'), clockTotal);
+        setTextIfChanged($('stm-time-total'), clockTotal);
+        setTextIfChanged($('mbp-tempo-value'), tempoText);
+        setTextIfChanged($('mbp-beat-whole'), String(beat.whole));
+        setTextIfChanged($('mbp-beat-quarter'), String(beat.quarter));
+        setTextIfChanged($('mbp-beat-sixteenth'), String(beat.sixteenth));
+
+        // 文字长度变化 (如节拍位数、速度位数) 可能改变顶栏所需宽度, 重新量一次
+        var layoutKey = clockCurrent.length + '|' + clockTotal.length + '|' + tempoText.length +
+            '|' + beat.whole + '|' + beat.quarter + '|' + beat.sixteenth;
+        if (layoutKey !== _mobileProgressLayoutKey) {
+            _mobileProgressLayoutKey = layoutKey;
+            scheduleMobileProgressLayout();
+        }
+    }
+
+    // ============ 移动端速度控件 (拖动微调 + 点击输入) ============
+    var MOBILE_TEMPO_MIN = 0;
+    var MOBILE_TEMPO_MAX = 512;
+    var MOBILE_TEMPO_STEP_PER_PX = 0.2;   // 上下拖动 1px = 0.2 t/s
+    var MOBILE_TEMPO_DRAG_THRESHOLD = 4;  // 位移小于该值视为点击
+
+    function applyMobileTempo(value) {
+        var v = parseFloat(value);
+        if (!isFinite(v)) return;
+        v = Math.max(MOBILE_TEMPO_MIN, Math.min(MOBILE_TEMPO_MAX, v));
+        v = Math.round(v * 100) / 100;
+        state.tempo = v;
+        $setValue('tempo-value', String(v));
+        $setValue('settings-tempo-input', v);
+        $setText('settings-tempo-value', v.toFixed(1));
+        markDirty();
+        if (state.isPlaying) restartPlayback();
+        updateMobileProgress(true);
+    }
+
+    function initMobileTempoControl() {
+        var wrap = $('mbp-tempo');
+        var readout = $('mbp-tempo-readout');
+        var input = $('mbp-tempo-input');
+        if (!wrap || !readout || !input) return;
+
+        var drag = null;
+
+        function startEdit() {
+            input.value = formatTempoValue(state.tempo);
+            wrap.classList.add('is-editing');
+            // 弹出数字键盘并全选, 便于直接覆盖
+            try { input.focus(); } catch (e) {}
+            if (input.select) input.select();
+        }
+
+        function commitEdit() {
+            if (!wrap.classList.contains('is-editing')) return;
+            wrap.classList.remove('is-editing');
+            applyMobileTempo(input.value);
+        }
+
+        function cancelEdit() {
+            wrap.classList.remove('is-editing');
+            updateMobileProgress(true);
+        }
+
+        input.addEventListener('keydown', function(e) {
+            // 阻止冒泡到全局快捷键 (数字键在项目里绑定了钢琴音符)
+            e.stopPropagation();
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                commitEdit();
+                input.blur();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                cancelEdit();
+                input.blur();
+            }
+        });
+        input.addEventListener('blur', function() {
+            if (wrap.classList.contains('is-editing')) commitEdit();
+        });
+
+        readout.addEventListener('pointerdown', function(e) {
+            if (typeof e.button === 'number' && e.button !== 0) return;
+            drag = {
+                startY: e.clientY,
+                startTempo: parseFloat(state.tempo) || 0,
+                moved: false,
+                undoPushed: false
+            };
+            wrap.classList.add('is-dragging');
+            if (readout.setPointerCapture) {
+                try { readout.setPointerCapture(e.pointerId); } catch (err) {}
+            }
+            e.preventDefault();
+        });
+
+        readout.addEventListener('pointermove', function(e) {
+            if (!drag) return;
+            var delta = drag.startY - e.clientY;   // 向上拖动 = 提速
+            if (!drag.moved && Math.abs(delta) < MOBILE_TEMPO_DRAG_THRESHOLD) return;
+            drag.moved = true;
+            if (!drag.undoPushed) {
+                if (N.pushUndo) N.pushUndo();
+                drag.undoPushed = true;
+            }
+            applyMobileTempo(drag.startTempo + delta * MOBILE_TEMPO_STEP_PER_PX);
+            e.preventDefault();
+        });
+
+        function endDrag(e) {
+            if (!drag) return;
+            var moved = drag.moved;
+            drag = null;
+            wrap.classList.remove('is-dragging');
+            if (readout.releasePointerCapture && e && typeof e.pointerId === 'number') {
+                try { readout.releasePointerCapture(e.pointerId); } catch (err) {}
+            }
+            // 没有发生位移 = 单击: 就地输入速度
+            if (!moved) startEdit();
+        }
+        readout.addEventListener('pointerup', endDrag);
+        readout.addEventListener('pointercancel', endDrag);
+
+        // 键盘可达: 聚焦后回车开始输入
+        readout.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                startEdit();
             }
         });
     }
@@ -432,6 +710,7 @@
         updateRadioTempoSlider();
         markDirty();
         if (state.isPlaying) restartPlayback();
+        updateMobileProgress(true);
     }
 
     // 全局鼠标事件 (拖动期间)
@@ -472,6 +751,11 @@
     N.createLandscapeDrawerDOM = createLandscapeDrawerDOM;
     N.createMobileFabBar = createMobileFabBar;
     N.initMobileToolSwitcher = initMobileToolSwitcher;
+    N.initMobileTempoControl = initMobileTempoControl;
+    N.updateMobileProgress = updateMobileProgress;
+    N.refreshMobileProgressLayout = refreshMobileProgressLayout;
+    N.applyMobileTempo = applyMobileTempo;
+    N.isMobileLandscapeLayout = isMobileLandscapeLayout;
     N.initRadioTempoSlider = initRadioTempoSlider;
     N.updateRadioTempoSlider = updateRadioTempoSlider;
     N.setRadioTempo = setRadioTempo;

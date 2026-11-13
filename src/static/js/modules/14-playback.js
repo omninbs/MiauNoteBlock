@@ -38,8 +38,13 @@
     if (!state.followMode) {
         try { state.followMode = localStorage.getItem('noteblock.follow_mode') || 'frame'; } catch (e) { state.followMode = 'frame'; }
     }
-    if (state.regionStartPlay === undefined) state.regionStartPlay = readBoolSetting('noteblock.region_start_play', false);
-    if (state.regionStopAfter === undefined) state.regionStopAfter = readBoolSetting('noteblock.region_stop_after', false);
+    // smoothScroll 不是独立开关, 只表示「是否居中跟随」= 跟随开启 且 非按页;
+    // 「按页」是书本翻页, 播放头随播放移动, 不固定居中
+    state.smoothScroll = state.followProgress !== false &&
+        (state.followMode === 'frame' || state.followMode === 'tick');
+    // 区间播放选项默认开启
+    if (state.regionStartPlay === undefined) state.regionStartPlay = readBoolSetting('noteblock.region_start_play', true);
+    if (state.regionStopAfter === undefined) state.regionStopAfter = readBoolSetting('noteblock.region_stop_after', true);
     // 方向键临时控制: 倍速与倒放
     state._playbackRate = 1;
     state._playbackReverse = false;
@@ -50,22 +55,33 @@
         return Math.max(state.maxTick + 4, 64);
     }
 
-    function updateAutoScrollBtnIcon() {
-        // 工具栏上的旧按钮已移入设置弹窗，这里主要同步设置弹窗 UI
+    // 跟随播放指示器相关状态统一入口:
+    // followProgress = 是否跟随; followMode = 跟随方式 (page 书本翻页 / tick 按刻 / frame 按帧);
+    // smoothScrollEnabled 仅表示「居中平滑跟随」, 由模式推导, 不与跟随开关混同
+    function syncFollowState() {
+        var centered = state.followProgress !== false &&
+            (state.followMode === 'frame' || state.followMode === 'tick');
+        state.smoothScroll = centered;
+        if (state.pianoRoll) state.pianoRoll.smoothScrollEnabled = centered;
+        var smoothChk = $('settings-smooth-scroll');
+        if (smoothChk) smoothChk.checked = state.followProgress !== false;
         var btn = $('btn-auto-scroll');
         if (btn) {
             var ic = btn.querySelector('i');
-            if (state.smoothScroll) {
+            if (state.followProgress !== false) {
                 if (ic) ic.className = 'fa-solid fa-arrows-to-dot icon';
-                btn.title = '平滑翻页: 开启';
+                btn.title = '跟随播放指示器: 开启';
             } else {
                 if (ic) ic.className = 'fa-solid fa-forward-step icon';
-                btn.title = '平滑翻页: 关闭';
+                btn.title = '跟随播放指示器: 关闭';
             }
         }
-        // 同步设置弹窗开关
-        var smoothChk = $('settings-smooth-scroll');
-        if (smoothChk) smoothChk.checked = !!state.smoothScroll;
+        return centered;
+    }
+
+    function updateAutoScrollBtnIcon() {
+        // 工具栏上的旧按钮已移入设置弹窗，这里主要同步设置弹窗 UI
+        syncFollowState();
     }
 
     // 打开设置弹窗 (不含速度控制)
@@ -77,9 +93,14 @@
         }
         // 同步当前状态
         updateAutoScrollBtnIcon();
-        // 同步平滑翻页开关
+        // 同步跟随开关
         var smoothChk = $('settings-smooth-scroll');
-        if (smoothChk) smoothChk.checked = !!state.smoothScroll;
+        if (smoothChk) smoothChk.checked = state.followProgress !== false;
+        // 同步区间播放选项 (与时间栏右键菜单同一状态)
+        var regionStartChk = $('settings-region-start-play');
+        if (regionStartChk) regionStartChk.checked = !!state.regionStartPlay;
+        var regionStopChk = $('settings-region-stop-after');
+        if (regionStopChk) regionStopChk.checked = !!state.regionStopAfter;
         var streamingChk = $('settings-streaming-lyrics');
         if (streamingChk) streamingChk.checked = !!state.streamingLyrics;
         var renderFpsSel = $('settings-render-fps');
@@ -140,6 +161,8 @@
         if (timeEl) {
             timeEl.textContent = Math.floor(state.currentTick) + ' / ' + Math.floor(totalTicks) + ' tick';
         }
+        // 移动端顶栏的进度信息 (实际秒数 / 节拍进度) 与绝对 tick 同步刷新
+        if (N.updateMobileProgress) N.updateMobileProgress(true);
     }
 
     function updatePlayheadPosition() {
@@ -188,6 +211,8 @@
     function handlePlayToggle() {
         // 方向键走带与正式播放互斥, 避免两个循环同时推进播放头
         stopArrowScrub();
+        // 播放前同步跟随状态 (开关 + 翻页方式), 保证与设置/右键菜单一致
+        syncFollowState();
         if (state.isPlaying) {
             // 暂停: 保持 currentTick 和 playhead 位置, 不重置
             state.isPlaying = false;
@@ -221,15 +246,15 @@
                 var dw = state.pianoRoll.displayWidth;
                 // 使用统一的 _zoomX(): 片段模式走独立横向缩放, 避免 scrollX 计算错误跳到极端位置
                 var cellW = cfg.cellW * state.pianoRoll._zoomX();
-                if (state.pianoRoll.smoothScrollEnabled) {
-                    // 平滑翻页: tick 对齐播放头固定位置 (允许负 scrollX)
+                var fs = state.pianoRoll._followState ? state.pianoRoll._followState() : null;
+                if (fs && fs.centered) {
+                    // 按刻/按帧居中跟随: 播放头固定视口 1/3
                     var playheadX = pw + (dw - pw) / 3;
                     state.pianoRoll.scrollX = state.currentTick * cellW + pw - playheadX;
                 } else {
-                    // 普通模式: 把 currentTick 对应位置滚到屏幕中间
-                    var centerX = pw + (dw - pw) / 2;
-                    state.pianoRoll.scrollX = state.currentTick * cellW + pw - centerX;
-                    if (state.pianoRoll.scrollX < 0) state.pianoRoll.scrollX = 0;
+                    // 按页 / 关闭跟随: 页对齐翻页, 播放头落在页内
+                    var pageW = Math.max(1, dw - pw);
+                    state.pianoRoll.scrollX = pageW * Math.floor((state.currentTick * cellW) / pageW);
                 }
                 // 钳制滚动上限, 防止视图跑到歌曲范围之外 (修复播放后内容不显示)
                 var maxSX = state.pianoRoll._getMaxScrollX();
@@ -291,6 +316,8 @@
         if (!state.noteIndex || state.noteIndex.size === 0) {
             buildNoteIndex(state.notes);
         }
+        // 片段侧栏电平表: 立刻从空闲轮询切到 rAF, 避免起播后头 100~150ms 没有电平
+        if (N.wakeLaneMeter) N.wakeLaneMeter();
         if (state.pianoRoll) state.pianoRoll._smoothedPlayheadTick = state.currentTick;
 
         var tickMs = Math.max(10, Math.floor(1000 / Math.max(1, state.tempo)));
@@ -413,6 +440,8 @@
                         timeEl.textContent = Math.floor(tick) + ' / ' + Math.floor(totalTicks) + ' tick';
                     }
                     $setText('current-pos', '位置: ' + state.currentTick);
+                    // 移动端顶栏进度信息 (内部自带节流, 播放时逐帧调用不划算)
+                    if (N.updateMobileProgress) N.updateMobileProgress();
                     _lastProgressUI = tick;
                 }
             }
@@ -425,31 +454,8 @@
             var visualFrameMs = state.renderFpsLimit > 0 ? 1000 / state.renderFpsLimit : 0;
             var shouldRenderVisual = visualFrameMs === 0 || now >= _nextVisualFrame;
             if (state.pianoRoll && shouldRenderVisual) {
-                // 跟随进度条 (模式: 按页 / 按刻 / 按帧), 播放中拖动查看时暂停
-                if (state.followProgress !== false && state.pianoRoll.smoothScrollEnabled
-                        && !state.pianoRoll._playbackViewHold && !state.pianoRoll._playbackReturnRAF) {
-                    var visibleWidth = state.pianoRoll.displayWidth - state.pianoRoll._currentPanelWidth;
-                    var playheadX = state.pianoRoll._currentPanelWidth + visibleWidth / 3;
-                    // 使用 _zoomX(): 片段模式走独立横向缩放, 避免 scrollX 跳到极端位置
-                    var cellW = state.pianoRoll._cfg.cellW * state.pianoRoll._zoomX();
-                    var dispTick = state.pianoRoll._getDisplayTick();
-                    var followMode = state.followMode || 'frame';
-                    var targetScrollX;
-                    if (followMode === 'page') {
-                        // 按页: 视图以整页宽度为步进翻动
-                        var pageTicks = Math.max(1, Math.floor(visibleWidth / cellW));
-                        var pageIndex = Math.floor(dispTick / pageTicks);
-                        targetScrollX = pageIndex * pageTicks * cellW + state.pianoRoll._currentPanelWidth - playheadX;
-                    } else if (followMode === 'tick') {
-                        // 按刻: 对齐到整数 tick
-                        targetScrollX = Math.floor(dispTick) * cellW + state.pianoRoll._currentPanelWidth - playheadX;
-                    } else {
-                        // 按帧: 每帧平滑跟随
-                        targetScrollX = dispTick * cellW + state.pianoRoll._currentPanelWidth - playheadX;
-                    }
-                    state.pianoRoll.scrollX = Math.max(0, Math.min(targetScrollX, state.pianoRoll._getMaxScrollX()));
-                    state.pianoRoll._fullRedrawNeeded = true;
-                }
+                // 播放跟随统一由 PianoRoll._applyPlaybackAutoScroll 处理
+                // (与设置中的「跟随播放指示器」共用同一状态与按页/按刻/按帧模式)
                 if (state.pianoRoll.redrawPlaybackOverlay) {
                     state.pianoRoll.redrawPlaybackOverlay();
                 }
@@ -478,6 +484,8 @@
         // 停止/暂停时清除歌词浮层与流式累积 (避免再次播放时残留上一段文字)
         resetStreamingLyrics();
         hideLyricsOverlay();
+        // 电平表立即进入淡出阶段, 而不是等空闲轮询到点才归零
+        if (N.wakeLaneMeter) N.wakeLaneMeter();
         if (state.pianoRoll) {
             state.pianoRoll.clearPlayHighlights();
             if (state.pianoRoll.redrawPlaybackOverlay) {
@@ -650,6 +658,7 @@
     // ---- 导出 ----
     N.getSongLengthTicks = getSongLengthTicks;
     N.updateAutoScrollBtnIcon = updateAutoScrollBtnIcon;
+    N.syncFollowState = syncFollowState;
     N.openSettingsDialog = openSettingsDialog;
     N.closeSettingsDialog = closeSettingsDialog;
     N.openTempoDialog = openTempoDialog;

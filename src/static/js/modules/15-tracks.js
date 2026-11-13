@@ -383,6 +383,12 @@
         }
 
         var html = '';
+        // 创建区间放在第一位
+        html += '<div class="ctx-item" data-action="region-create"><span class="ctx-icon"><i class="fa-solid fa-arrows-left-right"></i></span> ' + t('创建区间') + '</div>';
+        if (hasRegion) {
+            html += '<div class="ctx-item" data-action="region-clear"><span class="ctx-icon"><i class="fa-solid fa-xmark"></i></span> ' + t('清除区间') + '</div>';
+        }
+        html += '<div class="ctx-separator"></div>';
         html += '<div class="ctx-title">' + t('进度条') + '</div>';
         html += '<div class="ctx-item ctx-option" data-action="follow-toggle">' + box(follow)
             + '<span class="ctx-label">' + t('播放时跟随进度条') + '</span></div>';
@@ -397,11 +403,6 @@
             + '<span class="ctx-label">' + t('在区间时开始播放') + '</span></div>';
         html += '<div class="ctx-item ctx-option" data-action="region-stop">' + box(stopAfter)
             + '<span class="ctx-label">' + t('在区间后停止播放') + '</span></div>';
-        html += '<div class="ctx-separator"></div>';
-        html += '<div class="ctx-item" data-action="region-create"><span class="ctx-icon"><i class="fa-solid fa-arrows-left-right"></i></span> ' + t('创建区间') + '</div>';
-        if (hasRegion) {
-            html += '<div class="ctx-item" data-action="region-clear"><span class="ctx-icon"><i class="fa-solid fa-xmark"></i></span> ' + t('清除区间') + '</div>';
-        }
 
         menu.innerHTML = html;
         menu.style.display = 'block';
@@ -414,17 +415,25 @@
                 if (this.classList.contains('ctx-disabled')) return;
                 var action = this.dataset.action;
                 if (action === 'follow-toggle') {
+                    // 只切换「是否跟随」; 平滑/按页由跟随方式决定, 两者互不覆盖
                     state.followProgress = !(state.followProgress !== false);
                     persistBool('noteblock.follow_progress', state.followProgress);
+                    if (N.syncFollowState) N.syncFollowState();
                 } else if (action === 'follow-mode') {
                     state.followMode = this.dataset.mode || 'frame';
                     try { localStorage.setItem('noteblock.follow_mode', state.followMode); } catch (err) {}
+                    // 按帧/按刻 = 播放头居中跟随; 按页 = 书本翻页 (不与居中叠加)
+                    if (N.syncFollowState) N.syncFollowState();
                 } else if (action === 'region-start') {
                     state.regionStartPlay = !state.regionStartPlay;
                     persistBool('noteblock.region_start_play', state.regionStartPlay);
+                    var rsChk = $('settings-region-start-play');
+                    if (rsChk) rsChk.checked = !!state.regionStartPlay;
                 } else if (action === 'region-stop') {
                     state.regionStopAfter = !state.regionStopAfter;
                     persistBool('noteblock.region_stop_after', state.regionStopAfter);
+                    var rtChk = $('settings-region-stop-after');
+                    if (rtChk) rtChk.checked = !!state.regionStopAfter;
                 } else if (action === 'region-create') {
                     if (roll && roll.setRegion) {
                         var head = (roll.currentTick !== undefined && roll.currentTick !== null)

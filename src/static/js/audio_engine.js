@@ -368,10 +368,14 @@ function _recordLayerActivity(layer, gain, now, duration) {
 
 /**
  * 按片段轨道返回实时电平数组 (与 laneList 索引一一对应, 0..1)。
- * 精确分轨需要每轨独立 analyser; 这里用「主电平 × 该轨道音符层的发音活动」估算。
- * 无 channel/layerKeys 信息的轨道退化为主电平估算。
+ * 精确分轨需要每轨独立 analyser; 这里用「该轨道音符层的发音活动」估算。
+ *
+ * laneLayerRanges (可选): 片段缝合时建立的权威映射 —— 下标 = 片段轨道, 值为该轨道
+ * 覆盖的全局 layer 号数组。它和 _recordLayerActivity 记录的 n.layer 完全一致,
+ * 因此播放时一定能命中。没有它时退回 lane 自带的 layerKeys/channel (多次缝合后
+ * 可能与当前全局层号不同步, 表现为某些轨道电平永远是 0)。
  */
-function getTrackLevels(laneList) {
+function getTrackLevels(laneList, laneLayerRanges) {
     var master = getMasterLevel();
     if (!laneList || !laneList.length) return [];
     var now = audioContext ? audioContext.currentTime : 0;
@@ -388,10 +392,17 @@ function getTrackLevels(laneList) {
             result.push(0);
             continue;
         }
-        var layers = collectLaneLayers(lane, layerChannelMap);
+        var layers = null;
+        var ranges = laneLayerRanges && laneLayerRanges[i];
+        if (ranges && ranges.length) {
+            layers = [];
+            for (var ri = 0; ri < ranges.length; ri++) layers.push(String(ranges[ri]));
+        } else {
+            layers = collectLaneLayers(lane, layerChannelMap);
+        }
         if (!layers.length) {
             // 无分轨信息: 用主电平估算, 略微压低避免与真实分轨混淆
-            result.push(Math.min(1, master * 0.75));
+            result.push(Math.min(1, master * 0.9));
             continue;
         }
         var factor = 0;
@@ -405,14 +416,16 @@ function getTrackLevels(laneList) {
             var f;
             if (now <= rec.until) {
                 var age = now - rec.t;
-                f = age < 0.04 ? Math.max(0, age / 0.04) : 1;
+                f = age < 0.02 ? Math.max(0, age / 0.02) : 1;
             } else {
                 // 音符结束后 0.22s 内衰减到 0
                 f = Math.max(0, 1 - (now - rec.until) / 0.22);
             }
-            if (f > 0) factor = Math.max(factor, f * Math.min(1, rec.gain * 1.4));
+            if (f > 0) factor = Math.max(factor, f * Math.max(0.5, Math.min(1, rec.gain * 1.6)));
         }
-        result.push(Math.max(0, Math.min(1, master * factor)));
+        // 不再整体乘 master: 单轨轻奏时主电平本身就很小, 直接相乘会让电平条几乎不动。
+        // 改为以该轨发音强度为主, 主电平只做轻微的整体起伏调制。
+        result.push(Math.max(0, Math.min(1, factor * (0.58 + 0.42 * master))));
     }
     return result;
 }

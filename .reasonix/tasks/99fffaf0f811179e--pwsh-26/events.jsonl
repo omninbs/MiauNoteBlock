@@ -1,2 +1,0 @@
-{"sequence":1,"timestamp":"2026-11-13T23:22:30.0355326+08:00","event_type":"state_change","task_id":"99fffaf0f811179e--pwsh-26","session_id":"","state":"running","runtime_state":"alive"}
-{"sequence":2,"timestamp":"2026-11-13T23:22:41.4247581+08:00","event_type":"state_change","task_id":"99fffaf0f811179e--pwsh-26","session_id":"","state":"succeeded","runtime_state":"exited"}

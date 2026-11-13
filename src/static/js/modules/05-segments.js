@@ -266,7 +266,7 @@
     }
 
     // 缝合: 片段 -> state.notes (绝对 tick + 全局 layer)
-    // 静音 / 非独奏 lane: velocity = 0 (保留音符, 导出后可还原分组)
+    // 静音 / 非独奏 lane: 不修改音符力度, 而是静音该 lane 覆盖的 N 个 NBS 轨道
     function segmentCompose() {
         segmentEnsureLanes();
         var lanes = state.segmentLanes;
@@ -281,6 +281,7 @@
         var layerChannelOut = null;   // 片段合成后的 layer -> MIDI 通道 (自动分轨工程用)
         var composeLayerMap = {};     // 原始 layer -> 合成后的 layer (声部映射同步用)
         var layerOwner = {};          // 合成后的 layer -> 片段轨道下标 (新增层沿用轨道配置)
+        var laneLayerRanges = [];     // 片段轨道下标 -> 该轨道对应的 NBS 轨道号列表
         for (var li = 0; li < lanes.length; li++) {
             var lane = lanes[li];
             var segs = [];
@@ -296,6 +297,7 @@
                 }
             }
             var rels = Object.keys(used).map(Number).sort(function(x, y) { return x - y; });
+            var rangeStart = base;
             var map = {};
             for (var r = 0; r < rels.length; r++) {
                 map[rels[r]] = base + r;
@@ -338,7 +340,6 @@
                 }
                 lane.layerChannels = newChannels;
             }
-            var audible = !lane.muted && (!anySolo || lane.solo);
             var vol = Math.max(0, Math.min(100, isFinite(lane.volume) ? lane.volume : 100));
             for (var s2 = 0; s2 < segs.length; s2++) {
                 var seg = segs[s2];
@@ -347,8 +348,8 @@
                     var nn = sn2[n2];
                     var relLayer = isFinite(nn.layer) ? nn.layer : 0;
                     var vel = isFinite(nn.velocity) ? nn.velocity : 100;
-                    if (!audible) vel = 0;
-                    else vel = Math.max(0, Math.min(100, Math.round(vel * vol / 100)));
+                    // 静音/独奏只作用于轨道, 不改写音符力度 (否则会污染音符数据)
+                    vel = Math.max(0, Math.min(100, Math.round(vel * vol / 100)));
                     var lid = map[relLayer];
                     if (lid === undefined) lid = base;
                     var ntick = Math.max(0, Math.floor(seg.start + (nn.rel || 0)));
@@ -364,6 +365,9 @@
                     };
                 }
             }
+            var laneRange = [];
+            for (var rl = 0; rl < rels.length; rl++) laneRange.push(rangeStart + rl);
+            laneLayerRanges[li] = laneRange;
             base += rels.length;
         }
         var out = outOrder.map(function(k) { return outMap[k]; });
@@ -391,6 +395,41 @@
                     volume: (ownLane && isFinite(ownLane.volume)) ? Math.max(0, Math.min(100, ownLane.volume)) : 100,
                     stereo: 100, lock: 0
                 });
+            }
+        }
+        // 片段轨道静音/独奏: 静音该轨道覆盖的 N 个 NBS 轨道 (lock), 而不是改写音符力度
+        if (state.song && Array.isArray(state.song.layers)) {
+            var soloOut = [];
+            for (var lm = 0; lm < lanes.length; lm++) {
+                var laneM = lanes[lm];
+                var lockVal = (laneM.muted || (anySolo && !laneM.solo)) ? 1 : 0;
+                var rangeM = laneLayerRanges[lm] || [];
+                for (var rm = 0; rm < rangeM.length; rm++) {
+                    var lidM = rangeM[rm];
+                    if (!state.song.layers[lidM]) continue;
+                    state.song.layers[lidM].lock = lockVal;
+                    if (laneM.solo) soloOut.push(lidM);
+                }
+            }
+            // 合成后不再归属任何片段轨道的旧层: 解除静音, 避免残留静音轨道
+            for (var lx = base; lx < state.song.layers.length; lx++) {
+                if (state.song.layers[lx]) state.song.layers[lx].lock = 0;
+            }
+            // 独奏信息写入歌曲扩展字段, 实时播放据此判定可听性
+            state.song.solo_layers = soloOut;
+            state.soloActive = soloOut.length > 0;
+            // 同步已有轨道缓存: rebuildTracks 会保留旧轨道的静音/独奏状态, 这里直接覆盖
+            for (var tm = 0; tm < (state.tracks || []).length; tm++) {
+                var trk = state.tracks[tm];
+                var liOwner = layerOwner[trk.layer];
+                if (liOwner === undefined) {
+                    // 已不再归属任何片段轨道的旧层: 解除静音/独奏, 避免残留状态影响播放
+                    trk.muted = false;
+                    trk.solo = false;
+                    continue;
+                }
+                trk.muted = !!lanes[liOwner].muted;
+                trk.solo = !!lanes[liOwner].solo;
             }
         }
         return out;
@@ -616,6 +655,9 @@
         if (state.pianoRoll) state.pianoRoll.clearSelection();
         rebuildFromNotes();
         segmentSync();
+        // 片段轨道静音/独奏已写入 NBS 轨道 lock: 重建轨道缓存, 让播放立即生效
+        if (N.updateTrackPanelUI) N.updateTrackPanelUI();
+        if (N.stopUnaudibleTrackAudio) N.stopUnaudibleTrackAudio();
         markDirty();
     }
 

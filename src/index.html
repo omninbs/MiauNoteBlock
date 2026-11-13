@@ -22,7 +22,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="static/css/style.css?v=20261107a">
+    <link rel="stylesheet" href="static/css/style.css?v=20261113a">
 </head>
 <body>
 
@@ -48,6 +48,9 @@
             <button class="toolbar-btn" id="btn-file" title="文件">
                 <i class="fa-solid fa-file icon"></i>
             </button>
+            <button class="toolbar-btn" id="btn-save" title="保存 (Ctrl+S)">
+                <i class="fa-solid fa-floppy-disk icon"></i>
+            </button>
             <span class="toolbar-divider"></span>
             <span class="toolbar-title" id="toolbar-title" style="font-size:14px;font-weight:600;color:var(--text-primary);margin:0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;">
                 <span id="song-name">MiauNoteBlock</span>
@@ -66,9 +69,6 @@
         <div class="toolbar-section">
             <span style="font-size:12px;color:var(--text-secondary);margin-right:2px;white-space:nowrap;">速度</span>
             <input type="number" id="tempo-value" value="20" min="0" max="512" step="0.01" placeholder="t/s" style="width:60px;padding:2px 6px;font-size:12px;text-align:center;background:transparent;border:1px solid var(--ctrl-stroke-default);border-radius:4px;color:var(--text-primary);font-variant-numeric:tabular-nums;" title="速度 (Tick/秒)">
-            <button class="toolbar-btn" id="btn-keyboard-piano" title="使用键盘触发钢琴">
-                <i class="fa-solid fa-keyboard"></i>
-            </button>
         </div>
 
         <div class="toolbar-section toolbar-right">
@@ -203,15 +203,18 @@
             </div>
             <!-- 工具条 -->
             <div class="tool-bar" id="tool-bar">
-                <button class="tool-btn active" data-tool="default" title="默认工具 (D)"><i class="fa-solid fa-arrow-pointer"></i></button>
-                <button class="tool-btn" data-tool="select" title="选择工具 (S)"><i class="fa-solid fa-vector-square"></i></button>
-                <button class="tool-btn" data-tool="eraser" title="橡皮擦 (E)"><i class="fa-solid fa-eraser"></i></button>
-                <button class="tool-btn" data-tool="brush" title="画笔 (B)"><i class="fa-solid fa-paintbrush"></i></button>
-                <button class="tool-btn" data-tool="performance" title="演奏模式 (P)"><i class="fa-solid fa-music"></i></button>
+                <button class="tool-btn active" data-tool="default" title="默认工具 (Alt+1)"><i class="fa-solid fa-arrow-pointer"></i></button>
+                <button class="tool-btn" data-tool="select" title="选择工具 (Alt+2)"><i class="fa-solid fa-vector-square"></i></button>
+                <button class="tool-btn" data-tool="eraser" title="橡皮擦 (Alt+3)"><i class="fa-solid fa-eraser"></i></button>
+                <button class="tool-btn" data-tool="brush" title="画笔 (Alt+4)"><i class="fa-solid fa-paintbrush"></i></button>
+                <button class="tool-btn" data-tool="performance" title="演奏模式 (Alt+5)"><i class="fa-solid fa-music"></i></button>
+            </div>
+            <!-- 播放状态栏: 声音数 (仍在发声的音符音频数量), 贴住工具条上方左侧 -->
+            <div class="voice-status" id="voice-status" title="声音数: 正在发声的音符音频数量">
+                <i class="fa-solid fa-volume-high"></i><span id="voice-count">0</span>
             </div>
         </div>
 
-        <!-- 状态栏 -->
         <div class="status-bar" id="status-bar" style="display:flex;align-items:center;height:28px;padding:0 8px;background:rgba(0,0,0,0.3);border-top:1px solid var(--ctrl-stroke-default);flex-shrink:0;gap:10px;font-size:12px;color:var(--text-secondary);">
             <!-- 编辑模式切换滑块: 左 NBS 编辑 / 右 片段编辑 -->
             <div class="edit-mode-switch" id="edit-mode-switch" role="switch" aria-checked="false" title="切换编辑模式">
@@ -562,6 +565,7 @@
                 <button class="settings-tab active" data-settings-tab="general">通用</button>
                 <button class="settings-tab" data-settings-tab="editor">编辑器</button>
                 <button class="settings-tab" data-settings-tab="segment">片段模式</button>
+                <button class="settings-tab" data-settings-tab="display">显示</button>
                 <button class="settings-tab" data-settings-tab="personal">个性化</button>
             </div>
             <div class="settings-body">
@@ -585,11 +589,9 @@
                                 <option value="id-ID">🇮🇩 Bahasa Indonesia</option>
                             </select>
                         </div>
-                        <div class="settings-row">
-                            <button class="popup-btn" id="settings-storage-clean-btn" style="width:100%;">清理本地缓存</button>
-                        </div>
-                        <div class="settings-row">
-                            <button class="popup-btn" id="settings-about-btn" style="width:100%;">关于 MiauNoteBlock</button>
+                        <div class="settings-row settings-btn-row">
+                            <button class="popup-btn settings-action-btn" id="settings-storage-clean-btn">清理本地缓存</button>
+                            <button class="popup-btn settings-action-btn" id="settings-about-btn">关于 MiauNoteBlock</button>
                         </div>
                     </div>
                     <!-- ===== 性能 ===== -->
@@ -665,36 +667,16 @@
                             </label>
                         </div>
                     </div>
-                    <!-- ===== 音符显示 ===== -->
+                    <!-- ===== 歌词 ===== -->
                     <div class="settings-group">
-                        <div class="settings-group-title">音符显示</div>
-                        <div class="settings-row">
-                            <label class="settings-label">
-                                <input type="checkbox" id="settings-volume-opacity"> 音量映射透明度
-                            </label>
-                        </div>
-                        <div class="settings-row">
-                            <label class="settings-label">
-                                <input type="checkbox" id="settings-show-octave"> 音调标注八度
-                            </label>
-                        </div>
-                        <div class="settings-row">
-                            <label class="settings-label">
-                                <input type="checkbox" id="settings-show-note-clicks"> 音符显示点击次数
-                            </label>
-                        </div>
-                        <div class="settings-row">
-                            <label class="settings-label">
-                                <input type="checkbox" id="settings-show-note-block"> 音符显示音色方块
-                            </label>
-                        </div>
+                        <div class="settings-group-title">歌词</div>
                         <div class="settings-row">
                             <label class="settings-label">
                                 <input type="checkbox" id="settings-streaming-lyrics"> 流式歌词
                             </label>
                         </div>
                     </div>
-                    <!-- ===== 时间栏 (NBS) ===== -->
+                    <!-- ===== 时间栏 ===== -->
                     <div class="settings-group">
                         <div class="settings-group-title">时间栏</div>
                         <div class="settings-row settings-inline-row">
@@ -706,7 +688,7 @@
                             </select>
                         </div>
                         <div class="settings-row settings-inline-row">
-                            <label class="settings-label" for="settings-timeline-pos-nbs">时间栏位置（NBS）</label>
+                            <label class="settings-label" for="settings-timeline-pos-nbs">时间栏位置</label>
                             <select id="settings-timeline-pos-nbs" class="settings-control">
                                 <option value="top" selected>顶部</option>
                                 <option value="bottom">底部</option>
@@ -719,14 +701,18 @@
                                 <option value="pitch">根据音调大小</option>
                             </select>
                         </div>
+                    </div>
+                    <!-- ===== 片段显示 (NBS 视图中的片段轨道) ===== -->
+                    <div class="settings-group">
+                        <div class="settings-group-title">片段显示</div>
                         <div class="settings-row">
                             <label class="settings-label">
-                                <input type="checkbox" id="settings-seg-lane-dividers" checked> 片段轨道分割线（NBS）
+                                <input type="checkbox" id="settings-seg-lane-dividers" checked> 片段轨道分割线
                             </label>
                         </div>
                         <div class="settings-row">
                             <label class="settings-label">
-                                <input type="checkbox" id="settings-seg-boundary-lines"> 片段分割线（NBS）
+                                <input type="checkbox" id="settings-seg-boundary-lines"> 片段分割线
                             </label>
                         </div>
                     </div>
@@ -737,7 +723,7 @@
                     <div class="settings-group">
                         <div class="settings-group-title">布局</div>
                         <div class="settings-row settings-inline-row">
-                            <label class="settings-label" for="settings-timeline-pos-seg">时间栏位置（片段）</label>
+                            <label class="settings-label" for="settings-timeline-pos-seg">时间栏位置</label>
                             <select id="settings-timeline-pos-seg" class="settings-control">
                                 <option value="top">顶部</option>
                                 <option value="bottom" selected>底部</option>
@@ -768,6 +754,174 @@
                             <label class="settings-label">
                                 <input type="checkbox" id="settings-spw-velocity" checked> 显示力度控制器
                             </label>
+                        </div>
+                    </div>
+                </div>
+                <!-- ===== 显示: 音符显示 / 琴键 ===== -->
+                <div class="settings-tab-panel" id="settings-tab-display">
+                    <div class="settings-subtabs">
+                        <button class="settings-subtab active" data-display-subtab="note">音符显示</button>
+                        <button class="settings-subtab" data-display-subtab="keys">琴键</button>
+                    </div>
+                    <div class="settings-subpanel active" id="settings-subpanel-note">
+                        <!-- 实时预览 -->
+                        <div class="settings-group">
+                            <div class="settings-group-title">预览</div>
+                            <div class="settings-row">
+                                <canvas id="note-display-preview" class="note-display-preview" width="520" height="132"></canvas>
+                            </div>
+                        </div>
+                        <!-- 显示内容开关 -->
+                        <div class="settings-group">
+                            <div class="settings-group-title">显示内容</div>
+                            <div class="settings-row">
+                                <label class="settings-label">
+                                    <input type="checkbox" id="settings-volume-opacity"> 音符透明度跟随音量
+                                </label>
+                            </div>
+                            <div class="settings-row">
+                                <label class="settings-label">
+                                    <input type="checkbox" id="settings-show-octave"> 显示八度序号
+                                </label>
+                            </div>
+                            <div class="settings-row">
+                                <label class="settings-label">
+                                    <input type="checkbox" id="settings-show-note-clicks"> 显示音符序号
+                                </label>
+                            </div>
+                            <div class="settings-row">
+                                <label class="settings-label">
+                                    <input type="checkbox" id="settings-show-note-block"> 音符显示音色方块
+                                </label>
+                            </div>
+                            <div class="settings-row">
+                                <label class="settings-label">
+                                    <input type="checkbox" id="settings-mark-out-of-range" checked> 标记超出音域的音符
+                                </label>
+                            </div>
+                        </div>
+                        <!-- 音色图标 -->
+                        <details class="settings-expander">
+                            <summary class="settings-expander-head">音色图标</summary>
+                            <div class="settings-expander-body">
+                                <div class="settings-row settings-inline-row">
+                                    <label class="settings-label" for="settings-note-icon-size">大小</label>
+                                    <select id="settings-note-icon-size" class="settings-control">
+                                        <option value="large">大</option>
+                                        <option value="medium">中</option>
+                                        <option value="small" selected>小</option>
+                                    </select>
+                                </div>
+                                <div class="settings-row settings-inline-row">
+                                    <label class="settings-label" for="settings-note-icon-pos">位置</label>
+                                    <select id="settings-note-icon-pos" class="settings-control">
+                                        <option value="top-left">左上角</option>
+                                        <option value="top-right">右上角</option>
+                                        <option value="bottom-left">左下角</option>
+                                        <option value="bottom-right" selected>右下角</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </details>
+                        <!-- 音调文字 -->
+                        <details class="settings-expander">
+                            <summary class="settings-expander-head">音调文字</summary>
+                            <div class="settings-expander-body">
+                                <div class="settings-row settings-inline-row">
+                                    <label class="settings-label" for="settings-note-pitch-size">大小</label>
+                                    <select id="settings-note-pitch-size" class="settings-control">
+                                        <option value="large">大</option>
+                                        <option value="medium">中</option>
+                                        <option value="small" selected>小</option>
+                                    </select>
+                                </div>
+                                <div class="settings-row settings-inline-row">
+                                    <label class="settings-label">颜色</label>
+                                    <button class="settings-color-btn" id="settings-note-pitch-color" type="button">
+                                        <span class="settings-color-dot"></span><span class="settings-color-hex">#ffffff</span>
+                                    </button>
+                                </div>
+                                <div class="settings-row settings-inline-row">
+                                    <label class="settings-label" for="settings-note-pitch-pos">位置</label>
+                                    <select id="settings-note-pitch-pos" class="settings-control">
+                                        <option value="top-left" selected>左上角</option>
+                                        <option value="top-right">右上角</option>
+                                        <option value="bottom-left">左下角</option>
+                                        <option value="bottom-right">右下角</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </details>
+                        <!-- 方块名 -->
+                        <details class="settings-expander">
+                            <summary class="settings-expander-head">方块名</summary>
+                            <div class="settings-expander-body">
+                                <div class="settings-row settings-inline-row">
+                                    <label class="settings-label" for="settings-note-block-size">大小</label>
+                                    <select id="settings-note-block-size" class="settings-control">
+                                        <option value="large">大</option>
+                                        <option value="medium">中</option>
+                                        <option value="small" selected>小</option>
+                                    </select>
+                                </div>
+                                <div class="settings-row settings-inline-row">
+                                    <label class="settings-label">颜色</label>
+                                    <button class="settings-color-btn" id="settings-note-block-color" type="button">
+                                        <span class="settings-color-dot"></span><span class="settings-color-hex">#ffffff</span>
+                                    </button>
+                                </div>
+                                <div class="settings-row settings-inline-row">
+                                    <label class="settings-label" for="settings-note-block-pos">位置</label>
+                                    <select id="settings-note-block-pos" class="settings-control">
+                                        <option value="top-left">左上角</option>
+                                        <option value="top-right">右上角</option>
+                                        <option value="bottom-left" selected>左下角</option>
+                                        <option value="bottom-right">右下角</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </details>
+                        <!-- 音符序号 -->
+                        <details class="settings-expander">
+                            <summary class="settings-expander-head">音符序号</summary>
+                            <div class="settings-expander-body">
+                                <div class="settings-row settings-inline-row">
+                                    <label class="settings-label" for="settings-note-index-size">大小</label>
+                                    <select id="settings-note-index-size" class="settings-control">
+                                        <option value="large">大</option>
+                                        <option value="medium">中</option>
+                                        <option value="small" selected>小</option>
+                                    </select>
+                                </div>
+                                <div class="settings-row settings-inline-row">
+                                    <label class="settings-label">颜色</label>
+                                    <button class="settings-color-btn" id="settings-note-index-color" type="button">
+                                        <span class="settings-color-dot"></span><span class="settings-color-hex">#ffffff</span>
+                                    </button>
+                                </div>
+                                <div class="settings-row settings-inline-row">
+                                    <label class="settings-label" for="settings-note-index-pos">位置</label>
+                                    <select id="settings-note-index-pos" class="settings-control">
+                                        <option value="top-left">左上角</option>
+                                        <option value="top-right" selected>右上角</option>
+                                        <option value="bottom-left">左下角</option>
+                                        <option value="bottom-right">右下角</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+                    <div class="settings-subpanel" id="settings-subpanel-keys">
+                        <div class="settings-group">
+                            <div class="settings-group-title">琴键</div>
+                            <div class="settings-row">
+                                <label class="settings-label">
+                                    <input type="checkbox" id="settings-use-flat-notation"> 使用降调记号
+                                </label>
+                            </div>
+                            <div class="settings-row">
+                                <span class="settings-hint">开启后琴键显示为 Db / Eb / Gb / Ab / Bb</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1718,70 +1872,70 @@
     }
 </script>
 <!-- nbs_client.js 必须在 api_client.js 之前加载 (api_client.js 引用 NBSClient 全局对象) -->
-<script src="static/js/nbs_client.js?v=20261031f"></script>
+<script src="static/js/nbs_client.js?v=20261113a"></script>
 <script src="static/js/compress_est.js?v=20260926b"></script>
 <script src="static/js/api_client.js?v=20260905a"></script>
-<script src="static/js/custom_dropdown.js?v=20261031a"></script>
-<script src="static/js/i18n.js?v=20261031a"></script>
+<script src="static/js/custom_dropdown.js?v=20261113a"></script>
+<script src="static/js/i18n.js?v=20261113a"></script>
 <script src="static/js/audio_engine.js?v=20260919c"></script>
 <script src="static/js/custom_instruments.js?v=20260905a"></script>
 <script src="static/js/audio_fix_utils.js?v=20260905a"></script>
 <script src="static/js/sf3_player.js?v=20260808a"></script>
 <script src="static/js/spessa_player.js?v=20260918a"></script>
 <script src="static/js/soundfont_loader.js?v=20260808b"></script>
-<script src="static/js/piano_roll.js?v=20261107a"></script>
+<script src="static/js/piano_roll.js?v=20261113a"></script>
 <!-- 本地化第三方库: ZIP 打包 (jszip) / MP3 编码 (lamejs) / 取色器 (iro.js) -->
 <script src="static/vendor/jszip.min.js?v=20260905a"></script>
 <script src="static/vendor/lame.min.js?v=20260905a"></script>
-<script src="static/lib/iro.min.js?v=20261106a"></script>
+<script src="static/lib/iro.min.js?v=20261113a"></script>
 <!-- 离线渲染引擎: audio_render.js 必须在 main.js 之前加载 -->
 <script src="static/js/render_jsmix.js?v=20260906e"></script>
 <script src="static/js/audio_render.js?v=20260919c"></script>
 <!-- MIDI 重复片段分割 (MIDI 事件层分析), 必须在 main.js 之前加载 -->
-<script src="static/js/repeat_split.js?v=20261031a"></script>
+<script src="static/js/repeat_split.js?v=20261113a"></script>
 <!-- 片段浮动钢琴卷帘窗口: 依赖 main.js 暴露的 window.WebNBS.host -->
-<script src="static/js/segment_piano_window.js?v=20261107a"></script>
+<script src="static/js/segment_piano_window.js?v=20261113a"></script>
 <!-- 功能模块 (由原 main.js 按功能拆分), 必须按序加载 -->
-<script src="static/js/modules/00-core.js?v=20261030c"></script>
-<script src="static/js/modules/01-dialogs.js?v=20261030c"></script>
-<script src="static/js/modules/02-history.js?v=20261031e"></script>
-<script src="static/js/modules/03-segment-model.js?v=20261031d"></script>
-<script src="static/js/modules/04-segment-split.js?v=20261030c"></script>
-<script src="static/js/modules/05-segments.js?v=20261107a"></script>
-<script src="static/js/modules/06-notes-index.js?v=20261030c"></script>
-<script src="static/js/modules/07-tabs.js?v=20261031b"></script>
-<script src="static/js/modules/08-app-init.js?v=20261031a"></script>
-<script src="static/js/modules/09-piano-roll.js?v=20261030c"></script>
-<script src="static/js/modules/10-assist.js?v=20261030c"></script>
-<script src="static/js/modules/11-find.js?v=20261030c"></script>
-<script src="static/js/modules/12-keyboard.js?v=20261030c"></script>
-<script src="static/js/modules/13-clipboard.js?v=20261030c"></script>
-<script src="static/js/modules/14-playback.js?v=20261030c"></script>
-<script src="static/js/modules/15-tracks.js?v=20261030c"></script>
-<script src="static/js/modules/16-custom-inst.js?v=20261030c"></script>
-<script src="static/js/modules/17-instrument-ui.js?v=20261030c"></script>
-<script src="static/js/modules/18-toast.js?v=20261030c"></script>
-<script src="static/js/modules/19-soundfont.js?v=20261030c"></script>
-<script src="static/js/modules/20-mobile.js?v=20261030c"></script>
-<script src="static/js/modules/21-lyrics.js?v=20261030c"></script>
-<script src="static/js/modules/22-segment-ui.js?v=20261030c"></script>
-<script src="static/js/modules/23-json-io.js?v=20261030c"></script>
-<script src="static/js/modules/24-features-a.js?v=20261030c"></script>
-<script src="static/js/modules/25-features-b.js?v=20261030c"></script>
-<script src="static/js/modules/26-piano-keyboard.js?v=20261031a"></script>
-<script src="static/js/modules/27-file-io.js?v=20261030c"></script>
-<script src="static/js/modules/28-midi-dialog.js?v=20261030c"></script>
-<script src="static/js/modules/29-midi-tracks.js?v=20261030c"></script>
-<script src="static/js/modules/30-timbre.js?v=20261031b"></script>
-<script src="static/js/modules/31-midi-config.js?v=20261031b"></script>
-<script src="static/js/modules/32-storage.js?v=20261031f"></script>
-<script src="static/js/modules/33-export.js?v=20261030c"></script>
-<script src="static/js/modules/34-autosave.js?v=20261031f"></script>
-<script src="static/js/modules/35-lyrics-quick.js?v=20261101a"></script>
-<script src="static/js/modules/36-color-picker.js?v=20261106a"></script>
+<script src="static/js/modules/00-core.js?v=20261113a"></script>
+<script src="static/js/modules/01-dialogs.js?v=20261113a"></script>
+<script src="static/js/modules/02-history.js?v=20261113a"></script>
+<script src="static/js/modules/03-segment-model.js?v=20261113a"></script>
+<script src="static/js/modules/04-segment-split.js?v=20261113a"></script>
+<script src="static/js/modules/05-segments.js?v=20261113a"></script>
+<script src="static/js/modules/06-notes-index.js?v=20261113a"></script>
+<script src="static/js/modules/07-tabs.js?v=20261113a"></script>
+<script src="static/js/modules/08-app-init.js?v=20261113a"></script>
+<script src="static/js/modules/09-piano-roll.js?v=20261113a"></script>
+<script src="static/js/modules/10-assist.js?v=20261113a"></script>
+<script src="static/js/modules/11-find.js?v=20261113a"></script>
+<script src="static/js/modules/12-keyboard.js?v=20261113a"></script>
+<script src="static/js/modules/13-clipboard.js?v=20261113a"></script>
+<script src="static/js/modules/14-playback.js?v=20261113a"></script>
+<script src="static/js/modules/15-tracks.js?v=20261113a"></script>
+<script src="static/js/modules/16-custom-inst.js?v=20261113a"></script>
+<script src="static/js/modules/17-instrument-ui.js?v=20261113a"></script>
+<script src="static/js/modules/18-toast.js?v=20261113a"></script>
+<script src="static/js/modules/19-soundfont.js?v=20261113a"></script>
+<script src="static/js/modules/20-mobile.js?v=20261113a"></script>
+<script src="static/js/modules/21-lyrics.js?v=20261113a"></script>
+<script src="static/js/modules/22-segment-ui.js?v=20261113a"></script>
+<script src="static/js/modules/23-json-io.js?v=20261113a"></script>
+<script src="static/js/modules/24-features-a.js?v=20261113a"></script>
+<script src="static/js/modules/25-features-b.js?v=20261113a"></script>
+<script src="static/js/modules/26-piano-keyboard.js?v=20261113a"></script>
+<script src="static/js/modules/27-file-io.js?v=20261113a"></script>
+<script src="static/js/modules/28-midi-dialog.js?v=20261113a"></script>
+<script src="static/js/modules/29-midi-tracks.js?v=20261113a"></script>
+<script src="static/js/modules/30-timbre.js?v=20261113a"></script>
+<script src="static/js/modules/31-midi-config.js?v=20261113a"></script>
+<script src="static/js/modules/32-storage.js?v=20261113a"></script>
+<script src="static/js/modules/33-export.js?v=20261113a"></script>
+<script src="static/js/modules/34-autosave.js?v=20261113a"></script>
+<script src="static/js/modules/35-lyrics-quick.js?v=20261113a"></script>
+<script src="static/js/modules/36-color-picker.js?v=20261113a"></script>
 <!-- 桌面外壳桥接: 仅在 Tauri/MSIX 环境生效, 浏览器与服务器部署下自动空转 -->
-<script src="static/js/modules/40-desktop-bridge.js?v=20261101b"></script>
-<script src="static/js/main.js?v=20261030c"></script>
+<script src="static/js/modules/40-desktop-bridge.js?v=20261113a"></script>
+<script src="static/js/main.js?v=20261113a"></script>
 
 <script>
 // 桌面应用（含 MSIX 安装版）内：外部链接交给系统默认浏览器打开。

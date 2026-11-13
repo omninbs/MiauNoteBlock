@@ -2175,6 +2175,146 @@
         if (Object.prototype.hasOwnProperty.call(_timelinePosI18n, _nl)) Object.assign(UI_TEXT[_nl], _timelinePosI18n[_nl]);
     }
 
+    // ============ 显示标签页 (音符显示 / 琴键) + 时间栏右键菜单 词条 ============
+    var _displayTabI18n = {
+        'en-US': {
+            '音符显示': 'Note display', '琴键': 'Keys', '显示内容': 'Display content',
+            '音符透明度跟随音量': 'Note opacity follows velocity', '显示八度序号': 'Show octave number',
+            '显示音符序号': 'Show note number', '标记超出音域的音符': 'Mark notes out of pitch range',
+            '音色图标': 'Instrument icon', '音调文字': 'Pitch text', '方块名': 'Block name',
+            '颜色': 'Color', '大小': 'Size', '位置': 'Position',
+            '左上角': 'Top left', '右上角': 'Top right', '左下角': 'Bottom left', '右下角': 'Bottom right',
+            '使用降调记号': 'Use flat notation', '文字颜色': 'Text color', '色相': 'Hue', '十六进制': 'Hex',
+            '打开编辑器后可预览音符显示效果': 'Open the editor to preview note display',
+            '播放时跟随进度条': 'Follow playhead while playing', '按页': 'By page', '按刻': 'By tick', '按帧': 'By frame',
+            '在区间时开始播放': 'Start playing at region', '在区间后停止播放': 'Stop after region',
+            '创建区间': 'Create region', '清除区间': 'Clear region'
+        },
+        'ja-JP': {
+            '音符显示': '音符表示', '琴键': '鍵盤', '显示内容': '表示内容',
+            '音符透明度跟随音量': '音符の透明度を音量に追従', '显示八度序号': 'オクターブ番号を表示',
+            '显示音符序号': '音符番号を表示', '标记超出音域的音符': '音域外の音符をマーク',
+            '音色图标': '音色アイコン', '音调文字': '音程テキスト', '方块名': 'ブロック名',
+            '颜色': '色', '大小': 'サイズ', '位置': '位置',
+            '左上角': '左上', '右上角': '右上', '左下角': '左下', '右下角': '右下',
+            '使用降调记号': 'フラット記号を使用', '文字颜色': '文字色', '色相': '色相', '十六进制': '16 進数',
+            '打开编辑器后可预览音符显示效果': 'エディタを開くと音符表示をプレビューできます',
+            '播放时跟随进度条': '再生時に再生位置に追従', '按页': 'ページ単位', '按刻': 'ティック単位', '按帧': 'フレーム単位',
+            '在区间时开始播放': '範囲の開始位置から再生', '在区间后停止播放': '範囲の終了後に停止',
+            '创建区间': '範囲を作成', '清除区间': '範囲をクリア'
+        },
+        'ko-KR': {
+            '音符显示': '음표 표시', '琴键': '건반', '显示内容': '표시 내용',
+            '音符透明度跟随音量': '음표 투명도가 음량을 따름', '显示八度序号': '옥타브 번호 표시',
+            '显示音符序号': '음표 번호 표시', '标记超出音域的音符': '음역을 벗어난 음표 표시',
+            '音色图标': '음색 아이콘', '音调文字': '음높이 텍스트', '方块名': '블록 이름',
+            '颜色': '색상', '大小': '크기', '位置': '위치',
+            '左上角': '왼쪽 위', '右上角': '오른쪽 위', '左下角': '왼쪽 아래', '右下角': '오른쪽 아래',
+            '使用降调记号': '플랫 표기 사용', '文字颜色': '글자 색', '色相': '색조', '十六进制': '16진수',
+            '打开编辑器后可预览音符显示效果': '편집기를 열면 음표 표시를 미리 볼 수 있습니다',
+            '播放时跟随进度条': '재생 시 재생 위치 따라가기', '按页': '페이지 단위', '按刻': '틱 단위', '按帧': '프레임 단위',
+            '在区间时开始播放': '구간에서 재생 시작', '在区间后停止播放': '구간 이후 정지',
+            '创建区间': '구간 만들기', '清除区间': '구간 지우기'
+        },
+        'pt-BR': {
+            '音符显示': 'Exibição de notas', '琴键': 'Teclas', '显示内容': 'Conteúdo exibido',
+            '音符透明度跟随音量': 'Opacidade da nota conforme a velocidade', '显示八度序号': 'Mostrar número da oitava',
+            '显示音符序号': 'Mostrar número da nota', '标记超出音域的音符': 'Marcar notas fora da extensão',
+            '音色图标': 'Ícone do instrumento', '音调文字': 'Texto do tom', '方块名': 'Nome do bloco',
+            '颜色': 'Cor', '大小': 'Tamanho', '位置': 'Posição',
+            '左上角': 'Superior esquerdo', '右上角': 'Superior direito', '左下角': 'Inferior esquerdo', '右下角': 'Inferior direito',
+            '使用降调记号': 'Usar notação bemol', '文字颜色': 'Cor do texto', '色相': 'Matiz', '十六进制': 'Hexadecimal',
+            '打开编辑器后可预览音符显示效果': 'Abra o editor para visualizar a exibição das notas',
+            '播放时跟随进度条': 'Seguir o indicador durante a reprodução', '按页': 'Por página', '按刻': 'Por tick', '按帧': 'Por quadro',
+            '在区间时开始播放': 'Iniciar no intervalo', '在区间后停止播放': 'Parar após o intervalo',
+            '创建区间': 'Criar intervalo', '清除区间': 'Limpar intervalo'
+        },
+        'id-ID': {
+            '音符显示': 'Tampilan not', '琴键': 'Tuts', '显示内容': 'Isi tampilan',
+            '音符透明度跟随音量': 'Opasitas not mengikuti volume', '显示八度序号': 'Tampilkan nomor oktaf',
+            '显示音符序号': 'Tampilkan nomor not', '标记超出音域的音符': 'Tandai not di luar jangkauan nada',
+            '音色图标': 'Ikon timbre', '音调文字': 'Teks nada', '方块名': 'Nama blok',
+            '颜色': 'Warna', '大小': 'Ukuran', '位置': 'Posisi',
+            '左上角': 'Kiri atas', '右上角': 'Kanan atas', '左下角': 'Kiri bawah', '右下角': 'Kanan bawah',
+            '使用降调记号': 'Gunakan notasi mol', '文字颜色': 'Warna teks', '色相': 'Hue', '十六进制': 'Hex',
+            '打开编辑器后可预览音符显示效果': 'Buka editor untuk pratinjau tampilan not',
+            '播放时跟随进度条': 'Ikuti posisi putar saat diputar', '按页': 'Per halaman', '按刻': 'Per tick', '按帧': 'Per frame',
+            '在区间时开始播放': 'Mulai di rentang', '在区间后停止播放': 'Berhenti setelah rentang',
+            '创建区间': 'Buat rentang', '清除区间': 'Hapus rentang'
+        },
+        'es-ES': {
+            '音符显示': 'Visualización de notas', '琴键': 'Teclas', '显示内容': 'Contenido mostrado',
+            '音符透明度跟随音量': 'La opacidad de la nota sigue la velocidad', '显示八度序号': 'Mostrar número de octava',
+            '显示音符序号': 'Mostrar número de nota', '标记超出音域的音符': 'Marcar notas fuera de rango',
+            '音色图标': 'Icono de instrumento', '音调文字': 'Texto del tono', '方块名': 'Nombre del bloque',
+            '颜色': 'Color', '大小': 'Tamaño', '位置': 'Posición',
+            '左上角': 'Arriba a la izquierda', '右上角': 'Arriba a la derecha', '左下角': 'Abajo a la izquierda', '右下角': 'Abajo a la derecha',
+            '使用降调记号': 'Usar notación de bemoles', '文字颜色': 'Color del texto', '色相': 'Matiz', '十六进制': 'Hexadecimal',
+            '打开编辑器后可预览音符显示效果': 'Abre el editor para previsualizar la visualización de notas',
+            '播放时跟随进度条': 'Seguir el cursor al reproducir', '按页': 'Por página', '按刻': 'Por tick', '按帧': 'Por fotograma',
+            '在区间时开始播放': 'Iniciar en el intervalo', '在区间后停止播放': 'Detener tras el intervalo',
+            '创建区间': 'Crear intervalo', '清除区间': 'Borrar intervalo'
+        },
+        'ru-RU': {
+            '音符显示': 'Отображение нот', '琴键': 'Клавиши', '显示内容': 'Отображаемое содержимое',
+            '音符透明度跟随音量': 'Прозрачность ноты по громкости', '显示八度序号': 'Показывать номер октавы',
+            '显示音符序号': 'Показывать номер ноты', '标记超出音域的音符': 'Отмечать ноты вне диапазона',
+            '音色图标': 'Значок инструмента', '音调文字': 'Текст высоты тона', '方块名': 'Название блока',
+            '颜色': 'Цвет', '大小': 'Размер', '位置': 'Положение',
+            '左上角': 'Слева сверху', '右上角': 'Справа сверху', '左下角': 'Слева снизу', '右下角': 'Справа снизу',
+            '使用降调记号': 'Использовать бемоли', '文字颜色': 'Цвет текста', '色相': 'Оттенок', '十六进制': 'Hex',
+            '打开编辑器后可预览音符显示效果': 'Откройте редактор, чтобы увидеть предпросмотр нот',
+            '播放时跟随进度条': 'Следовать за курсором при воспроизведении', '按页': 'По странице', '按刻': 'По тику', '按帧': 'По кадру',
+            '在区间时开始播放': 'Начинать в диапазоне', '在区间后停止播放': 'Останавливать после диапазона',
+            '创建区间': 'Создать диапазон', '清除区间': 'Очистить диапазон'
+        },
+        'de-DE': {
+            '音符显示': 'Notendarstellung', '琴键': 'Tasten', '显示内容': 'Angezeigte Inhalte',
+            '音符透明度跟随音量': 'Notentransparenz folgt der Anschlagstärke', '显示八度序号': 'Oktavnummer anzeigen',
+            '显示音符序号': 'Notennummer anzeigen', '标记超出音域的音符': 'Noten außerhalb des Tonumfangs markieren',
+            '音色图标': 'Klangsymbol', '音调文字': 'Tonhöhentext', '方块名': 'Blockname',
+            '颜色': 'Farbe', '大小': 'Größe', '位置': 'Position',
+            '左上角': 'Oben links', '右上角': 'Oben rechts', '左下角': 'Unten links', '右下角': 'Unten rechts',
+            '使用降调记号': 'B-Notation verwenden', '文字颜色': 'Textfarbe', '色相': 'Farbton', '十六进制': 'Hex',
+            '打开编辑器后可预览音符显示效果': 'Editor öffnen, um die Notendarstellung in der Vorschau zu sehen',
+            '播放时跟随进度条': 'Beim Abspielen dem Abspielkopf folgen', '按页': 'Pro Seite', '按刻': 'Pro Tick', '按帧': 'Pro Frame',
+            '在区间时开始播放': 'Im Bereich starten', '在区间后停止播放': 'Nach dem Bereich stoppen',
+            '创建区间': 'Bereich erstellen', '清除区间': 'Bereich löschen'
+        },
+        'fr-FR': {
+            '音符显示': 'Affichage des notes', '琴键': 'Touches', '显示内容': 'Contenu affiché',
+            '音符透明度跟随音量': 'Opacité des notes selon la vélocité', '显示八度序号': 'Afficher le numéro d\'octave',
+            '显示音符序号': 'Afficher le numéro de note', '标记超出音域的音符': 'Marquer les notes hors tessiture',
+            '音色图标': 'Icône d\'instrument', '音调文字': 'Texte de hauteur', '方块名': 'Nom du bloc',
+            '颜色': 'Couleur', '大小': 'Taille', '位置': 'Position',
+            '左上角': 'En haut à gauche', '右上角': 'En haut à droite', '左下角': 'En bas à gauche', '右下角': 'En bas à droite',
+            '使用降调记号': 'Utiliser les bémols', '文字颜色': 'Couleur du texte', '色相': 'Teinte', '十六进制': 'Hexadécimal',
+            '打开编辑器后可预览音符显示效果': 'Ouvrez l\'éditeur pour prévisualiser l\'affichage des notes',
+            '播放时跟随进度条': 'Suivre la tête de lecture', '按页': 'Par page', '按刻': 'Par tick', '按帧': 'Par image',
+            '在区间时开始播放': 'Démarrer dans la région', '在区间后停止播放': 'Arrêter après la région',
+            '创建区间': 'Créer une région', '清除区间': 'Effacer la région'
+        }
+    };
+    for (_nl in _displayTabI18n) {
+        if (Object.prototype.hasOwnProperty.call(_displayTabI18n, _nl)) Object.assign(UI_TEXT[_nl], _displayTabI18n[_nl]);
+    }
+
+    // 设置标签页名称与音符序号折叠块标题
+    var _settingsTabNameI18n = {
+        'en-US': { '编辑器': 'Editor', '片段模式': 'Segment mode', '音符序号': 'Note number', '进度条': 'Progress bar' },
+        'ja-JP': { '编辑器': 'エディタ', '片段模式': 'セグメントモード', '音符序号': '音符番号', '进度条': 'プログレスバー' },
+        'ko-KR': { '编辑器': '편집기', '片段模式': '세그먼트 모드', '音符序号': '음표 번호', '进度条': '진행 표시줄' },
+        'pt-BR': { '编辑器': 'Editor', '片段模式': 'Modo de segmento', '音符序号': 'Número da nota', '进度条': 'Barra de progresso' },
+        'id-ID': { '编辑器': 'Editor', '片段模式': 'Mode segmen', '音符序号': 'Nomor not', '进度条': 'Bilah kemajuan' },
+        'es-ES': { '编辑器': 'Editor', '片段模式': 'Modo de segmento', '音符序号': 'Número de nota', '进度条': 'Barra de progreso' },
+        'ru-RU': { '编辑器': 'Редактор', '片段模式': 'Режим сегментов', '音符序号': 'Номер ноты', '进度条': 'Индикатор выполнения' },
+        'de-DE': { '编辑器': 'Editor', '片段模式': 'Segmentmodus', '音符序号': 'Notennummer', '进度条': 'Fortschrittsbalken' },
+        'fr-FR': { '编辑器': 'Éditeur', '片段模式': 'Mode segment', '音符序号': 'Numéro de note', '进度条': 'Barre de progression' }
+    };
+    for (_nl in _settingsTabNameI18n) {
+        if (Object.prototype.hasOwnProperty.call(_settingsTabNameI18n, _nl)) Object.assign(UI_TEXT[_nl], _settingsTabNameI18n[_nl]);
+    }
+
     // ============ 片段钢琴窗口设置 / 本地缓存清理 词条 (先补英文, 其它语言回退英文) ============
     var _spwStorageI18n = {
         'en-US': {

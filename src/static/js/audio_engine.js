@@ -807,6 +807,8 @@ window.AudioEngine = {
     isEnhanceEnabled: isAudioEnhanceEnabled,
     stopAll: stopAllAudio,
     stopLayer: stopLayerAudio,
+    // 当前仍在发声的音源数量 (音符音频完全播放结束才减一)
+    getActiveVoiceCount: function() { return _activeSources.length; },
     getContext: function() { return audioContext; },
     // 实时电平: 主输出 / 按片段轨道估算 (0..1)
     getMasterLevel: getMasterLevel,

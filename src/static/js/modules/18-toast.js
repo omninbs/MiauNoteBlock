@@ -57,6 +57,37 @@
         setTimeout(function() { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 300);
     }
 
+    // ============ 屏幕顶部居中提示 (poptip) ============
+    var _centerPoptipEl = null;
+    var _centerPoptipTimer = null;
+    function showCenterPoptip(message, options) {
+        options = options || {};
+        if (!message) return;
+        if (!_centerPoptipEl) {
+            _centerPoptipEl = document.createElement('div');
+            _centerPoptipEl.className = 'center-poptip';
+            document.body.appendChild(_centerPoptipEl);
+        }
+        if (_centerPoptipTimer) { clearTimeout(_centerPoptipTimer); _centerPoptipTimer = null; }
+        _centerPoptipEl.innerHTML = '';
+        var icon = document.createElement('i');
+        icon.className = options.icon || 'fa-solid fa-circle-info';
+        var text = document.createElement('span');
+        text.textContent = message;
+        _centerPoptipEl.appendChild(icon);
+        _centerPoptipEl.appendChild(text);
+        _centerPoptipEl.classList.remove('center-poptip-show');
+        // 强制回流以重启动画
+        void _centerPoptipEl.offsetWidth;
+        _centerPoptipEl.classList.add('center-poptip-show');
+        var dur = options.duration === undefined ? 2600 : options.duration;
+        if (dur > 0) {
+            _centerPoptipTimer = setTimeout(function() {
+                if (_centerPoptipEl) _centerPoptipEl.classList.remove('center-poptip-show');
+            }, dur);
+        }
+    }
+
     // ============ SoundFont 音色库初始化 ============
     // 策略: 页面加载只读取本地缓存; 下载由设置决定
     //   'ask'  (默认) 真正播放 MIDI 音符时弹窗询问
@@ -65,6 +96,7 @@
     // ---- 导出 ----
     N._ensureToastContainer = _ensureToastContainer;
     N.showToast = showToast;
+    N.showCenterPoptip = showCenterPoptip;
     N.updateToast = updateToast;
     N.dismissToast = dismissToast;
 })(window.WebNBS);

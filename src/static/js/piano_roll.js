@@ -57,12 +57,17 @@
 
     // NBS key 0 is MIDI A0; labels must use the MIDI pitch class, not key % 12.
     var PITCH_LABELS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    var PITCH_LABELS_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
 
     // 音调标签是否显示八度数字 (如 A4/C5), 与主界面设置 show_octave_labels 同步, 默认开启
     var octaveLabelEnabled = true;
     try { octaveLabelEnabled = localStorage.getItem('show_octave_labels') !== '0'; } catch (e) {}
     function pitchClassLabel(pitchKey) {
-        return PITCH_LABELS[(pitchKey + 9) % 12] + (octaveLabelEnabled ? (Math.floor((pitchKey + 21) / 12) - 1) : '');
+        var idx = ((pitchKey + 9) % 12 + 12) % 12;
+        // 降调记号 (Db/Eb/...) 由设置 → 显示 → 琴键 控制
+        var flat = !!(window.WebNBS && window.WebNBS.shared && window.WebNBS.shared.flatNotationEnabled);
+        var names = flat ? PITCH_LABELS_FLAT : PITCH_LABELS;
+        return names[idx] + (octaveLabelEnabled ? (Math.floor((pitchKey + 21) / 12) - 1) : '');
     }
 
     // 音符上额外显示: 点击次数 / 方块名 是两个独立开关 (主界面设置, 默认关闭)
@@ -72,6 +77,66 @@
         noteClicksEnabled = localStorage.getItem('noteblock.show_note_clicks') === '1';
         noteBlockEnabled = localStorage.getItem('noteblock.show_note_block') === '1';
     } catch (e) {}
+
+    // 音符显示配置 (设置 → 显示 → 音符显示): 图标/文字的尺寸、位置与颜色
+    // 档位语义: 「小」= 旧版的「中」尺寸, 中/大整体上移一级
+    var NOTE_DISPLAY_VERSION = 3;
+    var noteDisplayCfg = {
+        v: NOTE_DISPLAY_VERSION,
+        iconSize: 'small', iconPos: 'bottom-right',
+        pitchSize: 'small', pitchColor: '#ffffff', pitchPos: 'top-left',
+        blockSize: 'small', blockColor: '#ffffff', blockPos: 'bottom-left',
+        indexSize: 'small', indexColor: '#ffffff', indexPos: 'top-right',
+        markOutOfRange: true
+    };
+    (function loadNoteDisplayCfg() {
+        var raw = null;
+        try { raw = localStorage.getItem('noteblock.note_display'); } catch (e) {}
+        if (!raw) return;
+        var migrated = false;
+        try {
+            var obj = JSON.parse(raw);
+            if (obj && typeof obj === 'object') {
+                for (var k in noteDisplayCfg) {
+                    if (obj[k] !== undefined && obj[k] !== null) noteDisplayCfg[k] = obj[k];
+                }
+                // v1/v2 → v3: 档位重排, 原「中」视为「小」, 因此所有 *Size 下移一级,
+                // 保证老存档的视觉尺寸不变, 仅档位名称变了 (仅迁移一次)
+                if (obj.v !== NOTE_DISPLAY_VERSION) {
+                    var shift = { large: 'medium', medium: 'small', small: 'small' };
+                    var sizeKeys = ['iconSize', 'pitchSize', 'blockSize', 'indexSize'];
+                    for (var si = 0; si < sizeKeys.length; si++) {
+                        var cur = noteDisplayCfg[sizeKeys[si]];
+                        if (shift[cur]) noteDisplayCfg[sizeKeys[si]] = shift[cur];
+                    }
+                    noteDisplayCfg.v = NOTE_DISPLAY_VERSION;
+                    migrated = true;
+                }
+            }
+        } catch (e) {}
+        if (migrated) {
+            try { localStorage.setItem('noteblock.note_display', JSON.stringify(noteDisplayCfg)); } catch (e2) {}
+        }
+    })();
+
+    // 四角锚点: 返回 [水平靠右?, 垂直靠下?]
+    function noteCornerFlags(corner) {
+        return [corner === 'top-right' || corner === 'bottom-right',
+                corner === 'bottom-left' || corner === 'bottom-right'];
+    }
+    // 按档位计算文字字号 (随音符块宽度缩放)
+    // 档位尺寸: 小 = 旧版中, 中 = 旧版大, 大 = 更大
+    function noteTextSize(mode, bw) {
+        var factor = mode === 'large' ? 0.52 : (mode === 'small' ? 0.30 : 0.40);
+        var max = mode === 'large' ? 22 : (mode === 'small' ? 12 : 16);
+        return Math.max(6, Math.min(bw * factor, max));
+    }
+    // 按档位计算音色图标边长 (档位尺寸与文字保持同一语义)
+    function noteIconSize(mode, bw) {
+        var factor = mode === 'large' ? 0.50 : (mode === 'small' ? 0.28 : 0.38);
+        var max = mode === 'large' ? 24 : (mode === 'small' ? 12 : 18);
+        return Math.max(5, Math.min(bw * factor, max));
+    }
 
     // Minecraft 音符盒标准方块 (对应 NBS instrument 0~19, 中文方块名)
     var NOTE_BLOCK_NAMES = [
@@ -309,7 +374,12 @@
         // 音符播放高亮 { noteId: { startTime, duration } }
         this._playHighlights = {};
         this.onTimelineSeek = null;  // function(tick) - 时间轴点击/拖拽
+        this.onTimelineContextMenu = null; // function(clientX, clientY, tick) - 时间栏右键菜单
         this.playheadTick = 0;       // 播放头位置(tick)
+
+        // 区间 (region): 在时间栏右键菜单创建, -1 表示未设置
+        this.regionStart = -1;
+        this.regionEnd = -1;
 
         // 歌词标注: [{ id, tick, text, duration, lane }, ...]
         //   lane: 0..2 共 3 条歌词轨道 (允许不同轨道在同一 tick 重叠)
@@ -1173,8 +1243,11 @@
     };
 
     PianoRoll.prototype._layerToScreen = function(layer) {
-        var row = this._trackRowOrEdge(layer);
-        return this._rowY(row) + this._rowOffsetOf(row);
+        // 支持浮点 layer (拖动预览时音符平滑跟随鼠标): 整数部分定位行, 小数部分按行高偏移
+        var baseLayer = Math.floor(layer);
+        var frac = layer - baseLayer;
+        var row = this._trackRowOrEdge(baseLayer);
+        return this._rowY(row) + this._rowOffsetOf(row) + frac * this._cfg.cellH * this._zoomY();
     };
 
     // ============ 行模型: NBS 轨道 + 歌词轨道 (交织显示) ============
@@ -4044,6 +4117,14 @@
         var y = e.clientY - rect.top;
         var pw = this._currentPanelWidth;
 
+        // 时间栏 (进度条/刻度区) 右键: 区间与播放跟随菜单
+        var tlRect = this._timelineRect();
+        if (y >= tlRect.top && y <= tlRect.bottom) {
+            var tlTick = this._screenToTick(x);
+            if (this.onTimelineContextMenu) this.onTimelineContextMenu(e.clientX, e.clientY, Math.max(0, Math.round(tlTick)));
+            return;
+        }
+
         if (!this.segmentsEditMode && x < pw && y >= this._cfg.timelineHeight) {
             var layerHit = this._screenToLayer(y);
             if (layerHit >= 0 && layerHit < this.trackCount) {
@@ -4414,6 +4495,55 @@
         }
     };
 
+    // 选中音符 + 鼠标悬浮其上时, 滚轮微调音调
+    // 默认步长 1 半音; 按住 Alt 临时切换到 1 个八度
+    PianoRoll.prototype._tryWheelPitchAdjust = function(ax, ay, dy, altKey) {
+        if (!dy) return false;
+        var hover = this._getNoteAt(ax, ay);
+        if (!hover || !this.selectedNotes[hover.id]) return false;
+        var step = altKey ? 12 : 1;
+        var dir = dy < 0 ? 1 : -1;
+        var ids = Object.keys(this.selectedNotes);
+        var changed = false;
+        var now = performance.now();
+        // 同一次滚轮手势只记录一次撤销点 (间隔 > 700ms 视为新手势)
+        if (!this._wheelPitchUndoAt || now - this._wheelPitchUndoAt > 700) {
+            if (this.onNoteDragStart) this.onNoteDragStart();
+            this._wheelPitchUndoAt = now;
+        }
+        for (var i = 0; i < ids.length; i++) {
+            var idx = this._findNoteById(ids[i]);
+            if (idx < 0) continue;
+            var n = this.notes[idx];
+            var cur = (typeof n.key === 'number' && n.key >= 0) ? n.key : n.layer;
+            var next = Math.max(0, Math.min(87, cur + dir * step));
+            if (next !== cur) {
+                n.key = next;
+                changed = true;
+            }
+        }
+        if (changed) {
+            if (this.onNotesChanged) this.onNotesChanged(this.getSelectedNotes());
+            // 试听悬浮音符的新音高
+            if (this.onNotePreview) {
+                var hi = this._findNoteById(hover.id);
+                if (hi >= 0) this.onNotePreview(this.notes[hi].instrument, this.notes[hi].key);
+            }
+            // 首次使用滚轮调音时, 顶部居中提示 Alt 八度快捷操作
+            var tipSeen = false;
+            try { tipSeen = localStorage.getItem('noteblock.wheel_octave_tip_seen') === '1'; } catch (e) {}
+            if (!tipSeen) {
+                try { localStorage.setItem('noteblock.wheel_octave_tip_seen', '1'); } catch (e) {}
+                if (window.WebNBS && window.WebNBS.showCenterPoptip) {
+                    window.WebNBS.showCenterPoptip(altKey ? '按住 Alt 已切换为八度步长' : '按住 Alt，即可偏移八度');
+                }
+            }
+        }
+        this._fullRedrawNeeded = true;
+        this.requestRender();
+        return true;
+    };
+
     PianoRoll.prototype._onWheel = function(e) {
         e.preventDefault();
         // 归一化滚动量: deltaMode 1=行 / 2=页, 换算成像素
@@ -4428,6 +4558,12 @@
         // 缩放锚点: 优先鼠标位置, 缺失时退回编辑区中心
         var ax = isFinite(e.offsetX) ? e.offsetX : (this._currentPanelWidth + (this.displayWidth - this._currentPanelWidth) / 2);
         var ay = isFinite(e.offsetY) ? e.offsetY : (this.displayHeight / 2);
+
+        // 选中音符 + 悬浮其上: 滚轮调整音调 (Alt = 八度), 优先于滚动/缩放
+        if (!e.ctrlKey && !e.metaKey && !e.shiftKey
+            && this._tryWheelPitchAdjust(ax, ay, dy, !!e.altKey)) {
+            return;
+        }
 
         // 片段编辑模式: Ctrl 横向缩放 (锚点=播放指示器) / Alt 纵向缩放 (轨道高度) / 普通滚轮纵向滚动
         if (this.segmentsEditMode) {
@@ -6936,6 +7072,25 @@
             ctx.restore();
         }
 
+        // 区间 (region): 在进度条上绘制半透明色带 + 左右边界
+        if (this.regionStart >= 0 && this.regionEnd > this.regionStart && this.totalTicks > 0) {
+            var rw = Math.max(1, this.totalTicks);
+            var rx0 = (this.regionStart / rw) * w;
+            var rx1 = (this.regionEnd / rw) * w;
+            ctx.save();
+            ctx.fillStyle = 'rgba(78, 205, 196, 0.20)';
+            ctx.fillRect(rx0, barY, Math.max(2, rx1 - rx0), barHeight);
+            ctx.strokeStyle = 'rgba(78, 205, 196, 0.95)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(Math.round(rx0) + 0.5, barY);
+            ctx.lineTo(Math.round(rx0) + 0.5, barY + barHeight);
+            ctx.moveTo(Math.round(rx1) + 0.5, barY);
+            ctx.lineTo(Math.round(rx1) + 0.5, barY + barHeight);
+            ctx.stroke();
+            ctx.restore();
+        }
+
         // 滚动窗口 (thumb): 表示当前可视区域在全部内容中的位置
         var maxScroll = this._getMaxScrollX();
         var contentWidth = Math.max(1, this.totalTicks * (cfg.cellW * this._zoomX()));
@@ -6982,6 +7137,29 @@
         this.ctx.fillStyle = 'rgba(26, 26, 46, ' + this.panelAlpha + ')';
         this.ctx.fillRect(0, pb2.top, this.displayWidth, pb2.height);
         this._drawProgressBar();
+    };
+
+    // 设置区间 (时间栏右键菜单创建); start/end 会按 tick 排序并夹在歌曲范围内
+    PianoRoll.prototype.setRegion = function(start, end) {
+        var a = Math.max(0, Math.min(this.totalTicks, Math.round(Math.min(start, end))));
+        var b = Math.max(0, Math.min(this.totalTicks, Math.round(Math.max(start, end))));
+        if (b - a < 1) {
+            this.clearRegion();
+            return;
+        }
+        this.regionStart = a;
+        this.regionEnd = b;
+        this._redrawProgressBarOnly();
+    };
+
+    PianoRoll.prototype.clearRegion = function() {
+        this.regionStart = -1;
+        this.regionEnd = -1;
+        this._redrawProgressBarOnly();
+    };
+
+    PianoRoll.prototype.hasRegion = function() {
+        return this.regionStart >= 0 && this.regionEnd > this.regionStart;
     };
 
     PianoRoll.prototype.seekToTick = function(tick, immediate) {
@@ -7931,31 +8109,51 @@
         }
 
         // 垂直线 (tick 方向) - 仅在有音轨的行范围内绘制
-        // 性能优化: 按 beat/non-beat 分组, 用 2 次 stroke 代替 N 次
+        // 三级粗细: 小节线 (4 拍 × 4 tick = 16 tick) 3px / 节拍线 (4 tick) 2px / tick 分割线 1px
         if (this._rowCount() > 0 && trackAreaBottom > trackAreaTop) {
+            var drawTickLines = function(mod, lineWidth, alpha) {
+                ctx.lineWidth = lineWidth;
+                ctx.strokeStyle = 'rgba(255, 255, 255, ' + (alpha * gridAlpha) + ')';
+                ctx.beginPath();
+                for (var t = tickStart; t <= tickEnd; t++) {
+                    if (t % mod !== 0) continue;
+                    var tx = Math.round(this._tickToScreen(t));
+                    if (tx < pw || tx > w) continue;
+                    ctx.moveTo(tx, trackAreaTop);
+                    ctx.lineTo(tx, trackAreaBottom);
+                }
+                ctx.stroke();
+            }.bind(this);
+            // 小节线 (16 tick)
+            drawTickLines(16, 3, 0.16);
+            // 节拍线 (4 tick), 排除小节线
+            ctx.save();
+            ctx.beginPath();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = 'rgba(255, 255, 255, ' + (0.10 * gridAlpha) + ')';
+            for (var bt = tickStart; bt <= tickEnd; bt++) {
+                if (bt % 4 !== 0 || bt % 16 === 0) continue;
+                var bx = Math.round(this._tickToScreen(bt));
+                if (bx < pw || bx > w) continue;
+                ctx.moveTo(bx, trackAreaTop);
+                ctx.lineTo(bx, trackAreaBottom);
+            }
+            ctx.stroke();
+            ctx.restore();
+            // 每 tick 分割线 (排除 4 的倍数)
+            ctx.save();
+            ctx.beginPath();
             ctx.lineWidth = 1;
-            ctx.strokeStyle = 'rgba(255, 255, 255, ' + (0.06 * gridAlpha) + ')';
-            ctx.beginPath();
-            for (var tick = tickStart; tick <= tickEnd; tick++) {
-                if (tick % 4 !== 0) continue;
-                var xb = this._tickToScreen(tick);
-                if (xb < pw || xb > w) continue;
-                ctx.moveTo(xb, trackAreaTop);
-                ctx.lineTo(xb, trackAreaBottom);
+            ctx.strokeStyle = 'rgba(255, 255, 255, ' + (0.04 * gridAlpha) + ')';
+            for (var st = tickStart; st <= tickEnd; st++) {
+                if (st % 4 === 0) continue;
+                var sx = Math.round(this._tickToScreen(st)) + 0.5;
+                if (sx < pw || sx > w) continue;
+                ctx.moveTo(sx, trackAreaTop);
+                ctx.lineTo(sx, trackAreaBottom);
             }
             ctx.stroke();
-
-            ctx.lineWidth = 0.5;
-            ctx.strokeStyle = 'rgba(255, 255, 255, ' + (0.03 * gridAlpha) + ')';
-            ctx.beginPath();
-            for (var tick2 = tickStart; tick2 <= tickEnd; tick2++) {
-                if (tick2 % 4 === 0) continue;
-                var x2 = this._tickToScreen(tick2);
-                if (x2 < pw || x2 > w) continue;
-                ctx.moveTo(x2, trackAreaTop);
-                ctx.lineTo(x2, trackAreaBottom);
-            }
-            ctx.stroke();
+            ctx.restore();
         }
 
         // 水平线 (layer 方向) - 按 octave/non-octave 分组 (含歌词行, 跟随排序动画偏移)
@@ -8331,14 +8529,20 @@
             ctx.restore();
         }
 
-        // 乐器图标 (右下角): 直接绘制到音符上, 不加白底边框
+        // 乐器图标: 就近采样缩放 (不插值), 并显式清除阴影避免继承外部绘制状态
         var instImg = this._instrumentImages[note.instrument];
         if (bw > 14) {
-            var iconSize = Math.max(6, Math.min(bw * 0.3, 12));
-            var ix = bx + bw - iconSize - 2;
-            var iy = by + bh - iconSize - 2;
+            var iconSize = noteIconSize(noteDisplayCfg.iconSize, bw);
+            var iconF = noteCornerFlags(noteDisplayCfg.iconPos);
+            var ix = iconF[0] ? (bx + bw - iconSize - 2) : (bx + 2);
+            var iy = iconF[1] ? (by + bh - iconSize - 2) : (by + 2);
             ctx.save();
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
             ctx.imageSmoothingEnabled = false;
+            if (typeof ctx.imageSmoothingQuality === 'string') ctx.imageSmoothingQuality = 'low';
             if ((typeof note.instrument === 'number' && note.instrument >= 20) || !(instImg && instImg.complete && instImg.naturalWidth > 0)) {
                 // 自定义音色 / 图标缺失: 纯色方块
                 ctx.fillStyle = this._getInstrumentColor(note.instrument);
@@ -8349,48 +8553,56 @@
             ctx.restore();
         }
 
-        // 音高标签 (白色字体，左上角)
+        // 音高标签 (位置/字号/颜色可配置)
         if (bw > 12) {
-            var labelSize = Math.max(7, Math.min(bw * 0.35, 11));
-            // 超出 Minecraft 标准音域 (33-57) 时, 文字显示为红色 (移除 shadow, 改用深色描边)
+            var labelSize = noteTextSize(noteDisplayCfg.pitchSize, bw);
+            var pitchF = noteCornerFlags(noteDisplayCfg.pitchPos);
+            var pitchX = pitchF[0] ? (bx + bw - 2) : (bx + 2);
+            var pitchY = pitchF[1] ? (by + bh - 2) : (by + 2);
+            // 超出 Minecraft 标准音域 (33-57) 时标红 (可在设置中关闭)
             var pitchKeyNum = (typeof note.key === 'number') ? note.key : note.layer;
             var outOfRange = pitchKeyNum < MINECRAFT_PITCH_MIN || pitchKeyNum > MINECRAFT_PITCH_MAX;
+            var markRange = outOfRange && noteDisplayCfg.markOutOfRange !== false;
             ctx.font = 'bold ' + labelSize + 'px "Segoe UI", sans-serif';
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'top';
-            if (outOfRange) {
+            ctx.textAlign = pitchF[0] ? 'right' : 'left';
+            ctx.textBaseline = pitchF[1] ? 'bottom' : 'top';
+            if (markRange) {
                 ctx.strokeStyle = 'rgba(0,0,0,0.8)';
                 ctx.lineWidth = 2;
-                ctx.strokeText(pitchLabel, bx + 2, by + 2);
-                ctx.fillStyle = '#ff5555';
-            } else {
-                ctx.fillStyle = '#ffffff';
+                ctx.strokeText(pitchLabel, pitchX, pitchY);
             }
-            ctx.fillText(pitchLabel, bx + 2, by + 2);
+            ctx.fillStyle = markRange ? '#ff5555' : (noteDisplayCfg.pitchColor || '#ffffff');
+            ctx.fillText(pitchLabel, pitchX, pitchY);
         }
 
-        // 方块名 (音符底部) — 独立开关
+        // 方块名 — 独立开关, 字号/颜色/位置可配置
         if (noteBlockEnabled && bw > 18) {
             var blkName = NOTE_BLOCK_NAMES[note.instrument] || '';
             if (blkName) {
-                var blkSize = Math.max(7, Math.min(bw * 0.28, 10));
+                var blkSize = noteTextSize(noteDisplayCfg.blockSize, bw);
+                var blkF = noteCornerFlags(noteDisplayCfg.blockPos);
+                var blkX = blkF[0] ? (bx + bw - 2) : (bx + 2);
+                var blkY = blkF[1] ? (by + bh - 2) : (by + 2);
                 ctx.font = blkSize + 'px "Segoe UI", sans-serif';
-                ctx.textAlign = 'left';
-                ctx.textBaseline = 'bottom';
-                ctx.fillStyle = 'rgba(255,255,255,0.92)';
-                ctx.fillText(blkName, bx + 2, by + bh - 2);
+                ctx.textAlign = blkF[0] ? 'right' : 'left';
+                ctx.textBaseline = blkF[1] ? 'bottom' : 'top';
+                ctx.fillStyle = noteDisplayCfg.blockColor || 'rgba(255,255,255,0.92)';
+                ctx.fillText(blkName, blkX, blkY);
             }
         }
 
-        // 点击次数 (音符右上角) — 独立开关
+        // 音符序号 (原「点击次数」) — 独立开关, 字号/颜色/位置可配置
         if (noteClicksEnabled && bw > 16) {
             var clickText = '' + noteBlockClicks(pitchKeyNum);
-            var clkSize = Math.max(7, Math.min(bw * 0.28, 10));
+            var clkSize = noteTextSize(noteDisplayCfg.indexSize, bw);
+            var idF = noteCornerFlags(noteDisplayCfg.indexPos);
+            var idxX = idF[0] ? (bx + bw - 2) : (bx + 2);
+            var idxY = idF[1] ? (by + bh - 2) : (by + 2);
             ctx.font = clkSize + 'px "Segoe UI", sans-serif';
-            ctx.textAlign = 'right';
-            ctx.textBaseline = 'top';
-            ctx.fillStyle = 'rgba(255,255,255,0.92)';
-            ctx.fillText(clickText, bx + bw - 2, by + 2);
+            ctx.textAlign = idF[0] ? 'right' : 'left';
+            ctx.textBaseline = idF[1] ? 'bottom' : 'top';
+            ctx.fillStyle = noteDisplayCfg.indexColor || 'rgba(255,255,255,0.92)';
+            ctx.fillText(clickText, idxX, idxY);
         }
 
         // 播放高亮：白色叠加, 快速淡入淡出
@@ -8454,6 +8666,8 @@
     // 切换音调标签八度数字显示 (主界面设置项同步)
     PianoRoll.prototype.setOctaveLabelSetting = function(enabled) {
         octaveLabelEnabled = !!enabled;
+        this._fullRedrawNeeded = true;
+        this.render();
     };
 
     // 切换音符上额外信息显示 (点击次数 / 方块名, 两个独立开关, 主界面设置项同步)
@@ -8462,6 +8676,26 @@
         noteBlockEnabled = !!blockEnabled;
         this._fullRedrawNeeded = true;
         this.render();
+    };
+
+    // 应用音符显示配置 (图标/文字尺寸、位置、颜色) 并持久化
+    PianoRoll.prototype.setNoteDisplayConfig = function(partial) {
+        if (!partial) return;
+        for (var k in noteDisplayCfg) {
+            if (partial[k] !== undefined && partial[k] !== null) noteDisplayCfg[k] = partial[k];
+        }
+        try {
+            localStorage.setItem('noteblock.note_display', JSON.stringify(noteDisplayCfg));
+        } catch (e) {}
+        this._fullRedrawNeeded = true;
+        this.render();
+    };
+
+    // 供设置界面读取当前配置 (副本)
+    PianoRoll.prototype.getNoteDisplayConfig = function() {
+        var out = {};
+        for (var k in noteDisplayCfg) out[k] = noteDisplayCfg[k];
+        return out;
     };
 
     // 导出

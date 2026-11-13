@@ -80,8 +80,8 @@
         // 当前文件的持久 ID (用于自动保存覆盖, 而非产生重复)
         currentFileId: null,
 
-        // 键盘钢琴
-        keyboardPianoEnabled: false,
+        // 键盘钢琴 (默认开启; 工具切换使用 Alt+数字, 避免与琴键冲突)
+        keyboardPianoEnabled: true,
         numpadOctaveShift: 0,
         numpadSemitoneShift: 0,
         letterOctaveShift: 0,
@@ -207,14 +207,19 @@
     // surface so the visible label, selected key and audio pitch stay aligned.
     var NBS_MIDI_OFFSET = 21;
     var PIANO_NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    // 降调记号 (Db/Eb/Gb/Ab/Bb), 设置 → 显示 → 琴键
+    var FLAT_NOTE_NAMES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
     // 音调文字是否显示八度数字 (如 A4/C5), 默认开启, 可在设置中关闭
     N.shared.octaveLabelsEnabled = true;
     try { N.shared.octaveLabelsEnabled = localStorage.getItem('show_octave_labels') !== '0'; } catch(e) {}
+    N.shared.flatNotationEnabled = false;
+    try { N.shared.flatNotationEnabled = localStorage.getItem('noteblock.use_flat_notation') === '1'; } catch(e) {}
     function nbsKeyToMidiNote(key) {
         return Math.max(0, Math.min(87, Math.round(Number(key) || 0))) + NBS_MIDI_OFFSET;
     }
     function getNbsKeyPitchLabel(key) {
-        return PIANO_NOTE_NAMES[nbsKeyToMidiNote(key) % 12];
+        var names = N.shared.flatNotationEnabled ? FLAT_NOTE_NAMES : PIANO_NOTE_NAMES;
+        return names[nbsKeyToMidiNote(key) % 12];
     }
     function getNbsKeyOctave(key) {
         return Math.floor(nbsKeyToMidiNote(key) / 12) - 1;

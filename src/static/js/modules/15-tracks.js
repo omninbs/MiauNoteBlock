@@ -355,6 +355,95 @@
         state.contextMenuTarget = null;
     }
 
+    // ============ 时间栏右键菜单 (播放跟随 / 区间) ============
+    function persistBool(key, value) {
+        try { localStorage.setItem(key, value ? '1' : '0'); } catch (e) {}
+    }
+    function showTimelineContextMenu(x, y, tick) {
+        var menu = $('context-menu');
+        if (!menu) return;
+        hideContextMenu();
+
+        var t = i18nText;
+        var roll = state.pianoRoll;
+        var follow = state.followProgress !== false;
+        var mode = state.followMode || 'frame';
+        var startPlay = !!state.regionStartPlay;
+        var stopAfter = !!state.regionStopAfter;
+        var hasRegion = !!(roll && roll.hasRegion && roll.hasRegion());
+
+        // 复选框 (Win 风格勾选框): 选中时蓝底白勾
+        function box(active) {
+            return '<span class="ctx-box' + (active ? ' on' : '') + '">'
+                + '<i class="fa-solid fa-check"></i></span>';
+        }
+        // 单选框 (圆点)
+        function radio(active) {
+            return '<span class="ctx-radio' + (active ? ' on' : '') + '"></span>';
+        }
+
+        var html = '';
+        html += '<div class="ctx-title">' + t('进度条') + '</div>';
+        html += '<div class="ctx-item ctx-option" data-action="follow-toggle">' + box(follow)
+            + '<span class="ctx-label">' + t('播放时跟随进度条') + '</span></div>';
+        html += '<div class="ctx-item ctx-option ctx-sub" data-action="follow-mode" data-mode="page">' + radio(mode === 'page')
+            + '<span class="ctx-label">' + t('按页') + '</span></div>';
+        html += '<div class="ctx-item ctx-option ctx-sub" data-action="follow-mode" data-mode="tick">' + radio(mode === 'tick')
+            + '<span class="ctx-label">' + t('按刻') + '</span></div>';
+        html += '<div class="ctx-item ctx-option ctx-sub" data-action="follow-mode" data-mode="frame">' + radio(mode === 'frame')
+            + '<span class="ctx-label">' + t('按帧') + '</span></div>';
+        html += '<div class="ctx-separator"></div>';
+        html += '<div class="ctx-item ctx-option" data-action="region-start">' + box(startPlay)
+            + '<span class="ctx-label">' + t('在区间时开始播放') + '</span></div>';
+        html += '<div class="ctx-item ctx-option" data-action="region-stop">' + box(stopAfter)
+            + '<span class="ctx-label">' + t('在区间后停止播放') + '</span></div>';
+        html += '<div class="ctx-separator"></div>';
+        html += '<div class="ctx-item" data-action="region-create"><span class="ctx-icon"><i class="fa-solid fa-arrows-left-right"></i></span> ' + t('创建区间') + '</div>';
+        if (hasRegion) {
+            html += '<div class="ctx-item" data-action="region-clear"><span class="ctx-icon"><i class="fa-solid fa-xmark"></i></span> ' + t('清除区间') + '</div>';
+        }
+
+        menu.innerHTML = html;
+        menu.style.display = 'block';
+        window.WebNBSPositionFlyout(menu, { left: x, right: x, top: y, bottom: y });
+
+        var items = menu.querySelectorAll('.ctx-item');
+        for (var i = 0; i < items.length; i++) {
+            items[i].addEventListener('click', function(e) {
+                e.stopPropagation();
+                if (this.classList.contains('ctx-disabled')) return;
+                var action = this.dataset.action;
+                if (action === 'follow-toggle') {
+                    state.followProgress = !(state.followProgress !== false);
+                    persistBool('noteblock.follow_progress', state.followProgress);
+                } else if (action === 'follow-mode') {
+                    state.followMode = this.dataset.mode || 'frame';
+                    try { localStorage.setItem('noteblock.follow_mode', state.followMode); } catch (err) {}
+                } else if (action === 'region-start') {
+                    state.regionStartPlay = !state.regionStartPlay;
+                    persistBool('noteblock.region_start_play', state.regionStartPlay);
+                } else if (action === 'region-stop') {
+                    state.regionStopAfter = !state.regionStopAfter;
+                    persistBool('noteblock.region_stop_after', state.regionStopAfter);
+                } else if (action === 'region-create') {
+                    if (roll && roll.setRegion) {
+                        var head = (roll.currentTick !== undefined && roll.currentTick !== null)
+                            ? roll.currentTick : (state.currentTick || 0);
+                        roll.setRegion(Math.round(head), tick);
+                    }
+                    hideContextMenu();
+                    return;
+                } else if (action === 'region-clear') {
+                    if (roll && roll.clearRegion) roll.clearRegion();
+                    hideContextMenu();
+                    return;
+                }
+                // 勾选类操作后重绘同一位置的菜单, 保留即时反馈
+                showTimelineContextMenu(x, y, tick);
+            });
+        }
+    }
+
     function handleContextAction(action, x, y) {
         var noteIds = state.contextMenuTarget;
         var hasNotes = noteIds && noteIds.length > 0;
@@ -669,6 +758,7 @@
     N.escapeHTML = escapeHTML;
     N.createContextMenuDOM = createContextMenuDOM;
     N.showContextMenu = showContextMenu;
+    N.showTimelineContextMenu = showTimelineContextMenu;
     N.hideContextMenu = hideContextMenu;
     N.handleContextAction = handleContextAction;
     N.showInstrumentSubMenu = showInstrumentSubMenu;

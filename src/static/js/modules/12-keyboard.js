@@ -84,12 +84,12 @@
         } else {
             state.performanceMode = false;
             stopPerformanceRecording();
-            // 恢复键盘钢琴状态 (关闭, 因为是强制开启的)
-            state.keyboardPianoEnabled = false;
+            // 键盘钢琴默认常开, 退出演奏模式后保持开启
+            state.keyboardPianoEnabled = true;
             var kpBtn2 = $('btn-keyboard-piano');
-            if (kpBtn2) kpBtn2.classList.remove('active');
+            if (kpBtn2) kpBtn2.classList.add('active');
             if (state.pianoRoll && state.pianoRoll.setShowKeyLabels) {
-                state.pianoRoll.setShowKeyLabels(false);
+                state.pianoRoll.setShowKeyLabels(true);
             }
             // 节拍器按钮已删除
             updatePlayButtonForRecording();
@@ -1067,8 +1067,11 @@
                 return;
             }
 
-            if (state.keyboardPianoEnabled && !editableTarget) {
-                if (!allowedEditShortcut && pianoKey !== undefined) {
+            if (state.keyboardPianoEnabled && !editableTarget && !state.segmentsEditMode) {
+                // 键盘钢琴默认开启: 仅拦截真正映射到琴键的组合 (不带 Ctrl/Alt, 避免抢占快捷键)
+                // 移动端单键快捷键 (m/s) 优先, 避免被琴键映射吞掉
+                var mobileKeyShortcut = window.innerWidth < 768 && (e.code === 'KeyM' || e.code === 'KeyS');
+                if (!mobileKeyShortcut && !allowedEditShortcut && pianoKey !== undefined && !e.ctrlKey && !e.metaKey && !e.altKey) {
                     e.preventDefault();
                     if (!state._activePianoKeys[e.code]) {
                         state._activePianoKeys[e.code] = pianoKey;
@@ -1076,28 +1079,15 @@
                     }
                     return;
                 }
-                if (!allowedEditShortcut) {
-                    e.preventDefault();
-                    return;
-                }
             }
 
-            // 键盘钢琴按键处理（不拦截输入框）
-            if (state.keyboardPianoEnabled) {
-                // Don't intercept when Ctrl/Cmd is pressed (allow copy/paste/select-all)
-                if (e.ctrlKey || e.metaKey) {
-                    // Fall through to normal shortcut handling
-                } else {
-                    var pianoKey = N.shared.KEYBOARD_PIANO_MAP[e.code];
-                    if (pianoKey !== undefined && !state._activePianoKeys[e.code]) {
-                        var isInput = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT');
-                        if (!isInput) {
-                            e.preventDefault();
-                            state._activePianoKeys[e.code] = true;
-                            handlePianoKeyDown(pianoKey, e.code);
-                            return;
-                        }
-                    }
+            // Alt+1..5 切换工具 (与键盘钢琴共存的工具切换方式)
+            if (e.altKey && !e.ctrlKey && !e.metaKey) {
+                var altTool = { Digit1: 'default', Digit2: 'select', Digit3: 'eraser', Digit4: 'brush', Digit5: 'performance' }[e.code];
+                if (altTool) {
+                    e.preventDefault();
+                    switchTool(altTool);
+                    return;
                 }
             }
 
@@ -1199,17 +1189,21 @@
                 toggleSoloSelectedTrack();
             } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
                 e.preventDefault();
+                var isHorizArrow = (e.key === 'ArrowLeft' || e.key === 'ArrowRight');
+                var selCount = state.pianoRoll ? state.pianoRoll.getSelectedNotes().length : 0;
+                // 无选中音符时: 方向键临时控制播放进度 (暂停 = 原速走带/倒放; 播放中 = 2 倍速/倒放)
+                if (isHorizArrow && selCount === 0 && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                    if (!e.repeat) {
+                        var arrowDir = e.key === 'ArrowRight' ? 1 : -1;
+                        if (state.isPlaying) {
+                            if (N.setArrowPlaybackModifier) N.setArrowPlaybackModifier(arrowDir);
+                        } else if (N.startArrowScrub) {
+                            N.startArrowScrub(arrowDir);
+                        }
+                    }
+                    return;
+                }
                 handleArrowKey(e.key);
-            } else if (window.innerWidth >= 768 && (e.key === 'd' || e.key === 'D' || e.key === '1')) {
-                switchTool('default');
-            } else if (window.innerWidth >= 768 && (e.key === 's' || e.key === 'S' || e.key === '2')) {
-                switchTool('select');
-            } else if (window.innerWidth >= 768 && (e.key === 'e' || e.key === 'E' || e.key === '3')) {
-                switchTool('eraser');
-            } else if (window.innerWidth >= 768 && (e.key === 'b' || e.key === 'B' || e.key === '4')) {
-                switchTool('brush');
-            } else if (window.innerWidth >= 768 && (e.key === 'p' || e.key === 'P' || e.key === '5')) {
-                switchTool('performance');
             } else {
                 handled = false;
             }
@@ -1221,6 +1215,11 @@
         });
 
         document.addEventListener('keyup', function(e) {
+            // 方向键松开: 停止走带并恢复正常播放速度
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                if (N.stopArrowScrub) N.stopArrowScrub();
+                if (N.clearArrowPlaybackModifier) N.clearArrowPlaybackModifier();
+            }
             if (state.keyboardPianoEnabled && state._activePianoKeys[e.code]) {
                 var pianoKey = state._activePianoKeys[e.code];
                 state._activePianoKeys[e.code] = false;
@@ -1229,6 +1228,20 @@
                     handlePianoKeyUp(pianoKey, e.code);
                 }
             }
+        });
+
+        // 窗口失焦时释放所有按键, 避免琴键卡住或方向键走带停不下来
+        window.addEventListener('blur', function() {
+            var codes = Object.keys(state._activePianoKeys || {});
+            for (var i = 0; i < codes.length; i++) {
+                var pk = state._activePianoKeys[codes[i]];
+                state._activePianoKeys[codes[i]] = false;
+                if (pk === true) pk = getShiftedKeyboardPianoKey(codes[i]);
+                if (pk !== undefined) handlePianoKeyUp(pk, codes[i]);
+            }
+            if (N.stopArrowScrub) N.stopArrowScrub();
+            if (N.clearArrowPlaybackModifier) N.clearArrowPlaybackModifier();
+            if (N.stopAllMidiPerformanceNotes) N.stopAllMidiPerformanceNotes();
         });
     }
 

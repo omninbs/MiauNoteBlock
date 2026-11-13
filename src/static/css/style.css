@@ -241,16 +241,28 @@
     overflow-y: hidden;
     padding-bottom: 4px;
     scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.26) rgba(255, 255, 255, 0.06);
     -webkit-overflow-scrolling: touch;
     /* 横向滚动色卡, 同时允许纵向滚动设置内容 */
     touch-action: pan-x pan-y;
 }
+/* 横向滚动条: 显式补全轨道/滑块/圆角样式, 不依赖主题变量 (避免变量缺失时不可见) */
 .settings-theme-grid::-webkit-scrollbar {
-    height: 4px;
+    height: 6px;
+}
+.settings-theme-grid::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 3px;
 }
 .settings-theme-grid::-webkit-scrollbar-thumb {
-    background: var(--ctrl-stroke-hover);
-    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.26);
+    border-radius: 3px;
+}
+.settings-theme-grid::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.40);
+}
+.settings-theme-grid::-webkit-scrollbar-corner {
+    background: transparent;
 }
 .settings-theme-card {
     display: flex;
@@ -339,13 +351,41 @@
 }
 .wn-cp-panel {
     position: absolute;
-    width: 220px;
-    padding: 10px;
+    width: 404px;
+    padding: 10px 12px 12px;
     border-radius: 12px;
     background: var(--mica-acrylic, #1d2126);
     border: 1px solid var(--ctrl-stroke-default);
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
     color: var(--text-primary);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+/* 横向主体: 左列色轮 + 预设色, 右列数值与操作按钮 */
+.wn-cp-body {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+}
+.wn-cp-left {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 0 0 auto;
+    width: 150px;
+    max-width: 150px;
+}
+.wn-cp-right {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 10px;
+    flex: 1 1 auto;
+    min-width: 210px;
+    padding-top: 2px;
+}
+.wn-cp-fields {
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -362,6 +402,17 @@
     padding: 12px 14px;
     padding-bottom: calc(12px + env(safe-area-inset-bottom));
     align-items: stretch;
+}
+/* 手机端恢复竖向排列, 避免横向挤压 */
+.wn-cp-panel.is-mobile .wn-cp-body {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+}
+.wn-cp-panel.is-mobile .wn-cp-left {
+    width: 100%;
+    max-width: none;
+    align-items: center;
 }
 .wn-cp-head {
     display: flex;
@@ -408,10 +459,10 @@
     padding: 2px 0;
 }
 .wn-cp-swatch {
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
     padding: 0;
-    border-radius: 6px;
+    border-radius: 5px;
     border: 1px solid var(--ctrl-stroke-default);
     cursor: pointer;
 }
@@ -484,6 +535,14 @@
     border: 1px solid var(--ctrl-stroke-default);
     background: var(--ctrl-fill-default);
     color: var(--text-primary);
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+/* 去掉数字微调箭头, 避免挤压数值显示 */
+.wn-cp-rgb input::-webkit-outer-spin-button,
+.wn-cp-rgb input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
 }
 .wn-cp-rgb input:focus {
     outline: none;
@@ -735,25 +794,28 @@ body.bg-active #piano-roll-container {
     position: fixed;
     /* 自定义 tooltip: 需始终位于弹窗(100200)与自定义弹窗(100400)之上 */
     z-index: 100500;
-    background: var(--mica-acrylic);
-    color: var(--text-primary);
-    border: 1px solid var(--ctrl-stroke-default);
+    /* 固定暗色配色: 不随 UI 主题变化, 保证在浅色/彩色主题上依然清晰 */
+    background: rgba(18, 20, 24, 0.97);
+    color: #e9edf2;
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 4px;
     padding: 4px 8px;
     font-size: 11px;
     line-height: 1.4;
-    box-shadow: var(--shadow-flyout);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
     pointer-events: none;
     /* 长提示自动换行并保留 \n 分行; 短提示仍为单行 */
     white-space: pre-line;
     word-break: break-word;
     max-width: min(280px, calc(100vw - 16px));
     opacity: 0;
-    transition: opacity 120ms ease;
+    transform: translateY(-2px);
+    transition: opacity 160ms ease, transform 160ms ease;
     font-family: var(--font-family);
 }
 .cdd-tip.cdd-tip-visible {
     opacity: 1;
+    transform: translateY(0);
 }
 
 /* ==================================================================
@@ -2373,6 +2435,29 @@ body.segment-edit-mode .tool-bar {
     border: 1px solid var(--ctrl-stroke-default);
 }
 
+/* 声音数状态栏: 贴底靠左, 与右侧底部工具栏同底高, 互不遮挡 */
+.voice-status {
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 22px;
+    padding: 0 9px;
+    border-radius: 6px;
+    background: rgba(32, 32, 32, 0.9);
+    border: 1px solid var(--ctrl-stroke-default);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+    user-select: none;
+}
+.voice-status i { font-size: 10px; opacity: 0.85; }
+.voice-status.active { color: #7fe3d5; }
+
 .tool-btn {
     width: 36px;
     height: 36px;
@@ -2748,6 +2833,89 @@ body.segment-edit-mode .tool-bar {
 .context-menu.visible {
     display: block;
     animation: flyoutShow 100ms cubic-bezier(0, 0, 0, 1);
+}
+
+/* ---- 时间栏右键菜单: 进度条跟随 / 区间 (复选框 + 单选组) ---- */
+.ctx-title {
+    padding: 6px 12px 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+}
+.ctx-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 12px;
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--text-primary);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background var(--anim-fast);
+}
+.ctx-item:hover {
+    background: var(--ctrl-fill-hover);
+}
+.ctx-sub {
+    padding-left: 30px;
+}
+.ctx-box {
+    flex: 0 0 auto;
+    width: 14px;
+    height: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    border: 1px solid var(--ctrl-stroke-default);
+    background: transparent;
+}
+.ctx-box i {
+    display: none;
+    font-size: 9px;
+    color: #fff;
+}
+.ctx-box.on {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+.ctx-box.on i {
+    display: block;
+}
+.ctx-radio {
+    flex: 0 0 auto;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1px solid var(--ctrl-stroke-default);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.ctx-radio.on {
+    border-color: var(--accent);
+}
+.ctx-radio.on::after {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+}
+.ctx-separator {
+    height: 1px;
+    margin: 4px 0;
+    background: var(--ctrl-stroke-default);
+}
+.ctx-icon {
+    flex: 0 0 auto;
+    width: 14px;
+    text-align: center;
+    color: var(--text-tertiary);
+}
+.ctx-label {
+    flex: 1 1 auto;
 }
 
 .context-menu-item {
@@ -4069,7 +4237,7 @@ body.segment-edit-mode .tool-bar {
 .settings-inline-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
 }
 .settings-inline-row .settings-label {
     margin: 0;
@@ -4558,10 +4726,22 @@ body.segment-edit-mode .tool-bar {
     margin-right: 0;
 }
 .settings-control {
-    flex: 1;
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     gap: var(--space-2);
+}
+/* 下拉框紧贴标题文字, 不再靠右拉伸 */
+.settings-inline-row > select.settings-control {
+    min-width: 140px;
+}
+.settings-control-wide {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.settings-control-wide > select {
+    flex: 0 1 auto;
+    max-width: 60%;
 }
 .settings-hint {
     color: var(--text-tertiary);
@@ -7095,6 +7275,33 @@ textarea:disabled {
 }
 .toast.error .toast-progress-fill {
     background: #ff6b6b;
+}
+
+/* 屏幕顶部居中提示 (poptip) */
+.center-poptip {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    z-index: 10050;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 16px;
+    border-radius: 999px;
+    background: rgba(18, 20, 24, 0.97);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #e9edf2;
+    font-size: 13px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+    pointer-events: none;
+    white-space: nowrap;
+    opacity: 0;
+    transform: translate(-50%, -8px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.center-poptip.center-poptip-show {
+    opacity: 1;
+    transform: translate(-50%, 0);
 }
 
 /* ==================================================================
@@ -9843,3 +10050,156 @@ body.spw-fullscreen-open {
         min-height: 48px;
     }
 }
+
+/* ================= 设置界面: 显示标签页 / 子标签 / 折叠块 / 开关 ================= */
+.settings-subtabs {
+    display: flex;
+    gap: 4px;
+    margin: 0 0 10px;
+    border-bottom: 1px solid var(--ctrl-stroke-default);
+}
+.settings-subtab {
+    background: none;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    padding: 5px 10px;
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    transition: color 150ms ease, border-color 150ms ease;
+}
+.settings-subtab:hover { color: var(--text-primary); }
+.settings-subtab.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--accent-color, #4cc2ff);
+    font-weight: 600;
+}
+.settings-subpanel { display: none; }
+.settings-subpanel.active { display: block; }
+
+/* WinUI3 风格折叠块 */
+.settings-expander {
+    border: 1px solid var(--ctrl-stroke-default);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.02);
+    margin-bottom: 8px;
+    overflow: hidden;
+}
+.settings-expander-head {
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    cursor: pointer;
+    user-select: none;
+}
+.settings-expander-head::-webkit-details-marker { display: none; }
+.settings-expander-head::before {
+    content: '\25B8';
+    font-size: 10px;
+    color: var(--text-secondary);
+    transition: transform 160ms ease;
+}
+.settings-expander[open] > .settings-expander-head::before { transform: rotate(90deg); }
+.settings-expander-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 2px 10px 10px;
+}
+
+/* 颜色选择按钮 (复用片段轨道调色盘) */
+.settings-color-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 8px;
+    border: 1px solid var(--ctrl-stroke-default);
+    border-radius: 4px;
+    background: var(--ctrl-fill-default);
+    color: var(--text-primary);
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+}
+.settings-color-btn:hover { border-color: var(--ctrl-stroke-hover); }
+.settings-color-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    background: #ffffff;
+}
+
+/* 音符显示实时预览 */
+.note-display-preview {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 150px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.28);
+    border: 1px solid var(--ctrl-stroke-default);
+}
+
+/* 同一行的操作按钮 (清理缓存 / 关于) */
+.settings-btn-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.settings-action-btn {
+    width: auto;
+    flex: 0 1 auto;
+    padding: 4px 14px;
+}
+
+/* 设置面板内所有复选框统一为带动画的滑块开关 */
+.settings-tab-panel input[type="checkbox"] {
+    -webkit-appearance: none;
+    appearance: none;
+    position: relative;
+    flex: 0 0 auto;
+    width: 34px;
+    height: 18px;
+    margin: 0;
+    border-radius: 9px;
+    border: 1px solid var(--ctrl-stroke-default);
+    background: rgba(128, 128, 128, 0.30);
+    cursor: pointer;
+    transition: background 160ms ease, border-color 160ms ease;
+}
+.settings-tab-panel input[type="checkbox"]::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #d8dde3;
+    transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1), background 160ms ease;
+}
+.settings-tab-panel input[type="checkbox"]:checked {
+    background: var(--accent-color, #4cc2ff);
+    border-color: transparent;
+}
+.settings-tab-panel input[type="checkbox"]:checked::after {
+    transform: translateX(16px);
+    background: #ffffff;
+}
+.settings-tab-panel input[type="checkbox"]:focus-visible {
+    outline: 2px solid var(--accent-color, #4cc2ff);
+    outline-offset: 2px;
+}
+.settings-tab-panel input[type="checkbox"]:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+

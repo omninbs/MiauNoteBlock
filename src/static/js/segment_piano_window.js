@@ -38,6 +38,7 @@
         '#5c8b5c', '#3d7a6b'
     ];
     var PITCH_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    var PITCH_NAMES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
 
     // 画布配色: 参考用户截图 (偏青的深灰), 同时保证与全局暗色主题对比充足
     var C = {
@@ -140,7 +141,11 @@
     function octaveLabelsEnabled() {
         try { return localStorage.getItem('show_octave_labels') !== '0'; } catch (e) { return true; }
     }
-    function pitchClass(key) { return PITCH_NAMES[(key + 9) % 12]; }
+    function pitchClass(key) {
+        var idx = ((key + 9) % 12 + 12) % 12;
+        var flat = !!(window.WebNBS && window.WebNBS.shared && window.WebNBS.shared.flatNotationEnabled);
+        return (flat ? PITCH_NAMES_FLAT : PITCH_NAMES)[idx];
+    }
     function pitchName(key) {
         var oct = Math.floor((key + 21) / 12) - 1;
         return pitchClass(key) + (octaveLabelsEnabled() ? oct : '');
@@ -1328,24 +1333,33 @@
             ctx.fillRect(KEYBAR_W, y, W - KEYBAR_W, this.rowH);
         }
 
-        // 时间网格
+        // 时间网格 (三级): 小节线 16 tick = 3px / 节拍线 4 tick = 2px / tick 分割线 1px
         var t0 = Math.floor(this.xToTick(KEYBAR_W));
         var t1 = Math.ceil(this.xToTick(W));
         ctx.strokeStyle = C.gridMinor;
         ctx.lineWidth = 1;
+        for (var st = t0; st <= t1; st++) {
+            if (st % 4 === 0) continue;
+            var sgx = Math.round(this.tickToX(st)) + 0.5;
+            if (sgx < KEYBAR_W) continue;
+            ctx.beginPath(); ctx.moveTo(sgx, top); ctx.lineTo(sgx, H); ctx.stroke();
+        }
+        ctx.lineWidth = 2;
         for (var tk = t0; tk <= t1; tk++) {
-            if (tk % 4 !== 0) continue;
+            if (tk % 4 !== 0 || tk % 16 === 0) continue;
             var gx = Math.round(this.tickToX(tk)) + 0.5;
             if (gx < KEYBAR_W) continue;
             ctx.beginPath(); ctx.moveTo(gx, top); ctx.lineTo(gx, H); ctx.stroke();
         }
         ctx.strokeStyle = C.gridMajor;
+        ctx.lineWidth = 3;
         for (var bt = t0; bt <= t1; bt++) {
             if (bt % 16 !== 0) continue;
             var bx = Math.round(this.tickToX(bt)) + 0.5;
             if (bx < KEYBAR_W) continue;
             ctx.beginPath(); ctx.moveTo(bx, top); ctx.lineTo(bx, H); ctx.stroke();
         }
+        ctx.lineWidth = 1;
 
         // 片段范围外压暗
         var segStart = this.seg ? this.seg.start : 0;

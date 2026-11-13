@@ -167,6 +167,11 @@
                 showContextMenu(x, y, noteIds, isLongPress);
             };
 
+            // 时间栏右键菜单 (播放跟随 / 区间)
+            state.pianoRoll.onTimelineContextMenu = function(x, y, tick) {
+                if (N.showTimelineContextMenu) N.showTimelineContextMenu(x, y, tick);
+            };
+
             state.pianoRoll.onSelectionChanged = function(selectedNotes) {
                 updateTrackPanelUI();
             };

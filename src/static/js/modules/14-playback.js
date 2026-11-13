@@ -26,6 +26,24 @@
     function updatePlayButtonForRecording() { return N.updatePlayButtonForRecording.apply(this, arguments); }
     function formatTime() { return N.formatTime.apply(this, arguments); }
 
+    // ---- 播放跟随 / 区间 相关状态 (时间栏右键菜单控制, 持久化到本地) ----
+    function readBoolSetting(key, def) {
+        try {
+            var v = localStorage.getItem(key);
+            if (v === null) return def;
+            return v === '1';
+        } catch (e) { return def; }
+    }
+    if (state.followProgress === undefined) state.followProgress = readBoolSetting('noteblock.follow_progress', true);
+    if (!state.followMode) {
+        try { state.followMode = localStorage.getItem('noteblock.follow_mode') || 'frame'; } catch (e) { state.followMode = 'frame'; }
+    }
+    if (state.regionStartPlay === undefined) state.regionStartPlay = readBoolSetting('noteblock.region_start_play', false);
+    if (state.regionStopAfter === undefined) state.regionStopAfter = readBoolSetting('noteblock.region_stop_after', false);
+    // 方向键临时控制: 倍速与倒放
+    state._playbackRate = 1;
+    state._playbackReverse = false;
+
 
     // ============ 进度条 ============
     function getSongLengthTicks() {
@@ -74,6 +92,10 @@
         // 同步音调文字八度数字开关
         var octChk = $('settings-show-octave');
         if (octChk) octChk.checked = N.shared.octaveLabelsEnabled;
+        // 音符显示预览需在弹窗完成布局后重绘, 避免尺寸为 0 时绘制
+        if (N.renderNotePreview) {
+            setTimeout(function() { try { N.renderNotePreview(); } catch (e) {} }, 0);
+        }
     }
 
     function closeSettingsDialog() {
@@ -164,6 +186,8 @@
     }
 
     function handlePlayToggle() {
+        // 方向键走带与正式播放互斥, 避免两个循环同时推进播放头
+        stopArrowScrub();
         if (state.isPlaying) {
             // 暂停: 保持 currentTick 和 playhead 位置, 不重置
             state.isPlaying = false;
@@ -184,6 +208,10 @@
             // 暂停后重新播放: 跳转到上次 seek 的位置 (用户点击时间栏的位置)
             if (typeof state._lastSeekTick === 'number' && state._lastSeekTick >= 0) {
                 state.currentTick = state._lastSeekTick;
+            }
+            // 区间: 开启「在区间时开始播放」时从区间起点开始
+            if (state.regionStartPlay && state.pianoRoll && state.pianoRoll.hasRegion && state.pianoRoll.hasRegion()) {
+                state.currentTick = state.pianoRoll.regionStart;
             }
             // B 方案: 开始播放时立即把面板跳到 progress bar 当前 tick
             if (state.pianoRoll) {
@@ -230,6 +258,7 @@
 
     function handleStop() {
         state.isPlaying = false;
+        stopArrowScrub();
         stopPlaybackLoop();
         if (window.AudioEngine && AudioEngine.stopAll) AudioEngine.stopAll();
         setPlayButtonIcon(false);
@@ -291,8 +320,13 @@
             if (elapsed > 200) elapsed = tickMs;
             _accumulator += elapsed;
 
-            while (_accumulator >= tickMs) {
-                _accumulator -= tickMs;
+            // 方向键临时控制: 倍速 (右) / 倒放 (左)
+            var rate = state._playbackRate > 0 ? state._playbackRate : 1;
+            var reverse = !!state._playbackReverse;
+            var stepMs = tickMs / rate;
+
+            while (_accumulator >= stepMs) {
+                _accumulator -= stepMs;
 
                 var tick = state.currentTick;
 
@@ -332,11 +366,45 @@
                 // 歌词浮层: 触发该 tick 的歌词 / 处理到期隐藏
                 processLyricsAtTick(tick);
 
-                state.currentTick = tick + 1;
-                if (state.currentTick > state.maxTick + 4) {
-                    state.currentTick = 0;
-                    resetStreamingLyrics();
-                    hideLyricsOverlay();
+                if (reverse) {
+                    // 倒放: 到开头即停止
+                    if (tick <= 0) {
+                        state.currentTick = 0;
+                        state.isPlaying = false;
+                        stopPlaybackLoop();
+                        if (window.AudioEngine && AudioEngine.stopAll) AudioEngine.stopAll();
+                        setPlayButtonIcon(false);
+                        if (state.pianoRoll) {
+                            state.pianoRoll.isPlaying = false;
+                            state.pianoRoll.playheadTick = 0;
+                        }
+                        updateProgressUI();
+                        return;
+                    }
+                    state.currentTick = tick - 1;
+                } else {
+                    var nextTick = tick + 1;
+                    // 区间: 开启「在区间后停止播放」时, 到区间终点停止
+                    if (state.regionStopAfter && state.pianoRoll && state.pianoRoll.hasRegion
+                            && state.pianoRoll.hasRegion() && nextTick > state.pianoRoll.regionEnd) {
+                        state.currentTick = state.pianoRoll.regionEnd;
+                        state.isPlaying = false;
+                        stopPlaybackLoop();
+                        if (window.AudioEngine && AudioEngine.stopAll) AudioEngine.stopAll();
+                        setPlayButtonIcon(false);
+                        if (state.pianoRoll) {
+                            state.pianoRoll.isPlaying = false;
+                            state.pianoRoll.playheadTick = state.pianoRoll.regionEnd;
+                        }
+                        updateProgressUI();
+                        return;
+                    }
+                    state.currentTick = nextTick;
+                    if (state.currentTick > state.maxTick + 4) {
+                        state.currentTick = 0;
+                        resetStreamingLyrics();
+                        hideLyricsOverlay();
+                    }
                 }
 
                 if (tick - _lastProgressUI >= 2 || state.currentTick === 0) {
@@ -357,14 +425,28 @@
             var visualFrameMs = state.renderFpsLimit > 0 ? 1000 / state.renderFpsLimit : 0;
             var shouldRenderVisual = visualFrameMs === 0 || now >= _nextVisualFrame;
             if (state.pianoRoll && shouldRenderVisual) {
-                // 平滑翻页 (播放中拖动查看时暂停: 用户正在自由浏览, 松开后由卷帘自己平滑回到播放头)
-                if (state.pianoRoll.smoothScrollEnabled
+                // 跟随进度条 (模式: 按页 / 按刻 / 按帧), 播放中拖动查看时暂停
+                if (state.followProgress !== false && state.pianoRoll.smoothScrollEnabled
                         && !state.pianoRoll._playbackViewHold && !state.pianoRoll._playbackReturnRAF) {
                     var visibleWidth = state.pianoRoll.displayWidth - state.pianoRoll._currentPanelWidth;
                     var playheadX = state.pianoRoll._currentPanelWidth + visibleWidth / 3;
                     // 使用 _zoomX(): 片段模式走独立横向缩放, 避免 scrollX 跳到极端位置
                     var cellW = state.pianoRoll._cfg.cellW * state.pianoRoll._zoomX();
-                    var targetScrollX = state.pianoRoll._getDisplayTick() * cellW + state.pianoRoll._currentPanelWidth - playheadX;
+                    var dispTick = state.pianoRoll._getDisplayTick();
+                    var followMode = state.followMode || 'frame';
+                    var targetScrollX;
+                    if (followMode === 'page') {
+                        // 按页: 视图以整页宽度为步进翻动
+                        var pageTicks = Math.max(1, Math.floor(visibleWidth / cellW));
+                        var pageIndex = Math.floor(dispTick / pageTicks);
+                        targetScrollX = pageIndex * pageTicks * cellW + state.pianoRoll._currentPanelWidth - playheadX;
+                    } else if (followMode === 'tick') {
+                        // 按刻: 对齐到整数 tick
+                        targetScrollX = Math.floor(dispTick) * cellW + state.pianoRoll._currentPanelWidth - playheadX;
+                    } else {
+                        // 按帧: 每帧平滑跟随
+                        targetScrollX = dispTick * cellW + state.pianoRoll._currentPanelWidth - playheadX;
+                    }
                     state.pianoRoll.scrollX = Math.max(0, Math.min(targetScrollX, state.pianoRoll._getMaxScrollX()));
                     state.pianoRoll._fullRedrawNeeded = true;
                 }
@@ -406,6 +488,106 @@
 
     function restartPlayback() {
         if (state.isPlaying) startPlaybackLoop();
+    }
+
+    // ============ 方向键临时控制进度 ============
+    // 暂停时: 按住方向键以歌曲原速前进/倒放并试听
+    function stopArrowScrub() {
+        if (state._arrowScrubRAF) {
+            cancelAnimationFrame(state._arrowScrubRAF);
+            state._arrowScrubRAF = null;
+        }
+        var wasActive = !!state._arrowScrubDir;
+        state._arrowScrubDir = 0;
+        if (!wasActive) return;
+        if (window.AudioEngine && AudioEngine.stopAll) AudioEngine.stopAll();
+        if (state.pianoRoll) {
+            state.pianoRoll.clearPlayHighlights();
+            if (state.pianoRoll.redrawPlaybackOverlay) state.pianoRoll.redrawPlaybackOverlay();
+            state.pianoRoll.render();
+        }
+    }
+
+    function startArrowScrub(dir) {
+        if (state.isPlaying || !state.pianoRoll) return;
+        if (state._arrowScrubDir === dir && state._arrowScrubRAF) return;
+        stopArrowScrub();
+        if (window.AudioEngine && AudioEngine.init) AudioEngine.init();
+        var tickMs = Math.max(10, Math.floor(1000 / Math.max(1, state.tempo)));
+        var acc = 0;
+        var last = performance.now();
+        var trackByLayer = {};
+        for (var ti = 0; ti < state.tracks.length; ti++) {
+            trackByLayer[state.tracks[ti].layer] = state.tracks[ti];
+        }
+        function playAtTick(tick) {
+            var notesAtTick = getNotesAtTick(tick);
+            for (var k = 0; k < notesAtTick.length; k++) {
+                var n = notesAtTick[k];
+                var track = trackByLayer[n.layer];
+                if (track && !isTrackAudible(track)) continue;
+                if (state.layerChannelMap) {
+                    var midiCh = state.layerChannelMap[n.layer];
+                    if (midiCh !== undefined && !isChannelAudible(midiCh)) continue;
+                }
+                if (window.AudioEngine && AudioEngine.playNote) {
+                    var trackVolume = track && track.volume !== undefined ? Number(track.volume) : 100;
+                    trackVolume = isFinite(trackVolume) ? Math.max(0, Math.min(100, trackVolume)) : 100;
+                    var noteVelocity = n.velocity === undefined ? 100 : n.velocity;
+                    AudioEngine.playNote(n.instrument, n.key, noteVelocity * trackVolume / 100, n.pan || 50, n.pitch, n.layer);
+                }
+            }
+            if (state.pianoRoll && state.highlightAnimationEnabled) state.pianoRoll.highlightPlayingNotes(notesAtTick);
+            if (state.pianoRoll && state.trackHighlightEnabled) state.pianoRoll.highlightTriggeredTracks(notesAtTick);
+        }
+        function frame(now) {
+            if (state._arrowScrubDir !== dir) return;
+            var elapsed = now - last;
+            last = now;
+            if (elapsed > 200) elapsed = tickMs;
+            acc += elapsed;
+            while (acc >= tickMs) {
+                acc -= tickMs;
+                var nt = state.currentTick + dir;
+                if (nt < 0) nt = 0;
+                if (nt > state.maxTick + 4) nt = state.maxTick + 4;
+                if (nt === state.currentTick) {
+                    stopArrowScrub();
+                    return;
+                }
+                state.currentTick = nt;
+                playAtTick(nt);
+                var pr = state.pianoRoll;
+                pr.playheadTick = nt;
+                pr.currentTick = nt;
+                pr._smoothedPlayheadTick = nt;
+                pr._lastTickTime = performance.now();
+                pr._fullRedrawNeeded = true;
+                pr.render();
+                var timeEl = $('progress-time');
+                if (timeEl) timeEl.textContent = Math.floor(nt) + ' / ' + Math.floor(getSongLengthTicks()) + ' tick';
+                updateProgressUI();
+            }
+            state._arrowScrubRAF = requestAnimationFrame(frame);
+        }
+        state._arrowScrubDir = dir;
+        state._arrowScrubRAF = requestAnimationFrame(frame);
+    }
+
+    // 播放中: 右方向键临时 2 倍速 / 左方向键临时倒放 (均保持原速基础上)
+    function setArrowPlaybackModifier(dir) {
+        if (dir > 0) {
+            state._playbackRate = 2;
+            state._playbackReverse = false;
+        } else {
+            state._playbackRate = 1;
+            state._playbackReverse = true;
+        }
+    }
+
+    function clearArrowPlaybackModifier() {
+        state._playbackRate = 1;
+        state._playbackReverse = false;
     }
 
     // ============ 轨道管理 ============
@@ -482,6 +664,10 @@
     N.startPlaybackLoop = startPlaybackLoop;
     N.stopPlaybackLoop = stopPlaybackLoop;
     N.restartPlayback = restartPlayback;
+    N.startArrowScrub = startArrowScrub;
+    N.stopArrowScrub = stopArrowScrub;
+    N.setArrowPlaybackModifier = setArrowPlaybackModifier;
+    N.clearArrowPlaybackModifier = clearArrowPlaybackModifier;
     N.findTrackByLayer = findTrackByLayer;
     N.lockToMutedSolo = lockToMutedSolo;
     N.mutedSoloToLock = mutedSoloToLock;

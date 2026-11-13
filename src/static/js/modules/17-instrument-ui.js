@@ -293,6 +293,8 @@
             + '.context-menu .ctx-disabled { color: #555; cursor: default; }'
             + '.context-menu .ctx-separator { height: 1px; background: rgba(255,255,255,0.06); margin: 4px 0; }'
             + '.context-menu .ctx-icon { font-size: 14px; width: 18px; text-align: center; }'
+            + '.context-menu .ctx-check { font-size: 12px; width: 16px; text-align: center; color: #4ecdc4; }'
+            + '.context-menu .ctx-sub { padding-left: 30px; }'
             + '.context-menu .ctx-arrow { margin-left: auto; font-size: 10px; opacity: 0.5; }'
             + '.ctx-selected { background: rgba(78,205,196,0.15); }'
             + '.instrument-popup { position: fixed; z-index: 9998; display: none; background: rgba(22,33,62,0.96); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 8px 0; min-width: 200px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); color: #eaeaea; font-size: 13px; max-height: 400px; overflow-y: auto; }'

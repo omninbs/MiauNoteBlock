@@ -131,8 +131,11 @@
             + '<span class="wn-cp-title"></span>'
             + '<button type="button" class="wn-cp-close" aria-label="' + i18nText('关闭') + '">&times;</button>'
             + '</div>'
+            + '<div class="wn-cp-body">'
+            + '<div class="wn-cp-left">'
             + '<div class="wn-cp-wheel" aria-label="' + i18nText('色相') + '"></div>'
-            + '<div class="wn-cp-swatches" hidden></div>'
+            + '</div>'
+            + '<div class="wn-cp-right">'
             + '<div class="wn-cp-fields">'
             + '<label class="wn-cp-hex-row"><span>' + i18nText('十六进制') + '</span>'
             + '<input class="wn-cp-hex" type="text" maxlength="7" spellcheck="false" autocomplete="off"></label>'
@@ -141,10 +144,13 @@
             + '<label><span>G</span><input class="wn-cp-g" type="number" min="0" max="255" step="1"></label>'
             + '<label><span>B</span><input class="wn-cp-b" type="number" min="0" max="255" step="1"></label>'
             + '</div>'
+            + '<div class="wn-cp-swatches" hidden></div>'
             + '</div>'
             + '<div class="wn-cp-actions">'
             + '<button type="button" class="wn-cp-btn wn-cp-cancel">' + i18nText('取消') + '</button>'
             + '<button type="button" class="wn-cp-btn wn-cp-ok">' + i18nText('确定') + '</button>'
+            + '</div>'
+            + '</div>'
             + '</div>'
             + '</div>';
         document.body.appendChild(_root);
@@ -232,8 +238,8 @@
         }
         var vw = window.innerWidth || document.documentElement.clientWidth;
         var vh = window.innerHeight || document.documentElement.clientHeight;
-        var pw = _panel.offsetWidth || 220;
-        var ph = _panel.offsetHeight || 340;
+        var pw = _panel.offsetWidth || 404;
+        var ph = _panel.offsetHeight || 300;
         var margin = 8;
         var left, top;
         if (anchorRect) {
@@ -278,7 +284,7 @@
         _root.classList.toggle('is-mobile', isMobile());
         _root.style.display = isMobile() ? 'flex' : 'block';
         // 先显示以便测量尺寸, 再创建 iro 并定位
-        createPicker(isMobile() ? 240 : 180);
+        createPicker(isMobile() ? 240 : 150);
         syncInputs({
             r: parseInt(_currentHex.slice(1, 3), 16),
             g: parseInt(_currentHex.slice(3, 5), 16),

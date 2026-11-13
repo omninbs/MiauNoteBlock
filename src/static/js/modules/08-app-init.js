@@ -182,6 +182,10 @@
         $('btn-undo').addEventListener('click', performUndo);
         $('btn-redo').addEventListener('click', performRedo);
 
+        // 顶部工具栏: 保存
+        var saveBtn = $('btn-save');
+        if (saveBtn) saveBtn.addEventListener('click', function() { N.handleSave(); });
+
         // 播放控制 (现在在状态栏)
         var playBtn = $('btn-play');
         if (playBtn) playBtn.addEventListener('click', handlePlayToggle);
@@ -405,6 +409,7 @@
             volOpacityChk.addEventListener('change', function() {
                 if (state.pianoRoll) state.pianoRoll.setVolumeOpacityEnabled(this.checked);
                 try { localStorage.setItem('volume_opacity', this.checked ? '1' : '0'); } catch(e) {}
+                if (N.renderNotePreview) N.renderNotePreview();
             });
         }
 
@@ -627,6 +632,7 @@
                 N.shared.octaveLabelsEnabled = this.checked;
                 try { localStorage.setItem('show_octave_labels', this.checked ? '1' : '0'); } catch(e) {}
                 applyOctaveLabelSetting(N.shared.octaveLabelsEnabled, true);
+                renderNotePreview();
             });
         }
 
@@ -641,6 +647,7 @@
                     showNoteBlockChk ? showNoteBlockChk.checked : false
                 );
             }
+            renderNotePreview();
         }
         if (showNoteClicksChk) {
             try { showNoteClicksChk.checked = localStorage.getItem('noteblock.show_note_clicks') === '1'; } catch(e) {}
@@ -658,7 +665,221 @@
         }
         syncNoteExtraState();
 
-        // 总开关关闭时, 子选项行变暗 (表示当前不生效); 总开关打开则恢复
+        // ============ 显示标签页: 子标签切换 (音符显示 / 琴键) ============
+        (function initDisplaySubtabs() {
+            var btns = document.querySelectorAll('[data-display-subtab]');
+            for (var i = 0; i < btns.length; i++) {
+                btns[i].addEventListener('click', function() {
+                    var name = this.getAttribute('data-display-subtab');
+                    var allBtn = document.querySelectorAll('[data-display-subtab]');
+                    for (var j = 0; j < allBtn.length; j++) allBtn[j].classList.toggle('active', allBtn[j] === this);
+                    var panels = document.querySelectorAll('.settings-subpanel');
+                    for (var k = 0; k < panels.length; k++) panels[k].classList.remove('active');
+                    var p = $('settings-subpanel-' + name);
+                    if (p) p.classList.add('active');
+                    if (name === 'note') renderNotePreview();
+                });
+            }
+        })();
+
+        // ============ 显示 → 音符显示: 图标/文字 大小、位置、颜色 ============
+        // 档位语义: 「小」= 旧版「中」的尺寸, 中/大整体上移一级
+        var NOTE_DISPLAY_DEFAULTS = {
+            iconSize: 'small', iconPos: 'bottom-right',
+            pitchSize: 'small', pitchColor: '#ffffff', pitchPos: 'top-left',
+            blockSize: 'small', blockColor: '#ffffff', blockPos: 'bottom-left',
+            indexSize: 'small', indexColor: '#ffffff', indexPos: 'top-right',
+            markOutOfRange: true
+        };
+        function readNoteDisplayCfg() {
+            var cfg = {};
+            for (var k in NOTE_DISPLAY_DEFAULTS) cfg[k] = NOTE_DISPLAY_DEFAULTS[k];
+            // 优先使用钢琴卷帘当前配置 (单一真源: 含默认值迁移, 避免两边不一致)
+            if (state.pianoRoll && state.pianoRoll.getNoteDisplayConfig) {
+                try {
+                    var live = state.pianoRoll.getNoteDisplayConfig();
+                    for (var kl in cfg) {
+                        if (live && live[kl] !== undefined && live[kl] !== null) cfg[kl] = live[kl];
+                    }
+                    return cfg;
+                } catch (e) {}
+            }
+            try {
+                var raw = localStorage.getItem('noteblock.note_display');
+                if (raw) {
+                    var obj = JSON.parse(raw);
+                    for (var k2 in cfg) {
+                        if (obj && obj[k2] !== undefined && obj[k2] !== null) cfg[k2] = obj[k2];
+                    }
+                }
+            } catch (e) {}
+            return cfg;
+        }
+        function applyNoteDisplay(partial) {
+            if (state.pianoRoll && state.pianoRoll.setNoteDisplayConfig) {
+                state.pianoRoll.setNoteDisplayConfig(partial);
+            } else {
+                var cfg = readNoteDisplayCfg();
+                for (var key in partial) cfg[key] = partial[key];
+                try { localStorage.setItem('noteblock.note_display', JSON.stringify(cfg)); } catch (e) {}
+            }
+            renderNotePreview();
+        }
+        function renderNotePreview() {
+            var cv = $('note-display-preview');
+            if (!cv || !cv.getContext) return;
+            var ctx = cv.getContext('2d');
+            var W = cv.width, H = cv.height;
+            ctx.clearRect(0, 0, W, H);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+            ctx.fillRect(0, 0, W, H);
+            if (!(state.pianoRoll && state.pianoRoll._drawNoteBlock)) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+                ctx.font = '12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(N.i18nText('打开编辑器后可预览音符显示效果'), W / 2, H / 2);
+                return;
+            }
+            // 以钢琴卷帘的真实音符单元为基准等比放大绘制,
+            // 这样图标/文字的尺寸与位置和主画布保持同一比例
+            var baseW = 32, baseH = 32;
+            var pr = state.pianoRoll;
+            try {
+                if (pr._cfg) {
+                    if (pr._cfg.cellW) baseW = pr._cfg.cellW;
+                    if (pr._cfg.cellH) baseH = pr._cfg.cellH;
+                }
+            } catch (e) {}
+            var scale = Math.max(1.4, Math.min(3.2, (H - 24) / baseH));
+            var bw = baseW * scale;
+            var bh = baseH * scale;
+            var gap = Math.max(12, bw * 0.16);
+            var totalW = bw * 3 + gap * 2;
+            var startX = Math.max(8, (W - totalW) / 2);
+            var startY = (H - bh) / 2;
+            var insts = [0, 1, 7];
+            var keys = [45, 60, 75];
+            // 三个示例音符使用不同音量, 让「音符透明度跟随音量」也能在预览中体现
+            var vels = [100, 76, 48];
+            var colors = ['#3f8f4f', '#3f6f9f', '#9f6f3f'];
+            // _drawNoteBlock 的 scale 以传入单元格的中心为基准放大,
+            // 因此把逻辑坐标向内偏移, 让放大后的可见块正好落在预览位置
+            var offX = baseW * (scale - 1) / 2;
+            var offY = baseH * (scale - 1) / 2;
+            for (var i = 0; i < 3; i++) {
+                var pitchLabel = N.getNbsKeyDisplayLabel(keys[i]);
+                var note = { instrument: insts[i], key: keys[i], velocity: vels[i], pitch: 0, layer: i, tick: 0, id: 'preview_' + i };
+                pr._drawNoteBlock(ctx, startX + offX + i * (bw + gap), startY + offY, baseW, baseH, colors[i], false, pitchLabel, note, scale, 0);
+            }
+            // 音色图标是异步加载的: 未就绪时预览会显示纯色方块, 加载完成后自动重绘
+            hookPreviewImageLoad(pr);
+        }
+        var _previewReloadTimer = null;
+        function hookPreviewImageLoad(pr) {
+            var imgs = pr && pr._instrumentImages;
+            if (!imgs) return;
+            for (var k in imgs) {
+                var img = imgs[k];
+                if (!img || typeof img.addEventListener !== 'function') continue;
+                if (img.complete || img._nbPreviewHooked) continue;
+                img._nbPreviewHooked = true;
+                img.addEventListener('load', function() {
+                    if (_previewReloadTimer) return;
+                    _previewReloadTimer = setTimeout(function() {
+                        _previewReloadTimer = null;
+                        renderNotePreview();
+                    }, 60);
+                });
+            }
+        }
+        N.renderNotePreview = renderNotePreview;
+        var ndCfg = readNoteDisplayCfg();
+        var ndSelects = [
+            ['settings-note-icon-size', 'iconSize'],
+            ['settings-note-icon-pos', 'iconPos'],
+            ['settings-note-pitch-size', 'pitchSize'],
+            ['settings-note-pitch-pos', 'pitchPos'],
+            ['settings-note-block-size', 'blockSize'],
+            ['settings-note-block-pos', 'blockPos'],
+            ['settings-note-index-size', 'indexSize'],
+            ['settings-note-index-pos', 'indexPos']
+        ];
+        for (var nsi = 0; nsi < ndSelects.length; nsi++) {
+            (function(elId, key) {
+                var el = $(elId);
+                if (!el) return;
+                el.value = ndCfg[key];
+                el.addEventListener('change', function() {
+                    var o = {};
+                    o[key] = this.value;
+                    applyNoteDisplay(o);
+                });
+            })(ndSelects[nsi][0], ndSelects[nsi][1]);
+        }
+        function bindNoteColor(btnId, key) {
+            var btn = $(btnId);
+            if (!btn) return;
+            var dot = btn.querySelector('.settings-color-dot');
+            var hexEl = btn.querySelector('.settings-color-hex');
+            function sync(c) {
+                if (dot) dot.style.background = c;
+                if (hexEl) hexEl.textContent = c;
+            }
+            sync(ndCfg[key]);
+            btn.addEventListener('click', function() {
+                if (!N.openColorPicker) return;
+                N.openColorPicker({
+                    color: ndCfg[key],
+                    anchorEl: btn,
+                    title: N.i18nText('文字颜色'),
+                    swatches: (N.SEG_LANE_COLORS || []).slice(),
+                    onInput: function(hex) {
+                        ndCfg[key] = hex;
+                        sync(hex);
+                        var o = {};
+                        o[key] = hex;
+                        applyNoteDisplay(o);
+                    },
+                    onCommit: function(hex) {
+                        ndCfg[key] = hex;
+                        sync(hex);
+                        var o = {};
+                        o[key] = hex;
+                        applyNoteDisplay(o);
+                    }
+                });
+            });
+        }
+        bindNoteColor('settings-note-pitch-color', 'pitchColor');
+        bindNoteColor('settings-note-block-color', 'blockColor');
+        bindNoteColor('settings-note-index-color', 'indexColor');
+        var markRangeChk = $('settings-mark-out-of-range');
+        if (markRangeChk) {
+            markRangeChk.checked = ndCfg.markOutOfRange !== false;
+            markRangeChk.addEventListener('change', function() {
+                applyNoteDisplay({ markOutOfRange: this.checked });
+            });
+        }
+        renderNotePreview();
+
+        // ============ 显示 → 琴键: 使用降调记号 ============
+        var flatNotationChk = $('settings-use-flat-notation');
+        if (flatNotationChk) {
+            flatNotationChk.checked = !!N.shared.flatNotationEnabled;
+            flatNotationChk.addEventListener('change', function() {
+                N.shared.flatNotationEnabled = this.checked;
+                try { localStorage.setItem('noteblock.use_flat_notation', this.checked ? '1' : '0'); } catch (e) {}
+                applyOctaveLabelSetting(N.shared.octaveLabelsEnabled, true);
+                if (state.pianoRoll) {
+                    state.pianoRoll._fullRedrawNeeded = true;
+                    state.pianoRoll.render();
+                }
+                if (window.SegmentPianoWindow && window.SegmentPianoWindow.refresh) window.SegmentPianoWindow.refresh();
+                renderNotePreview();
+            });
+        }
+
         function syncTrackHighlightSubRow(rowId, enabled, chk) {
             var row = $(rowId);
             if (!row) return;
@@ -1877,6 +2098,25 @@
             document.documentElement.setAttribute('data-ui-theme', _savedTheme);
         }
     } catch (e) {}
+
+    // ---- 声音数状态栏: 每 200ms 刷新仍在发声的音源数量 ----
+    (function initVoiceStatus() {
+        var el = $('voice-count');
+        var wrap = $('voice-status');
+        if (!el) return;
+        var last = -1;
+        setInterval(function() {
+            var count = 0;
+            if (window.AudioEngine && AudioEngine.getActiveVoiceCount) {
+                try { count = AudioEngine.getActiveVoiceCount(); } catch (e) { count = 0; }
+            }
+            if (count !== last) {
+                last = count;
+                el.textContent = String(count);
+                if (wrap) wrap.classList.toggle('active', count > 0);
+            }
+        }, 200);
+    })();
 
     // ---- 导出 ----
     N.applyUiTheme = applyUiTheme;

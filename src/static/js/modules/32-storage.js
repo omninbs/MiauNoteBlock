@@ -17,6 +17,7 @@
     function lyricRebuildIndex() { return N.lyricRebuildIndex.apply(this, arguments); }
     function markDirty() { return N.markDirty.apply(this, arguments); }
     function renderTabs() { return N.renderTabs.apply(this, arguments); }
+    function refreshAudioLaneUI() { return N.refreshAudioLaneUI.apply(this, arguments); }
     function resetStreamingLyrics() { return N.resetStreamingLyrics.apply(this, arguments); }
     function segmentEnsure() { return N.segmentEnsure.apply(this, arguments); }
     function segmentSync() { return N.segmentSync.apply(this, arguments); }
@@ -134,6 +135,9 @@
                 solo_layers: Array.isArray(songMeta.solo_layers) ? songMeta.solo_layers.slice() : [],
                 lyrics: JSON.parse(JSON.stringify(state.lyrics || [])),
                 lyricLanes: JSON.parse(JSON.stringify(state.lyricLanes || [])),
+                // 音频轨道与音频块 (音频缓冲不持久化: 重新打开后标记缺失, 需重新导入)
+                audioLanes: JSON.parse(JSON.stringify(state.audioLanes || [])),
+                audioClips: JSON.parse(JSON.stringify(state.audioClips || [])),
                 // 片段轨道 / 声部分离依赖的映射信息, 必须随工程一起保存
                 layer_channel_map: songMeta.layer_channel_map || {},
                 layer_voice_map: songMeta.layer_voice_map || {},
@@ -146,68 +150,95 @@
             // 歌词轨道 (额外轨道) 定义: 与 song.lyrics 配套, 顶层存一份便于增量读取
             lyricLanes: JSON.parse(JSON.stringify(state.lyricLanes || [])),
             lyrics: JSON.parse(JSON.stringify(state.lyrics || [])),
+            audioLanes: JSON.parse(JSON.stringify(state.audioLanes || [])),
+            audioClips: JSON.parse(JSON.stringify(state.audioClips || [])),
             // 片段编辑数据: 轨道定义与片段内容原样保存 (允许同轨重叠, 不做去重/裁剪)
             segments: JSON.parse(JSON.stringify(state.segments || [])),
             segmentLanes: JSON.parse(JSON.stringify(state.segmentLanes || [])),
             segmentsEdited: !!state._segmentsEdited,
             solo_layers: Array.isArray(songMeta.solo_layers) ? songMeta.solo_layers.slice() : []
         };
-        var history = getHistoryFiles();
-        // 使用当前文件的持久 ID (多次保存覆盖同一文件, 不产生重复)
-        if (!state.currentFileId) {
-            state.currentFileId = Date.now().toString();
-        }
-        // 当前标签页记录持久 ID, 切换标签页后可继续覆盖同一文件
-        var _activeTabForSave = tabGetActive();
-        if (_activeTabForSave && _activeTabForSave.snapshot) {
-            _activeTabForSave.snapshot.fileId = state.currentFileId;
-        }
-        var id = state.currentFileId;
-        var name = (state.song && (state.song.name || state.song.song_name)) || 'Untitled';
-        // 查找是否已有该 ID 的历史记录
-        var existingIdx = -1;
-        for (var i = 0; i < history.length; i++) {
-            if (history[i].id === id) { existingIdx = i; break; }
-        }
-        var entry = { id: id, name: name, date: new Date().toLocaleString(), ts: Date.now(), size: state.notes.length, tempo: state.tempo };
-        if (existingIdx >= 0) {
-            // 覆盖已有记录, 但保持在列表中的位置
-            history[existingIdx] = entry;
-        } else {
-            history.unshift(entry);
-            // 上限 12 条 (与欢迎界面「最近歌曲」显示条数一致), 超出部分连同文件一起清理
-            if (history.length > 12) {
-                var removed = history.splice(12);
-                // 被截断的记录连同 IndexedDB 中的文件一起清理
-                for (var r = 0; r < removed.length; r++) {
-                    projectDbDelete(removed[r].id);
-                    try { localStorage.removeItem('nbs_file_' + removed[r].id); } catch(e) {}
+        var commitSave = function () {
+            var history = getHistoryFiles();
+            // 使用当前文件的持久 ID (多次保存覆盖同一文件, 不产生重复)
+            if (!state.currentFileId) {
+                state.currentFileId = Date.now().toString();
+            }
+            // 当前标签页记录持久 ID, 切换标签页后可继续覆盖同一文件
+            var _activeTabForSave = tabGetActive();
+            if (_activeTabForSave && _activeTabForSave.snapshot) {
+                _activeTabForSave.snapshot.fileId = state.currentFileId;
+            }
+            var id = state.currentFileId;
+            var name = (state.song && (state.song.name || state.song.song_name)) || 'Untitled';
+            // 查找是否已有该 ID 的历史记录
+            var existingIdx = -1;
+            for (var i = 0; i < history.length; i++) {
+                if (history[i].id === id) { existingIdx = i; break; }
+            }
+            var entry = { id: id, name: name, date: new Date().toLocaleString(), ts: Date.now(), size: state.notes.length, tempo: state.tempo };
+            if (existingIdx >= 0) {
+                // 覆盖已有记录, 但保持在列表中的位置
+                history[existingIdx] = entry;
+            } else {
+                history.unshift(entry);
+                // 上限 12 条 (与欢迎界面「最近歌曲」显示条数一致), 超出部分连同文件一起清理
+                if (history.length > 12) {
+                    var removed = history.splice(12);
+                    // 被截断的记录连同 IndexedDB 中的文件一起清理
+                    for (var r = 0; r < removed.length; r++) {
+                        projectDbDelete(removed[r].id);
+                        try { localStorage.removeItem('nbs_file_' + removed[r].id); } catch(e) {}
+                    }
                 }
             }
-        }
-        var historyOk = safeSetItem('nbs_history', JSON.stringify(history));
-        // 歌曲数据写入 IndexedDB (容量远大于 localStorage, 不会再触发配额清理)
-        projectDbPut(id, data).then(function() {
-            if (!silent) showAppAlert('保存成功', {title: '保存', icon: 'fa-solid fa-circle-check'});
-            tabMarkSaved();
-        }).catch(function() {
-            // IndexedDB 不可用时的回退: 仍尝试写入 localStorage
-            var fileOk = safeSetItem('nbs_file_' + id, JSON.stringify(data));
-            if (fileOk) tabMarkSaved();
-            if (!silent) {
-                if (fileOk) {
-                    showAppAlert('保存成功', {title: '保存', icon: 'fa-solid fa-circle-check'});
+            var historyOk = safeSetItem('nbs_history', JSON.stringify(history));
+            // 歌曲数据写入 IndexedDB (容量远大于 localStorage, 不会再触发配额清理)
+            projectDbPut(id, data).then(function() {
+                if (!silent) showAppAlert('保存成功', {title: '保存', icon: 'fa-solid fa-circle-check'});
+                tabMarkSaved();
+            }).catch(function() {
+                // IndexedDB 不可用时的回退: 仍尝试写入 localStorage
+                // localStorage 只能存字符串, 音频资产需先内联为 base64 (极少触发)
+                var fallbackToLocal = function () {
+                    var fileOk = safeSetItem('nbs_file_' + id, JSON.stringify(data));
+                    if (fileOk) tabMarkSaved();
+                    if (!silent) {
+                        if (fileOk) {
+                            showAppAlert('保存成功', {title: '保存', icon: 'fa-solid fa-circle-check'});
+                        } else {
+                            showAppAlert('存储空间不足, 部分数据可能未保存', {title: '警告', icon: 'fa-solid fa-triangle-exclamation'});
+                        }
+                    } else if (!fileOk) {
+                        // 静默保存(快捷键/自动保存)也失败时必须提示, 否则用户会以为已保存而丢内容
+                        showAppAlert('保存失败：浏览器本地存储空间不足，请到设置中清理旧工程后重试。', {
+                            title: '保存失败', icon: 'fa-solid fa-triangle-exclamation'
+                        });
+                    }
+                };
+                if (data.audioAssets && typeof N.audioAssetsInline === 'function') {
+                    N.audioAssetsInline(data.audioAssets).then(function (inline) {
+                        if (inline) data.audioAssets = inline;
+                        fallbackToLocal();
+                    }).catch(fallbackToLocal);
                 } else {
-                    showAppAlert('存储空间不足, 部分数据可能未保存', {title: '警告', icon: 'fa-solid fa-triangle-exclamation'});
+                    fallbackToLocal();
                 }
-            } else if (!fileOk) {
-                // 静默保存(快捷键/自动保存)也失败时必须提示, 否则用户会以为已保存而丢内容
-                showAppAlert('保存失败：浏览器本地存储空间不足，请到设置中清理旧工程后重试。', {
-                    title: '保存失败', icon: 'fa-solid fa-triangle-exclamation'
-                });
-            }
-        });
-        return historyOk;
+            });
+            return historyOk;
+        };
+
+        // 有音频缓冲时先编码为 WAV (ArrayBuffer, 分块异步) 随工程一起保存; 无音频保持原同步路径
+        var hasAudio = false;
+        try { hasAudio = !!(state.audioBuffers && Object.keys(state.audioBuffers).length); } catch (e) {}
+        if (hasAudio && typeof N.audioAssetsForSave === 'function') {
+            N.audioAssetsForSave().then(function (assets) {
+                if (assets) data.audioAssets = assets;
+                commitSave();
+            }).catch(function () { commitSave(); });
+            return true;
+        }
+        return commitSave();
     }
 
     // 自动保存定时器 (每 15 秒保存一次)
@@ -313,12 +344,34 @@
         }).catch(function() { return []; });
     }
 
+    // 递归累加对象内部二进制 (ArrayBuffer/TypedArray/Blob) 的字节数
+    //   JSON.stringify 会忽略这些, 音频资产存在对象里时不统计会严重低估占用
+    function measureBinaryBytes(v, depth) {
+        if (!v || typeof v !== 'object' || depth > 6) return 0;
+        if (typeof Blob !== 'undefined' && v instanceof Blob) return v.size || 0;
+        if (typeof ArrayBuffer !== 'undefined') {
+            if (v instanceof ArrayBuffer) return v.byteLength || 0;
+            if (ArrayBuffer.isView(v)) return v.byteLength || 0;
+        }
+        var sum = 0;
+        try {
+            var keys = Object.keys(v);
+            for (var i = 0; i < keys.length; i++) sum += measureBinaryBytes(v[keys[i]], depth + 1);
+        } catch (e) {}
+        return sum;
+    }
+
     function measureStoredValue(v) {
         if (v === null || v === undefined) return 0;
         if (typeof v === 'string') return v.length * 2;
         if (typeof Blob !== 'undefined' && v instanceof Blob) return v.size || 0;
-        if (typeof ArrayBuffer !== 'undefined' && v instanceof ArrayBuffer) return v.byteLength || 0;
-        try { return JSON.stringify(v).length * 2; } catch (e) { return 0; }
+        if (typeof ArrayBuffer !== 'undefined') {
+            if (v instanceof ArrayBuffer) return v.byteLength || 0;
+            if (ArrayBuffer.isView(v)) return v.byteLength || 0;
+        }
+        var textBytes = 0;
+        try { textBytes = JSON.stringify(v).length * 2; } catch (e) { textBytes = 0; }
+        return textBytes + measureBinaryBytes(v, 0);
     }
 
     // 估算 IndexedDB 中某个 objectStore 的占用字节数 (库不存在时返回 0)
@@ -456,6 +509,23 @@
         resetStreamingLyrics();
         lyricRebuildIndex();
         syncLyricsToRoll();
+        // 音频轨道与音频块随工程恢复; 音频缓冲不持久化, 打开后为缺失状态, 由 refreshAudioLaneUI 标记
+        state.audioLanes = Array.isArray(data.audioLanes)
+            ? JSON.parse(JSON.stringify(data.audioLanes))
+            : (Array.isArray(song.audioLanes) ? JSON.parse(JSON.stringify(song.audioLanes)) : []);
+        state.audioClips = Array.isArray(data.audioClips)
+            ? JSON.parse(JSON.stringify(data.audioClips))
+            : (Array.isArray(song.audioClips) ? JSON.parse(JSON.stringify(song.audioClips)) : []);
+        state.audioBuffers = {};
+        // 工程内保存了音频 (WAV base64) 时异步解码还原; 否则保持缺失标记
+        if (data.audioAssets && typeof N.restoreAudioAssets === 'function') {
+            N.restoreAudioAssets(data.audioAssets).then(function (map) {
+                state.audioBuffers = map || {};
+                refreshAudioLaneUI();
+            }).catch(function () { refreshAudioLaneUI(); });
+        } else {
+            refreshAudioLaneUI();
+        }
         state.notes = notes;
         // 新格式不再把音符重复写入 song, 这里补齐, 保证 song.notes 与 state.notes 一致
         state.song.notes = notes;

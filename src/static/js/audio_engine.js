@@ -182,6 +182,8 @@ function initAudioEngine() {
 
     // 预加载所有声音
     preloadAllSounds();
+    // 预加载长音频流式播放模块 (异步, 不阻塞初始化)
+    try { ensureClipStreamWorklet(); } catch (e) {}
 }
 
 /**
@@ -518,6 +520,307 @@ function resumeAudioContext() {
 }
 
 /**
+ * 解码音频文件数据为 AudioBuffer (音频轨道导入用)
+ * @param {ArrayBuffer} arrayBuffer - 音频文件二进制数据
+ * @returns {Promise<AudioBuffer>}
+ */
+function decodeAudio(arrayBuffer) {
+    if (!audioContext) {
+        initAudioEngine();
+    }
+    if (!audioContext) return Promise.reject(new Error('AudioContext unavailable'));
+    resumeAudioContext();
+    return audioContext.decodeAudioData(arrayBuffer);
+}
+
+/**
+ * 播放音频轨道的音频块 (原样播放用户导入的音频, 不变速不变调)
+ *
+ * @param {AudioBuffer} buffer - 已解码的音频缓冲
+ * @param {number} whenSec - 绝对开始时间 (audioContext.currentTime 域), 缺省立即播放
+ * @param {number} offsetSec - 源音频内的起始偏移 (秒)
+ * @param {number} gain - 输出增益 (1 = 原声)
+ * @param {number} pan - 声像 (-1 左 ~ 1 右)
+ * @param {string|number} layerKey - 层标识, 供 stopLayerAudio 按层停止
+ */
+function playAudioClip(buffer, whenSec, offsetSec, gain, pan, layerKey) {
+    if (!audioContext) {
+        initAudioEngine();
+    }
+    if (!audioContext || !buffer) return false;
+    resumeAudioContext();
+
+    var now = audioContext.currentTime;
+    var startAt = (typeof whenSec === 'number' && isFinite(whenSec) && whenSec > now) ? whenSec : now;
+    var offset = (typeof offsetSec === 'number' && isFinite(offsetSec) && offsetSec > 0)
+        ? Math.min(offsetSec, buffer.duration) : 0;
+    var g = (typeof gain === 'number' && isFinite(gain)) ? Math.max(0, gain) : 1;
+    if (g <= 0) return false;
+
+    // 长音频走流式播放 (AudioWorklet 分块供给):
+    // AudioBufferSource 会把整段 PCM 复制进音频线程, 3 分钟音频约 57MB,
+    // 复制/GC 会造成播放开头数百毫秒卡顿。流式只按 0.5s 分块推送, 开销恒定。
+    if (buffer.duration > CLIP_STREAM_THRESHOLD_SEC && _clipStreamReady && (startAt - now) < 0.25) {
+        if (playStreamedAudioClip(buffer, startAt, offset, g, pan, layerKey)) return true;
+    }
+
+    var source = audioContext.createBufferSource();
+    source.buffer = buffer;
+    var gainNode = audioContext.createGain();
+    gainNode.gain.value = g;
+    source.connect(gainNode);
+    var clipOut = getClipOutputNode() || masterGain;
+    if (audioContext.createStereoPanner) {
+        var panner = audioContext.createStereoPanner();
+        panner.pan.value = (typeof pan === 'number' && isFinite(pan))
+            ? Math.max(-1, Math.min(1, pan)) : 0;
+        gainNode.connect(panner);
+        panner.connect(clipOut);
+    } else {
+        gainNode.connect(clipOut);
+    }
+
+    source.start(startAt, offset);
+    var entry = { source: source, layer: layerKey };
+    _activeSources.push(entry);
+    source.onended = function() {
+        var idx = _activeSources.indexOf(entry);
+        if (idx >= 0) _activeSources.splice(idx, 1);
+    };
+    return true;
+}
+
+// 音频轨道输出节点: 跳过混响/空间效果链, 保留主音量。
+// 混响(卷积)与空间链会对整段音频做额外实时处理, 长音频首播卡顿的主要来源之一;
+// 导入的成品音频也不应再叠混响, 直出更忠实。
+function getClipOutputNode() {
+    if (!audioContext || !masterGain) return null;
+    // 空间风格链激活: 直接到输出, 避免经过空间处理
+    if (liveStyle && liveStyle !== 'dry') return audioContext.destination;
+    // NBS 增强模式: masterGain 直连输出
+    if (audioEnhanceEnabled) return masterGain;
+    // 原声(混响)模式: 走 masterGain 之后的干声支路, 跳过 convolver 湿声
+    return dryGain || masterGain;
+}
+
+// ============ 长音频流式播放 (AudioWorklet) ============
+var CLIP_STREAM_THRESHOLD_SEC = 10;  // 超过该时长的音频走流式 (短音频保持原路径, 零风险)
+var CLIP_STREAM_CHUNK_SEC = 0.5;     // 每次推送的分块时长
+var CLIP_STREAM_LEAD_SEC = 1.0;      // 提前量: 队列里始终保持约 1 秒数据
+var _clipStreamReady = false;
+var _clipStreamLoading = null;
+
+// worklet 处理器: 从主线程推送的队列里取 PCM 输出, 队列空则静音
+function ensureClipStreamWorklet() {
+    if (_clipStreamReady) return Promise.resolve(true);
+    if (_clipStreamLoading) return _clipStreamLoading;
+    if (!audioContext || !audioContext.audioWorklet) return Promise.resolve(false);
+    var code = [
+        'class NBSClipStreamer extends AudioWorkletProcessor {',
+        '  constructor() {',
+        '    super();',
+        '    this.q = []; this.cur = null; this.curPos = 0;',
+        '    this.stopped = false; this.ended = false;',
+        '    this.port.onmessage = (e) => {',
+        '      const d = e.data || {};',
+        '      if (d.type === "end") { this.ended = true; }',
+        '      else if (d.type === "stop") { this.stopped = true; this.q.length = 0; this.cur = null; }',
+        // 音频块: 带 type="push" 或省略 type 都接受 (只认左右声道数据本身)
+        '      else if (d.l && d.r) { this.q.push(d); }',
+        '    };',
+        '  }',
+        '  process(inputs, outputs) {',
+        '    const out = outputs[0];',
+        '    if (!out || !out.length) return true;',
+        '    const L = out[0], R = out.length > 1 ? out[1] : null;',
+        '    const n = L.length; let i = 0;',
+        '    if (this.stopped) { L.fill(0); if (R) R.fill(0); return false; }',
+        '    while (i < n) {',
+        '      if (!this.cur) {',
+        '        if (!this.q.length) break;',
+        '        this.cur = this.q.shift(); this.curPos = 0;',
+        '      }',
+        '      const src = this.cur.l;',
+        '      const avail = src.length - this.curPos;',
+        '      const take = Math.min(n - i, avail);',
+        '      L.set(src.subarray(this.curPos, this.curPos + take), i);',
+        '      if (R) R.set(this.cur.r.subarray(this.curPos, this.curPos + take), i);',
+        '      i += take; this.curPos += take;',
+        '      if (this.curPos >= src.length) this.cur = null;',
+        '    }',
+        '    if (i < n) { L.fill(0, i); if (R) R.fill(0, i); }',
+        '    if (this.ended && !this.q.length && !this.cur) {',
+        '      this.port.postMessage({ type: "ended" });',
+        '      return false;',
+        '    }',
+        '    return true;',
+        '  }',
+        '}',
+        'registerProcessor("nbw-clip-streamer", NBSClipStreamer);'
+    ].join('\n');
+    var url = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }));
+    _clipStreamLoading = audioContext.audioWorklet.addModule(url).then(function() {
+        _clipStreamReady = true;
+        try { URL.revokeObjectURL(url); } catch (e) {}
+        return true;
+    }).catch(function() {
+        return false;
+    });
+    return _clipStreamLoading;
+}
+
+// 流式播放一个音频块; 返回是否成功接管 (失败时调用方可回退到 AudioBufferSource)
+function playStreamedAudioClip(buffer, startAt, offsetSec, gain, pan, layerKey) {
+    try {
+        var ac = audioContext;
+        var node = new AudioWorkletNode(ac, 'nbw-clip-streamer', {
+            numberOfInputs: 0,
+            numberOfOutputs: 1,
+            outputChannelCount: [2]
+        });
+        var gainNode = ac.createGain();
+        gainNode.gain.value = gain;
+        node.connect(gainNode);
+        var tail = gainNode;
+        if (ac.createStereoPanner) {
+            var panner = ac.createStereoPanner();
+            panner.pan.value = (typeof pan === 'number' && isFinite(pan))
+                ? Math.max(-1, Math.min(1, pan)) : 0;
+            gainNode.connect(panner);
+            tail = panner;
+        }
+        tail.connect(getClipOutputNode() || masterGain);
+
+        var srcRate = buffer.sampleRate || ac.sampleRate;
+        var dstRate = ac.sampleRate;
+        var ratio = srcRate / dstRate;     // 源帧 / 目标帧
+        var chL = buffer.getChannelData(0);
+        var chR = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : chL;
+        // 单声道: 复制到左右声道时按 Web Audio 的等功率上混规则衰减 3dB,
+        // 与 AudioBufferSource 的播放音量保持一致
+        var monoGain = (buffer.numberOfChannels > 1) ? 1 : 0.7071067811865476;
+        var total = chL.length;
+        var readPos = Math.max(0, Math.min(total, Math.floor(offsetSec * srcRate)));
+        var framesPerChunk = Math.max(1, Math.round(CLIP_STREAM_CHUNK_SEC * dstRate));
+        // 后续分块的推送节奏以实际起播时刻为基准 (支持很小的提前调度)
+        var started = Math.max(ac.currentTime, (typeof startAt === 'number' && isFinite(startAt)) ? startAt : ac.currentTime);
+        var chunkIdx = 0;
+        var timer = null;
+        var stopped = false;
+        var endedSent = false;
+
+        var entry = { layer: layerKey, stream: true, node: node };
+
+        function makeChunk() {
+            var outL = new Float32Array(framesPerChunk);
+            var outR = new Float32Array(framesPerChunk);
+            for (var i = 0; i < framesPerChunk; i++) {
+                var p = readPos + i * ratio;
+                var i0 = Math.floor(p);
+                var frac = p - i0;
+                if (i0 + 1 >= total) {
+                    var last = total > 0 ? (i0 < total ? i0 : total - 1) : -1;
+                    outL[i] = last >= 0 ? chL[last] * monoGain : 0;
+                    outR[i] = last >= 0 ? chR[last] * monoGain : 0;
+                } else {
+                    outL[i] = (chL[i0] * (1 - frac) + chL[i0 + 1] * frac) * monoGain;
+                    outR[i] = (chR[i0] * (1 - frac) + chR[i0 + 1] * frac) * monoGain;
+                }
+            }
+            readPos += framesPerChunk * ratio;
+            return { l: outL, r: outR };
+        }
+
+        function sendEnd() {
+            if (endedSent) return;
+            endedSent = true;
+            try { node.port.postMessage({ type: 'end' }); } catch (e) {}
+        }
+
+        function scheduleNext() {
+            if (stopped || endedSent) return;
+            // 第 chunkIdx 块预计在 started + chunkIdx*CHUNK 被消费, 提前 LEAD 秒推送
+            var due = started + chunkIdx * CLIP_STREAM_CHUNK_SEC - CLIP_STREAM_LEAD_SEC;
+            var delay = Math.max(0, (due - ac.currentTime) * 1000);
+            timer = setTimeout(function() {
+                timer = null;
+                if (stopped) return;
+                if (readPos >= total) { sendEnd(); return; }
+                var chunk = makeChunk();
+                try {
+                    node.port.postMessage({ type: 'push', l: chunk.l, r: chunk.r }, [chunk.l.buffer, chunk.r.buffer]);
+                } catch (e) {
+                    return;
+                }
+                chunkIdx++;
+                scheduleNext();
+            }, delay);
+        }
+
+        entry.stop = function() {
+            if (stopped) return;
+            stopped = true;
+            if (timer) { clearTimeout(timer); timer = null; }
+            try { node.port.postMessage({ type: 'stop' }); } catch (e) {}
+            try { node.disconnect(); } catch (e) {}
+            try { gainNode.disconnect(); } catch (e) {}
+        };
+
+        node.port.onmessage = function(e) {
+            var d = e.data || {};
+            if (d.type === 'ended') {
+                entry.stop();
+                var idx = _activeSources.indexOf(entry);
+                if (idx >= 0) _activeSources.splice(idx, 1);
+            }
+        };
+
+        _activeSources.push(entry);
+        // 首块立即推送 (其内部会继续按时间推送后续分块, 形成约 1 秒预缓冲)
+        if (readPos >= total) sendEnd();
+        else {
+            var first = makeChunk();
+            node.port.postMessage({ type: 'push', l: first.l, r: first.r }, [first.l.buffer, first.r.buffer]);
+            chunkIdx = 1;
+            scheduleNext();
+        }
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+// 预热: 在导入完成后的空闲期创建一次流式节点并播极短静音,
+// 让音频线程完成 worklet 实例化, 避免首次播放时才开始初始化
+function prewarmClipStreaming(buffer) {
+    if (!_clipStreamReady || !audioContext || !buffer) return false;
+    if (!(buffer.duration > CLIP_STREAM_THRESHOLD_SEC)) return false;
+    try {
+        var ac = audioContext;
+        var node = new AudioWorkletNode(ac, 'nbw-clip-streamer', {
+            numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2]
+        });
+        var g = ac.createGain();
+        g.gain.value = 0;
+        node.connect(g);
+        g.connect(masterGain);
+        var frames = Math.max(128, Math.round(0.2 * ac.sampleRate));
+        var l = new Float32Array(frames);
+        var r = new Float32Array(frames);
+        node.port.postMessage({ type: 'push', l: l, r: r }, [l.buffer, r.buffer]);
+        node.port.postMessage({ type: 'end' });
+        setTimeout(function() {
+            try { node.port.postMessage({ type: 'stop' }); } catch (e) {}
+            try { node.disconnect(); } catch (e) {}
+            try { g.disconnect(); } catch (e) {}
+        }, 320);
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+/**
  * 播放单个音符 (Minecraft 红石音乐风格)
  *
  * @param {number} instrument - NBS 乐器索引 (0-15)
@@ -764,18 +1067,27 @@ function stopLayerAudio(layer) {
     for (var i = _activeSources.length - 1; i >= 0; i--) {
         var entry = _activeSources[i];
         if (entry.layer !== layer) continue;
-        try { entry.source.stop(); } catch(e) {}
-        try { entry.source.disconnect(); } catch(e) {}
+        if (entry.stream && typeof entry.stop === 'function') {
+            try { entry.stop(); } catch(e) {}
+        } else {
+            try { entry.source.stop(); } catch(e) {}
+            try { entry.source.disconnect(); } catch(e) {}
+        }
         _activeSources.splice(i, 1);
     }
 }
 
 function stopAllAudio() {
     if (!audioContext) return;
-    // 1. 停止并断开所有活动音源节点
+    // 1. 停止并断开所有活动音源节点 (含流式音频块)
     for (var i = 0; i < _activeSources.length; i++) {
-        try { _activeSources[i].source.stop(); } catch(e) {}
-        try { _activeSources[i].source.disconnect(); } catch(e) {}
+        var e = _activeSources[i];
+        if (e.stream && typeof e.stop === 'function') {
+            try { e.stop(); } catch(err) {}
+        } else {
+            try { e.source.stop(); } catch(err) {}
+            try { e.source.disconnect(); } catch(err) {}
+        }
     }
     _activeSources = [];
     // 清空分层电平记录, 电平表随后自然归零
@@ -813,6 +1125,9 @@ window.AudioEngine = {
     init: initAudioEngine,
     playNote: playMinecraftNote,
     playNotes: playNotes,
+    // 音频轨道: 解码音频文件 + 按绝对时间播放音频块
+    decodeAudio: decodeAudio,
+    playClip: playAudioClip,
     getPitch: getMinecraftPitch,
     getRate: getNotePlaybackRate,
     isReady: audioReady,
@@ -822,6 +1137,15 @@ window.AudioEngine = {
     stopLayer: stopLayerAudio,
     // 当前仍在发声的音源数量 (音符音频完全播放结束才减一)
     getActiveVoiceCount: function() { return _activeSources.length; },
+    // 长音频流式播放: 模块是否就绪 / 当前是否有流式音频块在播放
+    isClipStreamReady: function() { return !!_clipStreamReady; },
+    prewarmClipStreaming: prewarmClipStreaming,
+    isClipStreaming: function() {
+        for (var i = 0; i < _activeSources.length; i++) {
+            if (_activeSources[i] && _activeSources[i].stream) return true;
+        }
+        return false;
+    },
     getContext: function() { return audioContext; },
     // 实时电平: 主输出 / 按片段轨道估算 (0..1)
     getMasterLevel: getMasterLevel,

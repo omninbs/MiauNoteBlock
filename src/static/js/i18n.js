@@ -2161,15 +2161,15 @@
 
     // ============ 时间栏位置 / 地图纵轴模式 词条 (9 种非中文语言) ============
     var _timelinePosI18n = {
-        'en-US': { '时间栏位置（NBS）': 'Timeline position (NBS)', '时间栏位置（片段）': 'Timeline position (Segment)', '时间栏地图显示': 'Timeline map view', '片段音符预览': 'Segment note preview', '顶部': 'Top', '底部': 'Bottom', '根据轨道位置': 'By track position', '根据音调大小': 'By pitch' },
-        'ja-JP': { '时间栏位置（NBS）': 'タイムライン位置（NBS）', '时间栏位置（片段）': 'タイムライン位置（セグメント）', '时间栏地图显示': 'タイムラインマップ表示', '片段音符预览': 'セグメント音符プレビュー', '顶部': '上部', '底部': '下部', '根据轨道位置': 'トラック位置で表示', '根据音调大小': '音の高さで表示' },
-        'ko-KR': { '时间栏位置（NBS）': '타임라인 위치 (NBS)', '时间栏位置（片段）': '타임라인 위치 (세그먼트)', '时间栏地图显示': '타임라인 지도 보기', '片段音符预览': '세그먼트 음표 미리보기', '顶部': '상단', '底部': '하단', '根据轨道位置': '트랙 위치 기준', '根据音调大小': '음 높이 기준' },
-        'pt-BR': { '时间栏位置（NBS）': 'Posição da linha do tempo (NBS)', '时间栏位置（片段）': 'Posição da linha do tempo (Segmento)', '时间栏地图显示': 'Vista do mapa da linha do tempo', '片段音符预览': 'Prévia das notas do segmento', '顶部': 'Superior', '底部': 'Inferior', '根据轨道位置': 'Por posição da trilha', '根据音调大小': 'Pela altura do tom' },
-        'id-ID': { '时间栏位置（NBS）': 'Posisi timeline (NBS)', '时间栏位置（片段）': 'Posisi timeline (Segmen)', '时间栏地图显示': 'Tampilan peta timeline', '片段音符预览': 'Pratinjau nada segmen', '顶部': 'Atas', '底部': 'Bawah', '根据轨道位置': 'Berdasarkan posisi trek', '根据音调大小': 'Berdasarkan nada' },
-        'es-ES': { '时间栏位置（NBS）': 'Posición de la línea de tiempo (NBS)', '时间栏位置（片段）': 'Posición de la línea de tiempo (Segmento)', '时间栏地图显示': 'Vista del mapa de la línea de tiempo', '片段音符预览': 'Vista previa de notas del segmento', '顶部': 'Superior', '底部': 'Inferior', '根据轨道位置': 'Por posición de pista', '根据音调大小': 'Según el tono' },
-        'ru-RU': { '时间栏位置（NBS）': 'Положение панели времени (NBS)', '时间栏位置（片段）': 'Положение панели времени (Сегмент)', '时间栏地图显示': 'Вид карты панели времени', '片段音符预览': 'Просмотр нот сегмента', '顶部': 'Сверху', '底部': 'Снизу', '根据轨道位置': 'По позиции дорожки', '根据音调大小': 'По высоте звука' },
-        'de-DE': { '时间栏位置（NBS）': 'Zeitleistenposition (NBS)', '时间栏位置（片段）': 'Zeitleistenposition (Segment)', '时间栏地图显示': 'Zeitleisten-Kartenansicht', '片段音符预览': 'Segment-Notenvorschau', '顶部': 'Oben', '底部': 'Unten', '根据轨道位置': 'Nach Spurposition', '根据音调大小': 'Nach Tonhöhe' },
-        'fr-FR': { '时间栏位置（NBS）': 'Position de la chronologie (NBS)', '时间栏位置（片段）': 'Position de la chronologie (Segment)', '时间栏地图显示': 'Vue de la carte de la chronologie', '片段音符预览': 'Aperçu des notes du segment', '顶部': 'Haut', '底部': 'Bas', '根据轨道位置': 'Par position de piste', '根据音调大小': 'Par hauteur' }
+        'en-US': { '时间栏位置（NBS）': 'Timeline position (NBS)', '时间栏位置（片段）': 'Timeline position (Segment)', '时间栏地图显示': 'Timeline map view', '片段音符预览': 'Segment note preview', '顶部': 'Top', '底部': 'Bottom', '根据轨道位置': 'By track position', '根据音调大小': 'By pitch', '根据物理音调': 'By physical pitch' },
+        'ja-JP': { '时间栏位置（NBS）': 'タイムライン位置（NBS）', '时间栏位置（片段）': 'タイムライン位置（セグメント）', '时间栏地图显示': 'タイムラインマップ表示', '片段音符预览': 'セグメント音符プレビュー', '顶部': '上部', '底部': '下部', '根据轨道位置': 'トラック位置で表示', '根据音调大小': '音の高さで表示', '根据物理音调': '実際の音高で表示' },
+        'ko-KR': { '时间栏位置（NBS）': '타임라인 위치 (NBS)', '时间栏位置（片段）': '타임라인 위치 (세그먼트)', '时间栏地图显示': '타임라인 지도 보기', '片段音符预览': '세그먼트 음표 미리보기', '顶部': '상단', '底部': '하단', '根据轨道位置': '트랙 위치 기준', '根据音调大小': '음 높이 기준', '根据物理音调': '실제 음높이 기준' },
+        'pt-BR': { '时间栏位置（NBS）': 'Posição da linha do tempo (NBS)', '时间栏位置（片段）': 'Posição da linha do tempo (Segmento)', '时间栏地图显示': 'Vista do mapa da linha do tempo', '片段音符预览': 'Prévia das notas do segmento', '顶部': 'Superior', '底部': 'Inferior', '根据轨道位置': 'Por posição da trilha', '根据音调大小': 'Pela altura do tom', '根据物理音调': 'Pela altura física' },
+        'id-ID': { '时间栏位置（NBS）': 'Posisi timeline (NBS)', '时间栏位置（片段）': 'Posisi timeline (Segmen)', '时间栏地图显示': 'Tampilan peta timeline', '片段音符预览': 'Pratinjau nada segmen', '顶部': 'Atas', '底部': 'Bawah', '根据轨道位置': 'Berdasarkan posisi trek', '根据音调大小': 'Berdasarkan nada', '根据物理音调': 'Berdasarkan nada fisik' },
+        'es-ES': { '时间栏位置（NBS）': 'Posición de la línea de tiempo (NBS)', '时间栏位置（片段）': 'Posición de la línea de tiempo (Segmento)', '时间栏地图显示': 'Vista del mapa de la línea de tiempo', '片段音符预览': 'Vista previa de notas del segmento', '顶部': 'Superior', '底部': 'Inferior', '根据轨道位置': 'Por posición de pista', '根据音调大小': 'Según el tono', '根据物理音调': 'Según el tono físico' },
+        'ru-RU': { '时间栏位置（NBS）': 'Положение панели времени (NBS)', '时间栏位置（片段）': 'Положение панели времени (Сегмент)', '时间栏地图显示': 'Вид карты панели времени', '片段音符预览': 'Просмотр нот сегмента', '顶部': 'Сверху', '底部': 'Снизу', '根据轨道位置': 'По позиции дорожки', '根据音调大小': 'По высоте звука', '根据物理音调': 'По физической высоте звука' },
+        'de-DE': { '时间栏位置（NBS）': 'Zeitleistenposition (NBS)', '时间栏位置（片段）': 'Zeitleistenposition (Segment)', '时间栏地图显示': 'Zeitleisten-Kartenansicht', '片段音符预览': 'Segment-Notenvorschau', '顶部': 'Oben', '底部': 'Unten', '根据轨道位置': 'Nach Spurposition', '根据音调大小': 'Nach Tonhöhe', '根据物理音调': 'Nach physikalischer Tonhöhe' },
+        'fr-FR': { '时间栏位置（NBS）': 'Position de la chronologie (NBS)', '时间栏位置（片段）': 'Position de la chronologie (Segment)', '时间栏地图显示': 'Vue de la carte de la chronologie', '片段音符预览': 'Aperçu des notes du segment', '顶部': 'Haut', '底部': 'Bas', '根据轨道位置': 'Par position de piste', '根据音调大小': 'Par hauteur', '根据物理音调': 'Par hauteur physique' }
     };
     for (_nl in _timelinePosI18n) {
         if (Object.prototype.hasOwnProperty.call(_timelinePosI18n, _nl)) Object.assign(UI_TEXT[_nl], _timelinePosI18n[_nl]);
@@ -2315,10 +2315,10 @@
         if (Object.prototype.hasOwnProperty.call(_settingsTabNameI18n, _nl)) Object.assign(UI_TEXT[_nl], _settingsTabNameI18n[_nl]);
     }
 
-    // ============ 片段钢琴窗口设置 / 本地缓存清理 词条 (先补英文, 其它语言回退英文) ============
+    // ============ 钢琴卷帘门设置 / 本地缓存清理 词条 (先补英文, 其它语言回退英文) ============
     var _spwStorageI18n = {
         'en-US': {
-            '片段钢琴窗口': 'Segment piano window', '显示时间栏': 'Show timeline',
+            '钢琴卷帘门': 'Piano roll window', '显示时间栏': 'Show timeline',
             '显示进度条地图': 'Show minimap', '显示力度控制器': 'Show velocity',
             '清理本地缓存': 'Clear local cache', '已保存到浏览器': 'Saved to browser',
             '当前总占用': 'Total usage', '历史歌曲数据': 'Project data',
@@ -2341,6 +2341,21 @@
     };
     for (_nl in _spwStorageI18n) {
         if (Object.prototype.hasOwnProperty.call(_spwStorageI18n, _nl)) Object.assign(UI_TEXT[_nl], _spwStorageI18n[_nl]);
+    }
+
+    // ============ 钢琴卷帘门 (原「片段钢琴窗口」) 分组标题 词条 ============
+    var _pianoRollWindowI18n = {
+        'ja-JP': { '钢琴卷帘门': 'ピアノロール' },
+        'ko-KR': { '钢琴卷帘门': '피아노 롤' },
+        'es-ES': { '钢琴卷帘门': 'Ventana de piano roll' },
+        'id-ID': { '钢琴卷帘门': 'Jendela piano roll' },
+        'pt-BR': { '钢琴卷帘门': 'Janela de piano roll' },
+        'ru-RU': { '钢琴卷帘门': 'Окно пиано-ролла' },
+        'de-DE': { '钢琴卷帘门': 'Klavierrollen-Fenster' },
+        'fr-FR': { '钢琴卷帘门': 'Fenêtre piano roll' }
+    };
+    for (_nl in _pianoRollWindowI18n) {
+        if (Object.prototype.hasOwnProperty.call(_pianoRollWindowI18n, _nl)) Object.assign(UI_TEXT[_nl], _pianoRollWindowI18n[_nl]);
     }
 
     // ============ MIDI 声部分离 词条 (先补英文) ============
@@ -4534,6 +4549,148 @@
         '支持 NBS 格式导入/导出、MIDI 导入和钢琴卷帘编辑': 'Supports NBS import/export, MIDI import and piano roll editing',
         'QQ群:': 'QQ group:'
     });
+
+    // ============ 音频轨道 / 音频块 文案 (9 种非中文语言) ============
+    var _audioLaneI18n = {
+        'en-US': {
+            '添加': 'Add',
+            'NBS 音轨': 'NBS track',
+            '音频轨道': 'Audio lane',
+            '分割音频': 'Split audio',
+            '删除音频块': 'Delete audio clip',
+            '音频增益': 'Audio gain',
+            '音频': 'Audio',
+            '音频轨道缺失音频': 'Missing audio',
+            '音频轨道数量已达上限': 'Audio lane limit reached',
+            '音频导入成功': 'Audio imported',
+            '音频导入失败': 'Audio import failed',
+            '重命名音频轨道': 'Rename audio lane',
+            '删除音频轨道': 'Delete audio lane'
+        },
+        'es-ES': {
+            '添加': 'Añadir',
+            'NBS 音轨': 'Pista NBS',
+            '音频轨道': 'Pista de audio',
+            '分割音频': 'Dividir audio',
+            '删除音频块': 'Eliminar fragmento de audio',
+            '音频增益': 'Ganancia de audio',
+            '音频': 'Audio',
+            '音频轨道缺失音频': 'Audio no disponible',
+            '音频轨道数量已达上限': 'Se alcanzó el límite de pistas de audio',
+            '音频导入成功': 'Audio importado',
+            '音频导入失败': 'Error al importar audio',
+            '重命名音频轨道': 'Renombrar pista de audio',
+            '删除音频轨道': 'Eliminar pista de audio'
+        },
+        'pt-BR': {
+            '添加': 'Adicionar',
+            'NBS 音轨': 'Faixa NBS',
+            '音频轨道': 'Faixa de áudio',
+            '分割音频': 'Dividir áudio',
+            '删除音频块': 'Excluir trecho de áudio',
+            '音频增益': 'Ganho de áudio',
+            '音频': 'Áudio',
+            '音频轨道缺失音频': 'Áudio indisponível',
+            '音频轨道数量已达上限': 'Limite de faixas de áudio atingido',
+            '音频导入成功': 'Áudio importado',
+            '音频导入失败': 'Falha ao importar áudio',
+            '重命名音频轨道': 'Renomear faixa de áudio',
+            '删除音频轨道': 'Excluir faixa de áudio'
+        },
+        'ru-RU': {
+            '添加': 'Добавить',
+            'NBS 音轨': 'NBS-дорожка',
+            '音频轨道': 'Аудиодорожка',
+            '分割音频': 'Разделить аудио',
+            '删除音频块': 'Удалить аудиофрагмент',
+            '音频增益': 'Усиление аудио',
+            '音频': 'Аудио',
+            '音频轨道缺失音频': 'Аудио отсутствует',
+            '音频轨道数量已达上限': 'Достигнут предел аудиодорожек',
+            '音频导入成功': 'Аудио импортировано',
+            '音频导入失败': 'Не удалось импортировать аудио',
+            '重命名音频轨道': 'Переименовать аудиодорожку',
+            '删除音频轨道': 'Удалить аудиодорожку'
+        },
+        'de-DE': {
+            '添加': 'Hinzufügen',
+            'NBS 音轨': 'NBS-Spur',
+            '音频轨道': 'Audio-Spur',
+            '分割音频': 'Audio teilen',
+            '删除音频块': 'Audio-Segment löschen',
+            '音频增益': 'Audio-Lautstärke',
+            '音频': 'Audio',
+            '音频轨道缺失音频': 'Audio fehlt',
+            '音频轨道数量已达上限': 'Maximale Zahl an Audio-Spuren erreicht',
+            '音频导入成功': 'Audio importiert',
+            '音频导入失败': 'Audioimport fehlgeschlagen',
+            '重命名音频轨道': 'Audio-Spur umbenennen',
+            '删除音频轨道': 'Audio-Spur löschen'
+        },
+        'fr-FR': {
+            '添加': 'Ajouter',
+            'NBS 音轨': 'Piste NBS',
+            '音频轨道': 'Piste audio',
+            '分割音频': 'Diviser l’audio',
+            '删除音频块': 'Supprimer le clip audio',
+            '音频增益': 'Gain audio',
+            '音频': 'Audio',
+            '音频轨道缺失音频': 'Audio manquant',
+            '音频轨道数量已达上限': 'Limite de pistes audio atteinte',
+            '音频导入成功': 'Audio importé',
+            '音频导入失败': 'Échec de l’import audio',
+            '重命名音频轨道': 'Renommer la piste audio',
+            '删除音频轨道': 'Supprimer la piste audio'
+        },
+        'ja-JP': {
+            '添加': '追加',
+            'NBS 音轨': 'NBS トラック',
+            '音频轨道': 'オーディオレーン',
+            '分割音频': 'オーディオを分割',
+            '删除音频块': 'オーディオブロックを削除',
+            '音频增益': 'オーディオゲイン',
+            '音频': 'オーディオ',
+            '音频轨道缺失音频': 'オーディオが見つかりません',
+            '音频轨道数量已达上限': 'オーディオレーンの上限に達しました',
+            '音频导入成功': 'オーディオを読み込みました',
+            '音频导入失败': 'オーディオの読み込みに失敗しました',
+            '重命名音频轨道': 'オーディオレーンの名前を変更',
+            '删除音频轨道': 'オーディオレーンを削除'
+        },
+        'ko-KR': {
+            '添加': '추가',
+            'NBS 音轨': 'NBS 트랙',
+            '音频轨道': '오디오 레인',
+            '分割音频': '오디오 분할',
+            '删除音频块': '오디오 블록 삭제',
+            '音频增益': '오디오 게인',
+            '音频': '오디오',
+            '音频轨道缺失音频': '오디오 없음',
+            '音频轨道数量已达上限': '오디오 레인 한도에 도달했습니다',
+            '音频导入成功': '오디오를 가져왔습니다',
+            '音频导入失败': '오디오 가져오기 실패',
+            '重命名音频轨道': '오디오 레인 이름 변경',
+            '删除音频轨道': '오디오 레인 삭제'
+        },
+        'id-ID': {
+            '添加': 'Tambah',
+            'NBS 音轨': 'Trek NBS',
+            '音频轨道': 'Lane audio',
+            '分割音频': 'Pisahkan audio',
+            '删除音频块': 'Hapus blok audio',
+            '音频增益': 'Gain audio',
+            '音频': 'Audio',
+            '音频轨道缺失音频': 'Audio tidak ditemukan',
+            '音频轨道数量已达上限': 'Batas lane audio tercapai',
+            '音频导入成功': 'Audio berhasil diimpor',
+            '音频导入失败': 'Impor audio gagal',
+            '重命名音频轨道': 'Ganti nama lane audio',
+            '删除音频轨道': 'Hapus lane audio'
+        }
+    };
+    for (_nl in _audioLaneI18n) {
+        if (Object.prototype.hasOwnProperty.call(_audioLaneI18n, _nl)) Object.assign(UI_TEXT[_nl], _audioLaneI18n[_nl]);
+    }
 
     // has(key): 当前语言是否已有该词条 (不含回退)。供覆盖率自检用。
     function has(key) {

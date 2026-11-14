@@ -591,7 +591,6 @@
             <div class="settings-tabs">
                 <button class="settings-tab active" data-settings-tab="general">通用</button>
                 <button class="settings-tab" data-settings-tab="editor">编辑器</button>
-                <button class="settings-tab" data-settings-tab="segment">片段模式</button>
                 <button class="settings-tab" data-settings-tab="display">显示</button>
                 <button class="settings-tab" data-settings-tab="personal">个性化</button>
             </div>
@@ -754,50 +753,11 @@
                         </div>
                     </div>
                 </div>
-                <!-- ===== 片段模式: 片段编辑器相关 ===== -->
-                <div class="settings-tab-panel" id="settings-tab-segment">
-                    <!-- ===== 布局 ===== -->
-                    <div class="settings-group">
-                        <div class="settings-group-title">布局</div>
-                        <div class="settings-row settings-inline-row">
-                            <label class="settings-label" for="settings-timeline-pos-seg">时间栏位置</label>
-                            <select id="settings-timeline-pos-seg" class="settings-control">
-                                <option value="top">顶部</option>
-                                <option value="bottom" selected>底部</option>
-                            </select>
-                        </div>
-                        <div class="settings-row settings-inline-row">
-                            <label class="settings-label" for="settings-segment-preview-mode">片段音符预览</label>
-                            <select id="settings-segment-preview-mode" class="settings-control">
-                                <option value="track">根据轨道位置</option>
-                                <option value="pitch" selected>根据音调大小</option>
-                            </select>
-                        </div>
-                    </div>
-                    <!-- ===== 片段钢琴窗口 ===== -->
-                    <div class="settings-group">
-                        <div class="settings-group-title">片段钢琴窗口</div>
-                        <div class="settings-row">
-                            <label class="settings-label">
-                                <input type="checkbox" id="settings-spw-ruler" checked> 显示时间栏
-                            </label>
-                        </div>
-                        <div class="settings-row">
-                            <label class="settings-label">
-                                <input type="checkbox" id="settings-spw-minimap" checked> 显示进度条地图
-                            </label>
-                        </div>
-                        <div class="settings-row">
-                            <label class="settings-label">
-                                <input type="checkbox" id="settings-spw-velocity" checked> 显示力度控制器
-                            </label>
-                        </div>
-                    </div>
-                </div>
-                <!-- ===== 显示: 音符显示 / 琴键 ===== -->
+                <!-- ===== 显示: 音符显示 / 片段模式 / 琴键 ===== -->
                 <div class="settings-tab-panel" id="settings-tab-display">
                     <div class="settings-subtabs">
                         <button class="settings-subtab active" data-display-subtab="note">音符显示</button>
+                        <button class="settings-subtab" data-display-subtab="segment">片段模式</button>
                         <button class="settings-subtab" data-display-subtab="keys">琴键</button>
                     </div>
                     <div class="settings-subpanel active" id="settings-subpanel-note">
@@ -947,6 +907,46 @@
                                 </div>
                             </div>
                         </details>
+                    </div>
+                    <div class="settings-subpanel" id="settings-subpanel-segment">
+                        <!-- ===== 布局 ===== -->
+                        <div class="settings-group">
+                            <div class="settings-group-title">布局</div>
+                            <div class="settings-row settings-inline-row">
+                                <label class="settings-label" for="settings-timeline-pos-seg">时间栏位置</label>
+                                <select id="settings-timeline-pos-seg" class="settings-control">
+                                    <option value="top">顶部</option>
+                                    <option value="bottom" selected>底部</option>
+                                </select>
+                            </div>
+                            <div class="settings-row settings-inline-row">
+                                <label class="settings-label" for="settings-segment-preview-mode">片段音符预览</label>
+                                <select id="settings-segment-preview-mode" class="settings-control">
+                                    <option value="track">根据轨道位置</option>
+                                    <option value="pitch" selected>根据音调大小</option>
+                                    <option value="physical">根据物理音调</option>
+                                </select>
+                            </div>
+                        </div>
+                        <!-- ===== 钢琴卷帘门 ===== -->
+                        <div class="settings-group">
+                            <div class="settings-group-title">钢琴卷帘门</div>
+                            <div class="settings-row">
+                                <label class="settings-label">
+                                    <input type="checkbox" id="settings-spw-ruler" checked> 显示时间栏
+                                </label>
+                            </div>
+                            <div class="settings-row">
+                                <label class="settings-label">
+                                    <input type="checkbox" id="settings-spw-minimap" checked> 显示进度条地图
+                                </label>
+                            </div>
+                            <div class="settings-row">
+                                <label class="settings-label">
+                                    <input type="checkbox" id="settings-spw-velocity" checked> 显示力度控制器
+                                </label>
+                            </div>
+                        </div>
                     </div>
                     <div class="settings-subpanel" id="settings-subpanel-keys">
                         <div class="settings-group">
@@ -1961,6 +1961,7 @@
 <script src="static/js/modules/19-soundfont.js?v=20261113a"></script>
 <script src="static/js/modules/20-mobile.js?v=20261207a"></script>
 <script src="static/js/modules/21-lyrics.js?v=20261113a"></script>
+<script src="static/js/modules/22-audio.js?v=20261114a"></script>
 <script src="static/js/modules/22-segment-ui.js?v=20261113a"></script>
 <script src="static/js/modules/23-json-io.js?v=20261113a"></script>
 <script src="static/js/modules/24-features-a.js?v=20261113a"></script>

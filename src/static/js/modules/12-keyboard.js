@@ -938,9 +938,17 @@
         var menus = document.querySelectorAll('.context-menu');
         for (var m = 0; m < menus.length; m++) menus[m].style.display = 'none';
         var drawer = document.getElementById('landscape-drawer');
-        if (drawer) drawer.classList.remove('visible');
-        var drawerMask = document.getElementById('landscape-drawer-mask');
-        if (drawerMask) drawerMask.classList.remove('visible');
+        if (drawer && drawer.classList.contains('visible')) {
+            // 走完整的抽屉关闭流程: 清掉子页栈, 把被接管的菜单 (如功能菜单)
+            // 放回顶栏原位。只移除 visible 会让菜单滞留在子页里,
+            // 之后桌面端再打开时菜单以 static 定位从子页里错位弹出
+            if (N.closeMobileDrawer) N.closeMobileDrawer();
+            else {
+                drawer.classList.remove('visible');
+                var drawerMask = document.getElementById('landscape-drawer-mask');
+                if (drawerMask) drawerMask.classList.remove('visible');
+            }
+        }
     }
 
     // 观察所有模态弹窗容器: 一旦变为可见就关闭残留的悬浮层

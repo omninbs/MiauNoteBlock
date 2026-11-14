@@ -18,6 +18,7 @@
     function rebuildFromNotes() { return N.rebuildFromNotes.apply(this, arguments); }
     function segmentEnsureLanes() { return N.segmentEnsureLanes.apply(this, arguments); }
     function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
+    function showSmallTip() { return N.showSmallTip.apply(this, arguments); }
     function syncTrackPanelToggleButton() { return N.syncTrackPanelToggleButton.apply(this, arguments); }
 
 
@@ -115,6 +116,16 @@
             if (start < s.end && end > s.start) return true;
         }
         return false;
+    }
+
+    // 特殊轨道 (歌词/音频 special lane) 不承载片段音符: 编辑入口据此禁止
+    function specialLaneBlocked(idx) {
+        var ln = (state.segmentLanes || [])[idx];
+        return !!(ln && ln.special);
+    }
+
+    function blockSpecialLaneTip() {
+        showSmallTip(i18nText('特殊轨道不能合并或编辑'));
     }
 
     // 把绝对 tick 的音符放入片段 (rel 相对片段起点)
@@ -238,8 +249,9 @@
         for (var c = 0; c < clusters.length; c++) {
             var cl = clusters[c];
             var lane = 0;
+            // special lane 不承载片段: 找空位时跳过, 避免 orphan 片段落进特殊轨道被 compose 丢弃
             while (lane < segmentLaneCount()
-                && segmentLaneOverlaps(lane, cl.start, cl.end, null)) lane++;
+                && (segmentLaneOverlaps(lane, cl.start, cl.end, null) || specialLaneBlocked(lane))) lane++;
             if (lane >= segmentLaneCount()) {
                 state.segmentLanes.push({
                     id: state.segmentLanes.length + 1, muted: false, solo: false,
@@ -284,6 +296,8 @@
         var laneLayerRanges = [];     // 片段轨道下标 -> 该轨道对应的 NBS 轨道号列表
         for (var li = 0; li < lanes.length; li++) {
             var lane = lanes[li];
+            // 特殊轨道 (歌词/音频): 完全跳过 — 不写回 notes、不创建 NBS 轨道
+            if (lane && lane.special) continue;
             var segs = [];
             for (var si = 0; si < (state.segments || []).length; si++) {
                 if (state.segments[si].lane === li) segs.push(state.segments[si]);
@@ -675,6 +689,8 @@
         newEnd = Math.max(newStart + 1, Math.floor(newEnd));
         if (typeof newLane !== 'number' || !isFinite(newLane)) newLane = seg.lane;
         newLane = Math.max(0, Math.min(segmentLaneCount() - 1, newLane));
+        // 禁止把片段拖进/裁剪到特殊轨道 (compose 会跳过 special lane, 落进去等于丢数据)
+        if (specialLaneBlocked(newLane)) { blockSpecialLaneTip(); return; }
         if (newStart === seg.start && newEnd === seg.end && newLane === seg.lane) return;
         pushUndo();
         state._segmentsEdited = true;
@@ -706,6 +722,7 @@
         var at = Math.max(0, Math.floor(state.currentTick || 0));
         var seg = segmentAt(at) || segmentSelected();
         if (!seg || at <= seg.start || at >= seg.end) return false;
+        if (specialLaneBlocked(seg.lane)) { blockSpecialLaneTip(); return false; }
         pushUndo();
         state._segmentsEdited = true;
         var cut = at - seg.start;
@@ -740,6 +757,7 @@
         var seg = segmentSelected();
         var at = Math.floor(state.currentTick || 0);
         if (!seg || at <= seg.start || at >= seg.end) return false;
+        if (specialLaneBlocked(seg.lane)) { blockSpecialLaneTip(); return false; }
         segmentCommitDrag(seg.id, at, seg.end, seg.lane, 'left');
         return true;
     }
@@ -749,6 +767,7 @@
         var seg = segmentSelected();
         var at = Math.floor(state.currentTick || 0);
         if (!seg || at <= seg.start || at >= seg.end) return false;
+        if (specialLaneBlocked(seg.lane)) { blockSpecialLaneTip(); return false; }
         segmentCommitDrag(seg.id, seg.start, at, seg.lane, 'right');
         return true;
     }
@@ -756,6 +775,8 @@
     function segmentCopy() {
         var seg = segmentSelected();
         if (!seg) return false;
+        // 源片段在特殊轨道上时禁止复制 (special lane 恒无片段, 仅脏数据兜底)
+        if (specialLaneBlocked(seg.lane)) { blockSpecialLaneTip(); return false; }
         var arr = [];
         for (var i = 0; i < seg.notes.length; i++) {
             var n = seg.notes[i];
@@ -778,7 +799,8 @@
         var at = Math.max(0, Math.floor(clip.start || 0));
         var dur = Math.max(1, clip.duration || 1);
         var lane = Math.min(segmentLaneCount() - 1, (clip.lane || 0) + 1);
-        while (lane < segmentLaneCount() && segmentLaneOverlaps(lane, at, at + dur, null)) lane++;
+        // 粘贴落点跳过 special lane: 特殊轨道不能作为粘贴目标
+        while (lane < segmentLaneCount() && (segmentLaneOverlaps(lane, at, at + dur, null) || specialLaneBlocked(lane))) lane++;
         if (lane >= segmentLaneCount()) {
             state.segmentLanes.push({
                 id: state.segmentLanes.length + 1, muted: false, solo: false,
@@ -812,6 +834,11 @@
     function segmentDelete() {
         var ids = segmentSelectedIds();
         if (!ids.length) return false;
+        // 选中片段落在特殊轨道上时禁止删除 (脏数据兜底)
+        for (var di = 0; di < ids.length; di++) {
+            var dseg = segmentById(ids[di]);
+            if (dseg && specialLaneBlocked(dseg.lane)) { blockSpecialLaneTip(); return false; }
+        }
         pushUndo();
         state._segmentsEdited = true;
         var keep = [];
@@ -834,6 +861,8 @@
         var a = segmentById(ids[0]), b = segmentById(ids[1]);
         if (!a || !b) return false;
         if (a.lane !== b.lane) return false;
+        // 特殊轨道上的片段禁止合并
+        if (specialLaneBlocked(a.lane)) { blockSpecialLaneTip(); return false; }
         var left = a.start <= b.start ? a : b;
         var right = left === a ? b : a;
         if (left.end !== right.start) return false;
@@ -1086,10 +1115,19 @@
             var lc = (typeof ln.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(ln.color))
                 ? ln.color : colors[i % colors.length];
             var vol = Math.round(isFinite(ln.volume) ? ln.volume : 100);
-            html += '<div class="seg-lane-row" data-lane="' + i + '" style="top:' + relY + 'px;height:' + rh + 'px;">'
+            // 特殊轨道 (歌词/音频): 锁定样式, 名称前缀 🔒 + 类型名, 不可编辑
+            var isSpecial = !!(ln && ln.special);
+            var laneLabel = '';
+            if (isSpecial) {
+                laneLabel = '🔒 ' + (ln.special.kind === 'lyric' ? i18nText('歌词轨道') : i18nText('音频轨道'));
+                if (ln.name) laneLabel += ' · ' + ln.name;
+            }
+            html += '<div class="seg-lane-row' + (isSpecial ? ' seg-lane-locked' : '') + '" data-lane="' + i + '"'
+                + ' style="top:' + relY + 'px;height:' + rh + 'px;' + (isSpecial ? 'background:rgba(0,0,0,.22);' : '') + '">'
                 + '<div class="seg-lane-title">'
                 + '<span class="seg-lane-head"><span class="seg-lane-color" data-act="color" title="' + i18nText('轨道颜色') + '" style="background:' + lc + '"></span>'
-                + '<span class="seg-lane-name" title="' + escapeHtml(ln.name || '') + '">' + escapeHtml(ln.name || (i18nText('轨道') + ' ' + (i + 1))) + '</span></span>'
+                + '<span class="seg-lane-name" title="' + escapeHtml(isSpecial ? laneLabel : (ln.name || '')) + '">'
+                + escapeHtml(isSpecial ? laneLabel : (ln.name || (i18nText('轨道') + ' ' + (i + 1)))) + '</span></span>'
                 + '<span>'
                 + '<button class="seg-lane-btn' + (ln.muted ? ' active' : '') + '" data-act="mute" title="' + i18nText('静音') + '">M</button>'
                 + '<button class="seg-lane-btn' + (ln.solo ? ' active' : '') + '" data-act="solo" title="' + i18nText('独奏') + '">S</button>'
@@ -1171,6 +1209,11 @@
     function startLaneRename(idx, nameEl) {
         var ln = state.segmentLanes[idx];
         if (!ln || !nameEl || nameEl.querySelector('input')) return;
+        // 特殊轨道名称跟随源轨道 (歌词/音频), 不允许在片段侧栏重命名
+        if (ln.special) {
+            showSmallTip(i18nText('特殊轨道不能合并或编辑'));
+            return;
+        }
         var old = typeof ln.name === 'string' ? ln.name : '';
         var input = document.createElement('input');
         input.className = 'seg-lane-name-input';
@@ -1249,10 +1292,15 @@
         if (!panel || panel._bound) return;
         panel._bound = true;
         panel.addEventListener('click', function(e) {
-            // 底部「添加音轨」按钮
+            // 底部「添加音轨」按钮: 弹出轨道类型菜单 (NBS 音轨 / 歌词轨道 / 音频轨道)
             var addBtn = e.target.closest ? e.target.closest('.seg-lane-add') : null;
             if (addBtn) {
-                segmentAddLane();
+                if (typeof N.showAddTrackMenu === 'function') {
+                    var addRect = addBtn.getBoundingClientRect();
+                    N.showAddTrackMenu(addRect.left, addRect.top, 'segment');
+                } else {
+                    segmentAddLane();
+                }
                 return;
             }
             // 颜色点: 打开色板弹层
@@ -1574,6 +1622,21 @@
         else enterSegmentsEditMode();
     }
 
+    // 导出前把片段状态缝合回工程音符 (幂等)。
+    // 片段编辑模式内直接导出时, state.notes 仍是进入片段模式前的旧内容,
+    // 而 segments.json 记录的是当前片段坐标 —— 两者不一致, 导入后会按新片段窗口
+    // 去切旧音符, 表现为「大部分片段是空的」。导出前必须先把片段 compose 回来。
+    function segmentEnsureComposedForExport() {
+        if (!Array.isArray(state.segments) || !state.segments.length) return false;
+        // 未进过片段编辑且片段只是自动生成的整曲占位 → 无需重排层
+        if (!state.segmentsEditMode && !state._segmentsEdited) return false;
+        segmentCompose();
+        if (state.pianoRoll) state.pianoRoll.setNotes(state.notes);
+        rebuildFromNotes();
+        syncNbsLayerGroups();
+        return true;
+    }
+
     // ---- 导出 ----
     N.segmentSongEnd = segmentSongEnd;
     N.segmentFollowSongEnd = segmentFollowSongEnd;
@@ -1586,6 +1649,7 @@
     N.segmentLaneOverlaps = segmentLaneOverlaps;
     N.pushSegmentNote = pushSegmentNote;
     N.segmentCaptureFromSong = segmentCaptureFromSong;
+    N.segmentEnsureComposedForExport = segmentEnsureComposedForExport;
     N.segmentCompose = segmentCompose;
     N.segmentEnsureLaneLayers = segmentEnsureLaneLayers;
     N.segmentLaneLayerUsage = segmentLaneLayerUsage;

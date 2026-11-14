@@ -15,6 +15,7 @@
     function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
     function showAppConfirm() { return N.showAppConfirm.apply(this, arguments); }
     function showAppPrompt() { return N.showAppPrompt.apply(this, arguments); }
+    function syncAudioToRoll() { return N.syncAudioToRoll.apply(this, arguments); }
     function syncLyricsToRoll() { return N.syncLyricsToRoll.apply(this, arguments); }
     function updateNoteCount() { return N.updateNoteCount.apply(this, arguments); }
     function updateProgressUI() { return N.updateProgressUI.apply(this, arguments); }
@@ -46,6 +47,9 @@
             // 歌词轨道与歌词块随快照一并记录, 使歌词编辑同样可撤销/重做
             lyricLanes: JSON.parse(JSON.stringify(state.lyricLanes || [])),
             lyrics: JSON.parse(JSON.stringify(state.lyrics || [])),
+            // 音频轨道与音频块同样可撤销/重做 (音频缓冲不参与快照, 撤销不会释放已解码的音频)
+            audioLanes: JSON.parse(JSON.stringify(state.audioLanes || [])),
+            audioClips: JSON.parse(JSON.stringify(state.audioClips || [])),
             // 片段数据随快照记录, 使片段编辑同样可撤销/重做
             segments: JSON.parse(JSON.stringify(state.segments || [])),
             segmentLanes: JSON.parse(JSON.stringify(state.segmentLanes || [])),
@@ -68,6 +72,12 @@
         state.lyricLanes = Array.isArray(snapshot.lyricLanes)
             ? JSON.parse(JSON.stringify(snapshot.lyricLanes))
             : [];
+        state.audioLanes = Array.isArray(snapshot.audioLanes)
+            ? JSON.parse(JSON.stringify(snapshot.audioLanes))
+            : [];
+        state.audioClips = Array.isArray(snapshot.audioClips)
+            ? JSON.parse(JSON.stringify(snapshot.audioClips))
+            : [];
         state.segments = JSON.parse(JSON.stringify(snapshot.segments || []));
         state.segmentLanes = JSON.parse(JSON.stringify(snapshot.segmentLanes || []));
         // 旧快照没有这两个字段时保持当前映射, 避免把映射清空导致归位失配
@@ -82,6 +92,7 @@
         // 歌词恢复后重建索引并同步到轨道
         lyricRebuildIndex();
         syncLyricsToRoll();
+        syncAudioToRoll();
         segmentSync();
         // 撤销/重做会替换片段与轨道对象, 浮动钢琴卷帘窗口需重新绑定后再绘制
         if (window.SegmentPianoWindow) window.SegmentPianoWindow.refresh();

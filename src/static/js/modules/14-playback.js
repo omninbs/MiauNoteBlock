@@ -62,8 +62,22 @@
 
 
     // ============ 进度条 ============
+    // 歌曲总长度 (tick): 音符末尾 + 4 tick, 且至少覆盖所有音频块 (伴奏常比歌曲本身更长)
     function getSongLengthTicks() {
-        return Math.max(state.maxTick + 4, 64);
+        var end = state.maxTick + 4;
+        var clips = state.audioClips;
+        if (clips && clips.length) {
+            for (var i = 0; i < clips.length; i++) {
+                var c = clips[i];
+                if (!c) continue;
+                var startTick = parseInt(c.tick, 10);
+                var dur = parseInt(c.dur, 10);
+                if (!isFinite(startTick) || startTick < 0) startTick = 0;
+                if (!isFinite(dur) || dur < 1) dur = 1;
+                if (startTick + dur > end) end = startTick + dur;
+            }
+        }
+        return Math.max(end, 64);
     }
 
     // 跟随播放指示器相关状态统一入口:
@@ -184,6 +198,8 @@
     }
 
     function seekToTick(tick, immediate) {
+        // seek 可能跳过正在播放的音频块, 清掉所有音频轨道层避免长音频残留
+        stopAllAudioClipLayers();
         var totalTicks = getSongLengthTicks();
         if (tick < 0) tick = 0;
         if (tick > totalTicks) tick = totalTicks;
@@ -229,6 +245,7 @@
             state.isPlaying = false;
             stopPlaybackLoop();
             if (window.AudioEngine && AudioEngine.stopAll) AudioEngine.stopAll();
+            stopAllAudioClipLayers();
             setPlayButtonIcon(false);
             // 把钢琴卷帘播放头锁定在当前 tick
             if (state.pianoRoll) {
@@ -249,32 +266,34 @@
             if (state.regionStartPlay && state.pianoRoll && state.pianoRoll.hasRegion && state.pianoRoll.hasRegion()) {
                 state.currentTick = state.pianoRoll.regionStart;
             }
-            // B 方案: 开始播放时立即把面板跳到 progress bar 当前 tick
+            // 开始播放时的视图对齐:
+            // - 开启跟随: 居中(按刻/按帧)固定 1/3 位置, 按页则页对齐
+            // - 未开启跟随: 完全保留用户当前滚动位置, 不按页对齐、不居中、不回弹
             if (state.pianoRoll) {
-                state.pianoRoll.isPlaying = true;
-                var cfg = state.pianoRoll._cfg;
-                var pw = state.pianoRoll._currentPanelWidth;
-                var dw = state.pianoRoll.displayWidth;
+                var pr = state.pianoRoll;
+                pr.isPlaying = true;
+                var cfg = pr._cfg;
+                // 片段模式使用侧边板宽度作为编辑区原点
+                var originX = pr._editOriginX ? pr._editOriginX() : pr._currentPanelWidth;
+                var dw = pr.displayWidth;
                 // 使用统一的 _zoomX(): 片段模式走独立横向缩放, 避免 scrollX 计算错误跳到极端位置
-                var cellW = cfg.cellW * state.pianoRoll._zoomX();
-                var fs = state.pianoRoll._followState ? state.pianoRoll._followState() : null;
-                if (fs && fs.centered) {
-                    // 按刻/按帧居中跟随: 播放头固定视口 1/3
-                    var playheadX = pw + (dw - pw) / 3;
-                    state.pianoRoll.scrollX = state.currentTick * cellW + pw - playheadX;
-                } else {
-                    // 按页 / 关闭跟随: 页对齐翻页, 播放头落在页内
-                    var pageW = Math.max(1, dw - pw);
-                    state.pianoRoll.scrollX = pageW * Math.floor((state.currentTick * cellW) / pageW);
+                var cellW = cfg.cellW * pr._zoomX();
+                var visible = dw - originX;
+                var fs = pr._followState ? pr._followState() : null;
+                if (fs && fs.enabled && visible > 1 && cellW > 0) {
+                    var targetScrollX = fs.centered
+                        // 按刻/按帧居中跟随: 播放头固定视口 1/3
+                        ? state.currentTick * cellW - visible / 3
+                        // 按页: 以可视内容宽度为一页做页对齐
+                        : visible * Math.floor((state.currentTick * cellW) / visible);
+                    if (targetScrollX < 0) targetScrollX = 0;
+                    var maxSX = pr._getMaxScrollX ? pr._getMaxScrollX() : NaN;
+                    if (isFinite(maxSX) && maxSX >= 0 && targetScrollX > maxSX) targetScrollX = maxSX;
+                    if (Math.abs(targetScrollX - pr.scrollX) >= 2) pr.scrollX = targetScrollX;
                 }
-                // 钳制滚动上限, 防止视图跑到歌曲范围之外 (修复播放后内容不显示)
-                var maxSX = state.pianoRoll._getMaxScrollX();
-                if (isFinite(maxSX) && state.pianoRoll.scrollX > maxSX) {
-                    state.pianoRoll.scrollX = Math.max(0, maxSX);
-                }
-                state.pianoRoll.playheadTick = state.currentTick;
-                state.pianoRoll._smoothedPlayheadTick = state.currentTick;
-                state.pianoRoll._lastTickTime = performance.now();
+                pr.playheadTick = state.currentTick;
+                pr._smoothedPlayheadTick = state.currentTick;
+                pr._lastTickTime = performance.now();
             }
             state.isPlaying = true;
             setPlayButtonIcon(true);
@@ -297,6 +316,7 @@
         stopArrowScrub();
         stopPlaybackLoop();
         if (window.AudioEngine && AudioEngine.stopAll) AudioEngine.stopAll();
+        stopAllAudioClipLayers();
         setPlayButtonIcon(false);
         state.currentTick = 0;
         // 清除上次 seek 位置 (停止后从头开始, 暂停重播才跳回 seek 位置)
@@ -342,6 +362,48 @@
         var _lastFrameTime = performance.now();
         var _nextVisualFrame = 0;
         var _lastProgressUI = -Infinity;
+        // 本次播放已启动的音频块 (id → true): 每个块只起播一次,
+        // 支持从中途 seek 起播 (按块内偏移续播), 也避免逐 tick 重复触发
+        var scheduledAudioClips = {};
+
+        // 播放跟随滚动: 统一处理三种模式, 避免起播与逐帧逻辑重复
+        // - 居中跟随 (按刻/按帧): 播放头固定可视区 1/3, 逐帧平滑跟随
+        // - 按页: 播放头越过当前页时整页翻动
+        // - 未跟随: 不逐帧跟随, 仅当播放头越出可视区左右边界时滚动一次 (留 1/6 屏边距)
+        function applyFollowScroll(tick, cellW) {
+            var pr = state.pianoRoll;
+            if (!pr || !isFinite(tick) || !(cellW > 0)) return;
+            // 播放中用户正在拖动查看: 交还控制权, 不做自动滚动
+            if (pr._playbackViewHold || pr._playbackReturnRAF) return;
+            var w = pr.displayWidth;
+            var originX = pr._editOriginX ? pr._editOriginX() : pr._currentPanelWidth;
+            var visible = w - originX;
+            if (!(visible > 1)) return;
+            var fs = pr._followState ? pr._followState() : null;
+            var maxSX = pr._getMaxScrollX ? pr._getMaxScrollX() : NaN;
+            var target;
+            if (!fs || !fs.enabled) {
+                var screenX = tick * cellW - pr.scrollX + originX;
+                if (screenX >= originX + 8 && screenX <= w - 8) return;
+                target = screenX > w - 8
+                    // 出右边界: 回到可视区左侧 1/6 处 (前进约 5/6 屏)
+                    ? tick * cellW - visible / 6
+                    // 出左边界: 回到可视区右侧 1/6 处 (后退约 5/6 屏)
+                    : tick * cellW - visible * 5 / 6;
+            } else if (fs.centered) {
+                // 按刻量化到整 tick, 按帧连续
+                var t = fs.mode === 'tick' ? Math.floor(tick) : tick;
+                target = t * cellW - visible / 3;
+            } else {
+                target = visible * Math.floor((tick * cellW) / visible);
+            }
+            if (target < 0) target = 0;
+            if (isFinite(maxSX) && maxSX >= 0 && target > maxSX) target = maxSX;
+            // 最小滚动阈值, 防止亚像素抖动
+            if (Math.abs(target - pr.scrollX) < 2) return;
+            pr.scrollX = target;
+            pr._fullRedrawNeeded = true;
+        }
 
         function playbackFrame(now) {
             if (!state.isPlaying) return;
@@ -362,6 +424,8 @@
             var rate = state._playbackRate > 0 ? state._playbackRate : 1;
             var reverse = !!state._playbackReverse;
             var stepMs = tickMs / rate;
+            // 音频块调度用的 AudioContext (本帧取一次即可)
+            var audioCtx = (window.AudioEngine && AudioEngine.getContext) ? AudioEngine.getContext() : null;
 
             while (_accumulator >= stepMs) {
                 _accumulator -= stepMs;
@@ -404,6 +468,40 @@
                 // 歌词浮层: 触发该 tick 的歌词 / 处理到期隐藏
                 processLyricsAtTick(tick);
 
+                // 音频块调度: 该 tick 落在块区间内的 clip 交给 AudioEngine 按层播放 (一个 tick 可能有多条)
+                //   - 每个块每次播放只起播一次
+                //   - 从中途 seek 起播时按块内偏移续播, 而不是整段不响
+                if (audioCtx && state.audioClips && state.audioClips.length) {
+                    var secPerTick = 1 / Math.max(0.001, state.tempo || 20);
+                    for (var ci = 0; ci < state.audioClips.length; ci++) {
+                        var clip = state.audioClips[ci];
+                        if (!clip || scheduledAudioClips[clip.id]) continue;
+                        var clipStart = Math.max(0, Math.floor(clip.tick || 0));
+                        var clipDur = Math.max(1, Math.floor(clip.dur || 1));
+                        if (tick < clipStart || tick >= clipStart + clipDur) continue;
+                        try {
+                            var clipLane = state.audioLanes ? state.audioLanes[clip.lane] : null;
+                            if (clipLane && clipLane.muted) continue;
+                            var clipBuf = (state.audioBuffers && state.audioBuffers[clip.bufferId]) || null;
+                            if (!clipBuf || !clipBuf.buffer) continue;
+                            // 步进后的累积残差秒 (等价于步进前 (_accumulator - stepMs) / 1000)
+                            var residual = Math.max(0, _accumulator / 1000);
+                            var clipGain = (clip.gain != null ? clip.gain : 1)
+                                * (clipLane && clipLane.volume != null ? clipLane.volume / 100 : 1);
+                            // 层标识必须用 lane.id (与 stopAllAudioClipLayers 的 'audio:'+lane.id 一致),
+                            // 否则暂停/跳转时无法按层停止已启动的音频
+                            var clipLayerId = (clipLane && clipLane.id != null) ? clipLane.id : clip.lane;
+                            var clipOffset = (typeof clip.offsetSec === 'number' && isFinite(clip.offsetSec) ? clip.offsetSec : 0)
+                                + Math.max(0, tick - clipStart) * secPerTick;
+                            if (window.AudioEngine && AudioEngine.playClip) {
+                                var started = AudioEngine.playClip(clipBuf.buffer, audioCtx.currentTime + residual,
+                                    clipOffset, clipGain, 0, 'audio:' + clipLayerId);
+                                if (started) scheduledAudioClips[clip.id] = true;
+                            }
+                        } catch (e) {}
+                    }
+                }
+
                 if (reverse) {
                     // 倒放: 到开头即停止
                     if (tick <= 0) {
@@ -411,6 +509,7 @@
                         state.isPlaying = false;
                         stopPlaybackLoop();
                         if (window.AudioEngine && AudioEngine.stopAll) AudioEngine.stopAll();
+                        stopAllAudioClipLayers();
                         setPlayButtonIcon(false);
                         if (state.pianoRoll) {
                             state.pianoRoll.isPlaying = false;
@@ -429,6 +528,7 @@
                         state.isPlaying = false;
                         stopPlaybackLoop();
                         if (window.AudioEngine && AudioEngine.stopAll) AudioEngine.stopAll();
+                        stopAllAudioClipLayers();
                         setPlayButtonIcon(false);
                         if (state.pianoRoll) {
                             state.pianoRoll.isPlaying = false;
@@ -438,7 +538,11 @@
                         return;
                     }
                     state.currentTick = nextTick;
-                    if (state.currentTick > state.maxTick + 4) {
+                    if (state.currentTick > totalTicks) {
+                        // 循环回绕: 清掉仍在响的音频块层, 避免旧 clip 残留
+                        stopAllAudioClipLayers();
+                        // 回绕后音频块需要重新调度
+                        scheduledAudioClips = {};
                         state.currentTick = 0;
                         resetStreamingLyrics();
                         hideLyricsOverlay();
@@ -465,8 +569,12 @@
             var visualFrameMs = state.renderFpsLimit > 0 ? 1000 / state.renderFpsLimit : 0;
             var shouldRenderVisual = visualFrameMs === 0 || now >= _nextVisualFrame;
             if (state.pianoRoll && shouldRenderVisual) {
-                // 播放跟随统一由 PianoRoll._applyPlaybackAutoScroll 处理
-                // (与设置中的「跟随播放指示器」共用同一状态与按页/按刻/按帧模式)
+                // 播放跟随滚动: 居中/按页/未跟随三套策略在此统一分派
+                var followTick = state.pianoRoll._getDisplayTick
+                    ? state.pianoRoll._getDisplayTick()
+                    : state.currentTick;
+                applyFollowScroll(followTick, state.pianoRoll._cfg.cellW * state.pianoRoll._zoomX());
+                // 播放头由 overlay 绘制
                 if (state.pianoRoll.redrawPlaybackOverlay) {
                     state.pianoRoll.redrawPlaybackOverlay();
                 }
@@ -569,7 +677,8 @@
                 acc -= tickMs;
                 var nt = state.currentTick + dir;
                 if (nt < 0) nt = 0;
-                if (nt > state.maxTick + 4) nt = state.maxTick + 4;
+                var scrubLimit = getSongLengthTicks();
+                if (nt > scrubLimit) nt = scrubLimit;
                 if (nt === state.currentTick) {
                     stopArrowScrub();
                     return;
@@ -641,6 +750,15 @@
             if (state.tracks[i].solo) state.song.solo_layers.push(state.tracks[i].layer);
         }
         state.soloActive = state.song.solo_layers.length > 0;
+    }
+
+    // 停止所有音频轨道 clip 层 (playClip 使用 'audio:<laneId>' 作为层标识)
+    function stopAllAudioClipLayers() {
+        if (!window.AudioEngine || !AudioEngine.stopLayer) return;
+        var lanes = state.audioLanes || [];
+        for (var i = 0; i < lanes.length; i++) {
+            try { AudioEngine.stopLayer('audio:' + lanes[i].id); } catch (e) {}
+        }
     }
 
     function stopUnaudibleTrackAudio() {

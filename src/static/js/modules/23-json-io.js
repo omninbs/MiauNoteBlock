@@ -151,7 +151,7 @@
             state._segmentIdSeq = 0;
             var maxLane = laneLayers.length - 1;
 
-            // 按层号把音符切进片段; allStrict=false 时忽略层过滤只按时间窗归位 (旧格式兜底)
+            // 按层号把音符切进片段; strict=false 时忽略层过滤只按时间窗归位 (旧格式兜底)
             function buildSegments(strict) {
                 var segs = [];
                 var placed = 0;
@@ -420,6 +420,9 @@
 
         // 点击外部关闭
         document.addEventListener('click', function(e) {
+            // 菜单被移动端抽屉接管 (抽屉子页) 时不按「点击外部关闭」处理:
+            // 打开子页的那一次点击会冒泡到这里, 若不豁免菜单会被立刻藏掉, 子页变空白
+            if (menu.hasAttribute('data-drawer-embedded')) return;
             if (menu.style.display === 'block' && !menu.contains(e.target) && e.target !== btn) {
                 menu.style.display = 'none';
             }

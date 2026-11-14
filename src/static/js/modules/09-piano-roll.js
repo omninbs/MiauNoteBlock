@@ -10,21 +10,25 @@
     function $() { return N.$.apply(this, arguments); }
     function addLyricLane() { return N.addLyricLane.apply(this, arguments); }
     function buildNoteIndex() { return N.buildNoteIndex.apply(this, arguments); }
+    function closeTransientFloats() { return N.closeTransientFloats.apply(this, arguments); }
     function commitLyricClipDrag() { return N.commitLyricClipDrag.apply(this, arguments); }
     function createLyricClip() { return N.createLyricClip.apply(this, arguments); }
     function deleteTrack() { return N.deleteTrack.apply(this, arguments); }
     function ensureLyricLanes() { return N.ensureLyricLanes.apply(this, arguments); }
     function findTrackByLayer() { return N.findTrackByLayer.apply(this, arguments); }
+    function i18nText() { return N.i18nText.apply(this, arguments); }
     function markDirty() { return N.markDirty.apply(this, arguments); }
     function moveLyricLaneTo() { return N.moveLyricLaneTo.apply(this, arguments); }
     function moveTrackDown() { return N.moveTrackDown.apply(this, arguments); }
     function moveTrackUp() { return N.moveTrackUp.apply(this, arguments); }
     function mutedSoloToLock() { return N.mutedSoloToLock.apply(this, arguments); }
+    function openAudioFilePicker() { return N.openAudioFilePicker.apply(this, arguments); }
     function pushUndo() { return N.pushUndo.apply(this, arguments); }
     function removeLyricLane() { return N.removeLyricLane.apply(this, arguments); }
     function renameLyricLane() { return N.renameLyricLane.apply(this, arguments); }
     function renderSegmentSidePanel() { return N.renderSegmentSidePanel.apply(this, arguments); }
     function reorderTrack() { return N.reorderTrack.apply(this, arguments); }
+    function registerAudioPianoRollCallbacks() { return N.registerAudioPianoRollCallbacks.apply(this, arguments); }
     function seekToTick() { return N.seekToTick.apply(this, arguments); }
     function segmentAdoptTick() { return N.segmentAdoptTick.apply(this, arguments); }
     function segmentCommitDrag() { return N.segmentCommitDrag.apply(this, arguments); }
@@ -313,6 +317,13 @@
                 moveLyricLaneTo(fromLane, after);
             };
 
+            // 音频轨道回调 (实现在 22-audio.js)
+            registerAudioPianoRollCallbacks();
+            // 「添加」按钮: 弹出轨道类型菜单 (NBS 音轨 / 歌词轨道 / 音频轨道)
+            state.pianoRoll.onAddTrackMenu = function(clientX, clientY) {
+                showAddTrackMenu(clientX, clientY);
+            };
+
             // 同步初始状态
             state.pianoRoll.trackCount = (state.song && state.song.layers) ? state.song.layers.length : 1;
             // smoothScrollEnabled 只是派生值: 开启跟随且非按页时才固定播放头居中
@@ -338,7 +349,150 @@
         }
     }
 
+    // ============ 「添加」轨道类型菜单 ============
+    // 钢琴卷帘侧栏「添加」按钮触发: 选择要添加的轨道类型
+    var _addTrackMenuEl = null;
+    var _addTrackMenuBgDown = false;
+    var _addTrackMenuDocClick = null;
+    var _addTrackMenuDocPointerDown = null;
+    var _addTrackMenuDocKey = null;
+    var _addTrackMenuWin = null;
+    function hideAddTrackMenu() {
+        if (_addTrackMenuEl && _addTrackMenuEl.parentNode) _addTrackMenuEl.parentNode.removeChild(_addTrackMenuEl);
+        _addTrackMenuEl = null;
+        if (_addTrackMenuDocClick) {
+            document.removeEventListener('click', _addTrackMenuDocClick);
+            _addTrackMenuDocClick = null;
+        }
+        if (_addTrackMenuDocPointerDown) {
+            document.removeEventListener('pointerdown', _addTrackMenuDocPointerDown, true);
+            _addTrackMenuDocPointerDown = null;
+        }
+        if (_addTrackMenuDocKey) {
+            document.removeEventListener('keydown', _addTrackMenuDocKey);
+            _addTrackMenuDocKey = null;
+        }
+        if (_addTrackMenuWin) {
+            window.removeEventListener('resize', _addTrackMenuWin);
+            window.removeEventListener('scroll', _addTrackMenuWin, true);
+            _addTrackMenuWin = null;
+        }
+    }
+
+    // 片段模式: 音频导入是异步的, 轮询轨道数变化 (最长 10s), 导入完成后补生成 special 片段轨道
+    function waitAudioLaneForSegment() {
+        var lanes0 = (state.audioLanes || []).length;
+        var started = Date.now();
+        var timer = setInterval(function() {
+            if (!state.segmentsEditMode) { clearInterval(timer); return; }
+            var changed = (state.audioLanes || []).length !== lanes0;
+            if (!changed && Date.now() - started < 10000) return;
+            clearInterval(timer);
+            if (!changed) return;
+            if (N.segmentEnsureLanes) N.segmentEnsureLanes();
+            if (N.segmentSync) N.segmentSync();
+            if (N.renderSegmentSidePanel) N.renderSegmentSidePanel();
+            if (state.pianoRoll) state.pianoRoll.render();
+        }, 200);
+    }
+
+    function showAddTrackMenu(clientX, clientY, mode) {
+        hideAddTrackMenu();
+        closeTransientFloats();
+        if (!state.pianoRoll) return;
+        var inSegment = mode === 'segment';
+
+        // 复用应用统一的 .context-menu 外观 (照 21-lyrics 的 _ctxMenu/_ctxItem 写法)
+        var menu = document.createElement('div');
+        menu.className = 'context-menu visible';
+        menu.style.position = 'fixed';
+        menu.style.zIndex = '100420';
+        // NBS 音轨复用既有 onAddTrack 逻辑 (原注册保留不动, 此处仅调用)
+        var acts = [
+            { icon: 'fa-solid fa-layer-group', label: i18nText('NBS 音轨'), run: function() {
+                if (inSegment) {
+                    // 片段模式: 添加普通片段轨道
+                    if (N.segmentAddLane) N.segmentAddLane();
+                    if (N.renderSegmentSidePanel) N.renderSegmentSidePanel();
+                    if (state.pianoRoll) state.pianoRoll.render();
+                    return;
+                }
+                if (state.pianoRoll && state.pianoRoll.onAddTrack) state.pianoRoll.onAddTrack();
+            } },
+            { icon: 'fa-solid fa-closed-captioning', label: i18nText('歌词轨道'), run: function() {
+                if (!inSegment) {
+                    addLyricLane();
+                    return;
+                }
+                addLyricLane(null);
+                if (N.segmentEnsureLanes) N.segmentEnsureLanes();
+                if (N.segmentSync) N.segmentSync();
+                if (N.syncLyricsToRoll) N.syncLyricsToRoll();
+                if (N.renderSegmentSidePanel) N.renderSegmentSidePanel();
+                if (state.pianoRoll) state.pianoRoll.render();
+                markDirty();
+            } },
+            { icon: 'fa-solid fa-file-audio', label: i18nText('音频轨道'), run: function() {
+                openAudioFilePicker();
+                if (inSegment) waitAudioLaneForSegment();
+            } }
+        ];
+        for (var k = 0; k < acts.length; k++) {
+            (function(a) {
+                var el = document.createElement('div');
+                el.className = 'context-menu-item';
+                el.innerHTML = '<i class="' + a.icon + '"></i><span>' + a.label + '</span>';
+                el.addEventListener('click', function(ev) {
+                    ev.stopPropagation();
+                    hideAddTrackMenu();
+                    a.run();
+                });
+                menu.appendChild(el);
+            })(acts[k]);
+        }
+
+        document.body.appendChild(menu);
+        // 贴鼠标右下显示, 越界翻转
+        var r = menu.getBoundingClientRect();
+        var left = clientX + 6, top = clientY + 6;
+        if (left + r.width > window.innerWidth - 6) left = Math.max(6, clientX - r.width - 6);
+        if (top + r.height > window.innerHeight - 6) top = Math.max(6, clientY - r.height - 6);
+        menu.style.left = left + 'px';
+        menu.style.top = top + 'px';
+        _addTrackMenuEl = menu;
+        // 打开菜单的动作本身 (mousedown / click on「添加」) 会产生同一次手势的后续事件,
+        // 用打开时刻拦截: 这些事件的 timeStamp 不晚于 openedTs, 不能当成"点击外部"。
+        var openedTs = performance.now();
+        _addTrackMenuBgDown = false;
+        _addTrackMenuDocPointerDown = function(ev) {
+            if (!_addTrackMenuEl) return;
+            if (ev.timeStamp && ev.timeStamp <= openedTs + 1) return;
+            if (_addTrackMenuEl.contains(ev.target)) return;
+            _addTrackMenuBgDown = true;
+            hideAddTrackMenu();
+        };
+        _addTrackMenuDocClick = function(ev) {
+            if (!_addTrackMenuEl) return;
+            if (ev.timeStamp && ev.timeStamp <= openedTs + 1) return;
+            if (_addTrackMenuEl.contains(ev.target)) return;
+            // 鼠标点击已由 pointerdown 关闭; 这里兜底键盘触发的 click (detail === 0)
+            if (ev.detail > 0 && !_addTrackMenuBgDown) return;
+            hideAddTrackMenu();
+        };
+        _addTrackMenuDocKey = function(ev) {
+            if (ev.key === 'Escape' || ev.key === 'Esc') hideAddTrackMenu();
+        };
+        _addTrackMenuWin = function() { hideAddTrackMenu(); };
+        document.addEventListener('pointerdown', _addTrackMenuDocPointerDown, true);
+        document.addEventListener('click', _addTrackMenuDocClick);
+        document.addEventListener('keydown', _addTrackMenuDocKey);
+        window.addEventListener('resize', _addTrackMenuWin);
+        window.addEventListener('scroll', _addTrackMenuWin, true);
+    }
+
     // ---- 导出 ----
     N.initPianoRoll = initPianoRoll;
     N.initToolSwitcher = initToolSwitcher;
+    N.showAddTrackMenu = showAddTrackMenu;
+    N.hideAddTrackMenu = hideAddTrackMenu;
 })(window.WebNBS);

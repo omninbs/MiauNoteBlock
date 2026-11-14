@@ -32,6 +32,7 @@
     function performUndo() { return N.performUndo.apply(this, arguments); }
     function projectDbDelete() { return N.projectDbDelete.apply(this, arguments); }
     function pushUndo() { return N.pushUndo.apply(this, arguments); }
+    function refreshAudioLaneUI() { return N.refreshAudioLaneUI.apply(this, arguments); }
     function resetStreamingLyrics() { return N.resetStreamingLyrics.apply(this, arguments); }
     function resetToNewFile() { return N.resetToNewFile.apply(this, arguments); }
     function safeSetItem() { return N.safeSetItem.apply(this, arguments); }
@@ -94,6 +95,9 @@
                     solo_layers: Array.isArray(state.song.solo_layers) ? state.song.solo_layers.slice() : [],
                     lyrics: JSON.parse(JSON.stringify(state.lyrics || [])),
                     lyricLanes: JSON.parse(JSON.stringify(state.lyricLanes || [])),
+                    // 音频轨道与音频块 (音频缓冲为内存对象, 不写入自动保存)
+                    audioLanes: JSON.parse(JSON.stringify(state.audioLanes || [])),
+                    audioClips: JSON.parse(JSON.stringify(state.audioClips || [])),
                     layer_channel_map: state.song.layer_channel_map || {},
                     layer_voice_map: state.song.layer_voice_map || {},
                     channel_names: state.song.channel_names || {},
@@ -101,6 +105,8 @@
                 } : null,
                 lyrics: JSON.parse(JSON.stringify(state.lyrics || [])),
                 lyricLanes: JSON.parse(JSON.stringify(state.lyricLanes || [])),
+                audioLanes: JSON.parse(JSON.stringify(state.audioLanes || [])),
+                audioClips: JSON.parse(JSON.stringify(state.audioClips || [])),
                 segments: JSON.parse(JSON.stringify(state.segments || [])),
                 segmentLanes: JSON.parse(JSON.stringify(state.segmentLanes || [])),
                 segmentsEdited: !!state._segmentsEdited,
@@ -225,6 +231,22 @@
             resetStreamingLyrics();
             lyricRebuildIndex();
             syncLyricsToRoll();
+            // 音频轨道/音频块随自动保存恢复; 音频缓冲不持久化 → 标记为缺失
+            state.audioLanes = Array.isArray(data.audioLanes)
+                ? JSON.parse(JSON.stringify(data.audioLanes))
+                : (data.song && Array.isArray(data.song.audioLanes) ? JSON.parse(JSON.stringify(data.song.audioLanes)) : []);
+            state.audioClips = Array.isArray(data.audioClips)
+                ? JSON.parse(JSON.stringify(data.audioClips))
+                : (data.song && Array.isArray(data.song.audioClips) ? JSON.parse(JSON.stringify(data.song.audioClips)) : []);
+            state.audioBuffers = {};
+            refreshAudioLaneUI();
+            // 兼容旧数据: 快照中若含 audioAssets, 异步解码还原音频
+            if (data.audioAssets && typeof N.restoreAudioAssets === 'function') {
+                N.restoreAudioAssets(data.audioAssets).then(function (map) {
+                    state.audioBuffers = map || {};
+                    refreshAudioLaneUI();
+                }).catch(function () {});
+            }
             // 片段数据随自动保存一并恢复
             state._segmentIdSeq = 0;
             state._segmentsEdited = !!data.segmentsEdited;

@@ -37,6 +37,7 @@
     function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
     function showToast() { return N.showToast.apply(this, arguments); }
     function syncLyricsToRoll() { return N.syncLyricsToRoll.apply(this, arguments); }
+    function syncAudioToRoll() { return N.syncAudioToRoll.apply(this, arguments); }
     function syncNbsLayerGroups() { return N.syncNbsLayerGroups.apply(this, arguments); }
     function tabGetActive() { return N.tabGetActive.apply(this, arguments); }
     function tabOpenInNewTabIfNeeded() { return N.tabOpenInNewTabIfNeeded.apply(this, arguments); }
@@ -297,6 +298,11 @@
         resetStreamingLyrics();
         ensureLyricLanes();
         syncLyricsToRoll();
+        // 音频轨道与音频块随作品包元数据恢复; 音频缓冲不随包携带 → 打开后为缺失状态
+        state.audioLanes = Array.isArray(song.audioLanes) ? JSON.parse(JSON.stringify(song.audioLanes)) : [];
+        state.audioClips = Array.isArray(song.audioClips) ? JSON.parse(JSON.stringify(song.audioClips)) : [];
+        state.audioBuffers = {};
+        syncAudioToRoll();
         // 切换歌曲: 片段分割信息优先从作品包恢复, 否则重置为整首一个片段
         // 必须先清掉上一首歌的 MIDI 映射, 否则 segmentCaptureFromSong 会按旧通道归位, 导致片段全部为空
         state.layerChannelMap = {};

@@ -55,6 +55,43 @@
         '#3d7a6b'  // 19 Oxidized Copper Horn - 氧化青
     ];
 
+    // NBS 乐器基音偏移 (相对 key 的半音偏移, 值 0~19 对应 NBS 内置乐器):
+    // 高音乐器 (harp/bell/pling/chime) 取较大偏移, 低音乐器 (bass/didgeridoo) 为 0,
+    // 打击类 (bdrum/sdrum/click) 固定音高; 仅用于片段模式「物理音调」预览的纵向映射。
+    var INSTRUMENT_BASE_PITCH = [
+        24, // 0 Harp
+        0,  // 1 Double Bass
+        12, // 2 Bass Drum
+        12, // 3 Snare Drum
+        12, // 4 Click
+        12, // 5 Guitar
+        24, // 6 Flute
+        24, // 7 Bell
+        36, // 8 Chime
+        24, // 9 Xylophone
+        24, // 10 Iron Xylophone
+        12, // 11 Cow Bell
+        0,  // 12 Didgeridoo
+        24, // 13 Bit
+        12, // 14 Banjo
+        36, // 15 Pling
+        12, // 16 Copper Horn
+        12, // 17 Exposed Copper Horn
+        12, // 18 Weathered Copper Horn
+        12  // 19 Oxidized Copper Horn
+    ];
+
+    // 片段的「物理音调」: 音色基音 + 音符 key; 自定义音色 (>=20) 用其 pitch 字段
+    function segPhysicalPitch(n) {
+        var key = (n && isFinite(n.key)) ? n.key : 0;
+        var inst = (n && isFinite(n.instrument)) ? n.instrument : 0;
+        if (inst >= 20) {
+            var p = (n && isFinite(n.pitch)) ? n.pitch : 0;
+            return key + p;
+        }
+        return key + (INSTRUMENT_BASE_PITCH[inst] || 0);
+    }
+
     // NBS key 0 is MIDI A0; labels must use the MIDI pitch class, not key % 12.
     var PITCH_LABELS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
     var PITCH_LABELS_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
@@ -139,9 +176,11 @@
     }
 
     // Minecraft 音符盒标准方块 (对应 NBS instrument 0~19, 中文方块名)
+    // 顺序必须与音色索引严格一致, 名称即该音色所对应的 Minecraft 方块
     var NOTE_BLOCK_NAMES = [
-        '羊毛', '橡木', '石头', '沙石', '玻璃', '沙子', '黏土', '金块', '冰块', '青金石',
-        '石英块', '灵魂沙', '南瓜', '绿宝石', '干草块', '萤石', '铜管', '铜管', '铜管', '铜管'
+        '泥土', '橡木木板', '石头', '沙子', '玻璃', '羊毛', '黏土', '金块', '浮冰', '骨头块',
+        '铁块', '灵魂沙', '南瓜', '绿宝石块', '干草块', '萤石',
+        '铜块', '斑驳铜块', '风化铜块', '氧化铜块'
     ];
 
     // 音符盒点击次数: 从最低音 F#3 (NBS key 33) 基准, 每次右键升半音, 共 24 档 (0~24)
@@ -404,6 +443,9 @@
         this._segmentPreview = null;
         this._segMarquee = null;
         this._segPointerActive = false;
+        // 片段模式下歌词特殊轨道的拖动状态 / 选中高亮 (音频轨道仍只读)
+        this._segLyricDrag = null;
+        this._segLyricSelectedId = null;
         // 空白处左键按下后拖动播放头 (连续 seek)
         this._segSeekDrag = false;
         // 片段纵向滚动回调 (main.js 用于同步 DOM 侧边板)
@@ -417,10 +459,14 @@
         // 音符缩略图纵轴映射: 'pitch' 按音高 / 'track' 按轨道位置
         this.timelineMapMode = 'track';
         // 从设置直接恢复, 避免设置界面初始化顺序导致预览模式退回默认值
-        // 默认按音调显示 (更能反映旋律走向); 用户显式选择"根据轨道位置"才用 track
+        // 片段预览模式: 'track' 按轨道位置 / 'pitch' 按音调大小 (默认) / 'physical' 物理音调
         this.segmentPreviewMode = 'pitch';
         try {
-            if (localStorage.getItem('segment_preview_mode') === 'track') this.segmentPreviewMode = 'track';
+            var segPrev = localStorage.getItem('noteblock.segment_preview_mode')
+                || localStorage.getItem('segment_preview_mode');
+            if (segPrev === 'track' || segPrev === 'pitch' || segPrev === 'physical') {
+                this.segmentPreviewMode = segPrev;
+            }
         } catch (e) {}
         // NBS 模式下的片段可视化: 轨道分组横线 (默认开) / 片段边界竖线 (默认关)
         this.showSegmentLaneDividers = true;
@@ -444,8 +490,27 @@
         this.lyricSelectedId = null;   // 当前选中的歌词片段 id
         this.lyricSelectedIds = [];    // 批量选中的歌词片段 id (「全选」等)
         this._lyricHover = null;       // { id, zone } 悬停高亮
-        this._addLyricLaneBtnRect = null; // 「添加歌词轨道」按钮命中区
+        this._addEntryBtnRect = null;     // 「添加」按钮命中区 (弹出轨道类型菜单)
         this._lyricLaneBtnLayout = null;  // 歌词行右侧按钮布局缓存
+        // ---- 音频轨道 (「额外轨道」, 机制同歌词轨道, 行内放音频块) ----
+        this.audioLanes = [];             // [{ id, name, after }] 由 main 侧 syncAudioToRoll 注入
+        this.audioClips = [];             // [{ id, lane, tick, dur, offsetSec, bufferId, gain, name }]
+        this._audioDrag = null;           // 音频块拖动状态 { id, mode, startX, startY, origTick, origLane, origDur, ... }
+        this.audioSelectedId = null;      // 当前选中的音频块 id
+        this._audioHover = null;          // { id, zone } 悬停高亮
+        this.audioBuffers = null;         // { id: { name, buffer, duration } } 外部注入的引用 (仅内存)
+        this._audioPeaks = {};            // 波形缓存 key = clip.id → { sig, peaks }
+        this._audioLaneClick = false;     // 本次按下是否落在音频行内 (用于 mouseup 分支收口)
+        this._audioLongPressTimer = null; // 触摸端长按音频块 → 右键菜单
+        this.DEFAULT_AUDIOCLIP_DURATION = 4;
+        // 音频轨道回调 (由 main 侧注入)
+        this.onAudioClipContextMenu = null; // function(id, clientX, clientY) - 右键/长按音频块
+        this.onAudioLaneContextMenu = null; // function(lane, tick, clientX, clientY) - 右键音频轨道空白区
+        this.onAudioClipCommit = null;      // function(id, origTick, origLane) - 拖动结束提交
+        this.onAudioClipDragStart = null;   // function() - 首次移动回调 (pushUndo)
+        this.onDeleteAudioLane = null;      // function(laneIndex)
+        this.onRenameAudioLane = null;      // function(laneIndex, newName)
+        this.onReorderAudioLane = null;     // function(fromLane, after)
         // 回调 (由 main.js 注入)
         this.onLyricClipEdit = null;     // function(id, clientX, clientY) - 双击/轻点编辑文本
         this.onLyricClipCreate = null;   // function(tick, lane, clientX, clientY) - 空白处双击/长按新建
@@ -691,7 +756,9 @@
         var contentWidth = Math.max(0, this.totalTicks * cellW);
         // 片段模式按侧边板宽度计算可视区, 与 _tickToScreen 的原点保持一致
         var editWidth = Math.max(0, this.displayWidth - this._editOriginX());
-        return Math.max(0, contentWidth - editWidth);
+        // 内容之外额外留一屏余量: 允许横向滚出内容末尾 (配合播放/浏览不强制回弹)
+        var extraMargin = editWidth;
+        return Math.max(0, contentWidth - editWidth + extraMargin);
     };
 
     // 把 scrollX 钳制回合法范围 [0, maxScrollX]
@@ -798,9 +865,10 @@
         this.render();
     };
 
-    // 片段内音符预览纵轴: 'pitch' 按音高 / 'track' 按相对轨道位置
+    // 片段内音符预览纵轴: 'pitch' 按音高 / 'track' 按相对轨道位置 / 'physical' 物理音调
     PianoRoll.prototype.setSegmentPreviewMode = function(mode) {
-        this.segmentPreviewMode = (mode === 'pitch') ? 'pitch' : 'track';
+        this.segmentPreviewMode = (mode === 'pitch' || mode === 'physical') ? mode : 'track';
+        this._segKeyDirty = true;
         this._segThumbCache = {};
         this._fullRedrawNeeded = true;
         this.render();
@@ -1310,14 +1378,19 @@
         return a;
     };
 
-    // 行布局 (带签名缓存): rows = [{type:'track',layer} | {type:'lyric',lane}]
-    //   trackRow[layer] = 行号; lyricRow[lane] = 行号
+    // 行布局 (带签名缓存): rows = [{type:'track',layer} | {type:'lyric',lane} | {type:'audio',lane}]
+    //   trackRow[layer] = 行号; lyricRow[lane] = 行号; audioRow[lane] = 行号
+    //   同一 after 桶内顺序: NBS 轨道行 → 歌词行 → 音频行
     PianoRoll.prototype._rowLayout = function() {
         var tc = Math.max(0, this.trackCount | 0);
         var lanes = this.lyricLanes || [];
+        var alanes = this.audioLanes || [];
         var sig = tc + '|';
         for (var s = 0; s < lanes.length; s++) {
             sig += (lanes[s].id || '') + '@' + this._lyricAfterOf(s) + ',';
+        }
+        for (var sa = 0; sa < alanes.length; sa++) {
+            sig += 'A' + (alanes[sa].id || '') + '@' + this._audioAfterOf(sa) + ',';
         }
         if (this._rowLayoutSig === sig && this._rowLayoutCache) return this._rowLayoutCache;
 
@@ -1327,9 +1400,16 @@
             if (!buckets[a]) buckets[a] = [];
             buckets[a].push(i);
         }
+        var abuckets = {};
+        for (var ia = 0; ia < alanes.length; ia++) {
+            var aa = this._audioAfterOf(ia);
+            if (!abuckets[aa]) abuckets[aa] = [];
+            abuckets[aa].push(ia);
+        }
         var rows = [];
         var trackRow = [];
         var lyricRow = [];
+        var audioRow = [];
         var pushBucket = function(k) {
             var arr = buckets[k];
             if (!arr) return;
@@ -1338,13 +1418,23 @@
                 rows.push({ type: 'lyric', lane: arr[j] });
             }
         };
+        var pushAudioBucket = function(k) {
+            var arr = abuckets[k];
+            if (!arr) return;
+            for (var j = 0; j < arr.length; j++) {
+                audioRow[arr[j]] = rows.length;
+                rows.push({ type: 'audio', lane: arr[j] });
+            }
+        };
         pushBucket(-1);
+        pushAudioBucket(-1);
         for (var L = 0; L < tc; L++) {
             trackRow[L] = rows.length;
             rows.push({ type: 'track', layer: L });
             pushBucket(L);
+            pushAudioBucket(L);
         }
-        var layout = { rows: rows, trackRow: trackRow, lyricRow: lyricRow };
+        var layout = { rows: rows, trackRow: trackRow, lyricRow: lyricRow, audioRow: audioRow };
         this._rowLayoutSig = sig;
         this._rowLayoutCache = layout;
         return layout;
@@ -1437,6 +1527,339 @@
         return { top: this._lyricRowScreenY(lane) + pad, h: Math.max(4, cellH - pad * 2) };
     };
 
+    // ============ 音频轨道 (机制同歌词轨道, 行内放音频块) ============
+    // audioLanes: [{ id, name, after, volume, muted }] 由 main 侧注入 (外部数据, 只读快照);
+    // audioClips: [{ id, lane, tick, dur, offsetSec, bufferId, gain, name, missing }] 同为外部快照。
+    // 拖拽期间直接改快照对象的 tick/lane/dur, 松手后经 onAudioClipCommit 交由外部写回 state。
+    PianoRoll.prototype.setAudioLanes = function(lanes) {
+        // 复制成轻量对象: 入参是 state.audioLanes 本体, 直接引用会让变化检测永远失效
+        var list = [];
+        if (Array.isArray(lanes)) {
+            for (var s = 0; s < lanes.length; s++) {
+                var src = lanes[s] || {};
+                list.push({ id: src.id, name: src.name, after: src.after, volume: src.volume, muted: src.muted });
+            }
+        }
+        // 只在真正变化时重绘, 避免每帧同步都触发全量重绘
+        var changed = list.length !== (this.audioLanes ? this.audioLanes.length : 0);
+        if (!changed && this.audioLanes) {
+            for (var i = 0; i < list.length; i++) {
+                var a = list[i] || {}, b = this.audioLanes[i] || {};
+                if (a.id !== b.id || a.name !== b.name || a.after !== b.after
+                    || a.volume !== b.volume || a.muted !== b.muted) { changed = true; break; }
+            }
+        }
+        this.audioLanes = list;
+        this._rowLayoutSig = null;
+        if (changed) {
+            if (this.audioSelectedId != null) {
+                var still = false;
+                for (var j = 0; j < (this.audioClips || []).length; j++) {
+                    if (this.audioClips[j].id === this.audioSelectedId) { still = true; break; }
+                }
+                if (!still) this.audioSelectedId = null;
+            }
+            this._fullRedrawNeeded = true;
+            this.requestRender();
+        }
+    };
+
+    // 音频 buffer 表: { id: { name, buffer, duration } } — 浅存引用, 换表后波形缓存全部失效
+    PianoRoll.prototype.setAudioBuffers = function(map) {
+        this.audioBuffers = map || null;
+        this._audioPeaks = {};
+        this._fullRedrawNeeded = true;
+        this.requestRender();
+    };
+
+    PianoRoll.prototype._audioLaneCount = function() {
+        return (this.audioLanes && this.audioLanes.length) ? this.audioLanes.length : 0;
+    };
+
+    // 某条音频轨道的插入位置 (第几条 NBS 轨道下方, -1 = 最上方), 已按当前轨道数钳制
+    PianoRoll.prototype._audioAfterOf = function(lane) {
+        var tc = Math.max(0, this.trackCount | 0);
+        var src = this.audioLanes ? this.audioLanes[lane] : null;
+        var a = src ? parseInt(src.after, 10) : -1;
+        if (!isFinite(a) || a < -1) a = tc - 1;
+        if (a > tc - 1) a = tc - 1;
+        if (a < -1) a = -1;
+        return a;
+    };
+
+    PianoRoll.prototype._rowIndexOfAudio = function(lane) {
+        var r = this._rowLayout().audioRow[lane];
+        return isFinite(r) ? r : -1;
+    };
+
+    // 音频轨道行的屏幕 y (含动画偏移)
+    PianoRoll.prototype._audioRowScreenY = function(lane) {
+        var row = this._rowIndexOfAudio(lane);
+        if (row < 0) return this._rowY(this._rowCount());
+        return this._rowScreenY(row);
+    };
+
+    // y 命中的音频轨道索引; 不是音频行返回 -1
+    PianoRoll.prototype._audioLaneAtY = function(y) {
+        if (this.segmentsEditMode) return -1;
+        var row = this._rowAt(y);
+        var item = this._rowLayout().rows[row];
+        if (!item || item.type !== 'audio') return -1;
+        return item.lane;
+    };
+
+    // y 最接近的音频轨道索引 (浮动值, 用于拖动音频块时的纵向吸附)
+    PianoRoll.prototype._screenToAudioLaneFloat = function(y) {
+        if (this.segmentsEditMode || this._audioLaneCount() <= 0) return 0;
+        var cellH = this._cfg.cellH * this._zoomY();
+        if (!(cellH > 0)) return 0;
+        var fRow = (y - this._editOriginY() + this.scrollY) / cellH;
+        var layout = this._rowLayout();
+        var bestLane = 0, bestDist = Infinity;
+        for (var i = 0; i < layout.rows.length; i++) {
+            if (layout.rows[i].type !== 'audio') continue;
+            var d = Math.abs((i + 0.5) - fRow);
+            if (d < bestDist) { bestDist = d; bestLane = layout.rows[i].lane; }
+        }
+        return bestLane;
+    };
+
+    // 音频轨道行的纵向显示范围 (与 NBS 轨道行同高; 含动画偏移)
+    PianoRoll.prototype._audioRowRect = function(lane) {
+        var cellH = this._cfg.cellH * this._zoomY();
+        var pad = Math.min(3, cellH * 0.12);
+        return { top: this._audioRowScreenY(lane) + pad, h: Math.max(4, cellH - pad * 2) };
+    };
+
+    // 音频片段的时长 (tick, 恒 >= 1)
+    PianoRoll.prototype._audioClipDuration = function(clip) {
+        var d = (clip && typeof clip.dur === 'number') ? Math.round(clip.dur) : 0;
+        if (!isFinite(d) || d < 1) d = this.DEFAULT_AUDIOCLIP_DURATION || 4;
+        return d;
+    };
+    PianoRoll.prototype._audioClipEndTick = function(clip) {
+        return clip.tick + this._audioClipDuration(clip);
+    };
+
+    // 音频片段的实际时长 (秒): dur 个 tick 按 1 tick = 1000/tempo ms 换算 (与播放步进一致)
+    PianoRoll.prototype._audioClipSeconds = function(clip) {
+        var st = (window.WebNBS && window.WebNBS.state) || {};
+        var tempo = parseFloat(st.tempo);
+        if (!isFinite(tempo) || tempo <= 0) tempo = 20;
+        return this._audioClipDuration(clip) / tempo;
+    };
+
+    PianoRoll.prototype._findAudioById = function(id) {
+        for (var i = 0; i < (this.audioClips || []).length; i++) {
+            if (this.audioClips[i].id === id) return this.audioClips[i];
+        }
+        return null;
+    };
+
+    PianoRoll.prototype._setAudioSelected = function(id) {
+        if (this.audioSelectedId === id) return;
+        this.audioSelectedId = id;
+        this._fullRedrawNeeded = true;
+        this.requestRender();
+    };
+
+    // 命中测试: 返回 { clip, zone, lane } ; zone = 'left' | 'right' | 'move'
+    //   只在音频轨道行内命中; lane 为音频轨道索引
+    PianoRoll.prototype._hitAudioClip = function(x, y) {
+        var lane = this._audioLaneAtY(y);
+        if (lane < 0) return null;
+        var cellH = this._cfg.cellH * this._zoomY();
+        var edge = Math.min(7, cellH / 3);
+        for (var i = (this.audioClips || []).length - 1; i >= 0; i--) {
+            var clip = this.audioClips[i];
+            if ((clip.lane || 0) !== lane) continue;
+            var x0 = this._tickToScreen(clip.tick);
+            var x1 = this._tickToScreen(this._audioClipEndTick(clip));
+            if (x1 - x0 < 2) x1 = x0 + 2;
+            if (x < x0 || x > x1) continue;
+            var zone = 'move';
+            if (x1 - x0 > edge * 2.2) {
+                if (x - x0 <= edge) zone = 'left';
+                else if (x1 - x <= edge) zone = 'right';
+            }
+            return { clip: clip, zone: zone, lane: lane };
+        }
+        return null;
+    };
+
+    // 开始拖拽: 记录原始位置/时长, 直接改快照数据 (松手后由外部提交)
+    PianoRoll.prototype._beginAudioDrag = function(hit, x, y) {
+        var clip = hit.clip;
+        this._audioDrag = {
+            id: clip.id,
+            mode: hit.zone,
+            startX: x,
+            startY: y,
+            origTick: clip.tick,
+            origLane: clip.lane || 0,
+            origDur: this._audioClipDuration(clip),
+            origEnd: this._audioClipEndTick(clip),
+            moved: false,
+            _startNotified: false
+        };
+        this._setAudioSelected(clip.id);
+    };
+
+    // 拖拽计算: move 改 tick/lane (tick 取整吸附); right 改 dur; left 同时改 tick 与 dur (终点保持)
+    PianoRoll.prototype._applyAudioDrag = function(x, y) {
+        var d = this._audioDrag;
+        if (!d) return false;
+        var clip = this._findAudioById(d.id);
+        if (!clip) { this._audioDrag = null; return false; }
+        var cellW = this._cfg.cellW * this._zoomX();
+        if (!(cellW > 0)) return false;
+        var dispTick = Math.round((x - d.startX) / cellW);
+
+        if (d.mode === 'move') {
+            var pointerTick = this._screenToTickFloat(x);
+            var grabTickOffset = this._screenToTickFloat(d.startX) - d.origTick;
+            var tTick = Math.max(0, Math.round(pointerTick - grabTickOffset));
+            var laneMax = Math.max(0, this._audioLaneCount() - 1);
+            var grabLaneOffset = this._screenToAudioLaneFloat(d.startY) - d.origLane;
+            var tLane = Math.max(0, Math.min(laneMax, Math.round(this._screenToAudioLaneFloat(y) - grabLaneOffset)));
+            clip.tick = tTick;
+            clip.lane = tLane;
+            d.moved = d.moved || (tTick !== d.origTick) || (tLane !== d.origLane);
+        } else if (d.mode === 'right') {
+            var newDur = Math.max(1, d.origDur + dispTick);
+            clip.dur = newDur;
+            d.moved = d.moved || (newDur !== d.origDur);
+        } else if (d.mode === 'left') {
+            // 起点移动, 终点保持不变 (origEnd), dur 恒 >= 1
+            var newTick = Math.max(0, d.origTick + dispTick);
+            if (newTick > d.origEnd - 1) newTick = d.origEnd - 1;
+            var newDur2 = d.origEnd - newTick;
+            clip.tick = newTick;
+            clip.dur = newDur2;
+            d.moved = d.moved || (newTick !== d.origTick) || (newDur2 !== d.origDur);
+        }
+
+        // 首次移动意图: 通知外部 (pushUndo 等副作用)
+        if (d.moved && !d._startNotified) {
+            d._startNotified = true;
+            if (this.onAudioClipDragStart) this.onAudioClipDragStart();
+        }
+        this._fullRedrawNeeded = true;
+        this.requestRender();
+        return true;
+    };
+
+    // 结束拖拽: 快照数据已改, 交由外部写回 state
+    PianoRoll.prototype._endAudioDrag = function() {
+        var d = this._audioDrag;
+        this._audioDrag = null;
+        if (!d) return;
+        if (d.moved && this.onAudioClipCommit) {
+            this.onAudioClipCommit(d.id, d.origTick, d.origLane, d.mode);
+        }
+    };
+
+    // 触摸端: 长按音频块 → 右键菜单 (与桌面右键等价)
+    PianoRoll.prototype._startAudioClipLongPress = function(clipId, clientX, clientY) {
+        var self = this;
+        this._cancelAudioLongPress();
+        this._audioLongPressTimer = setTimeout(function() {
+            self._audioLongPressTimer = null;
+            self._touchMoved = true;        // 阻止 touchend 再走「轻点选中」
+            self._touchMode = 'none';
+            self._audioDrag = null;
+            self._setAudioSelected(clipId);
+            if (self.onAudioClipContextMenu) self.onAudioClipContextMenu(clipId, clientX, clientY);
+        }, 550);
+    };
+
+    PianoRoll.prototype._cancelAudioLongPress = function() {
+        if (this._audioLongPressTimer) {
+            clearTimeout(this._audioLongPressTimer);
+            this._audioLongPressTimer = null;
+        }
+    };
+
+    // 波形峰值缓存 (key = clip.id): 取 buffer 通道数据, 按 offsetSec + dur 秒窗口聚合 ~60 根 min/max 柱
+    //   计算失败 (无 buffer / 异常) 静默降级返回 null
+    PianoRoll.prototype._computeAudioPeaks = function(clip) {
+        try {
+            var entry = this.audioBuffers ? this.audioBuffers[clip.bufferId] : null;
+            var buffer = entry && entry.buffer;
+            if (!buffer || !buffer.getChannelData || !(buffer.length > 0)) return null;
+            var durSec = this._audioClipSeconds(clip);
+            if (!(durSec > 0)) return null;
+            var sr = buffer.sampleRate || 44100;
+            // 采样区间严格按 clip 的 offsetSec 与 dur (tick → 秒) 换算, 并 clamp 到 buffer 范围
+            var offsetSec = (typeof clip.offsetSec === 'number' && isFinite(clip.offsetSec)) ? clip.offsetSec : 0;
+            var startS = Math.floor(offsetSec * sr);
+            var endS = Math.floor((offsetSec + durSec) * sr);
+            if (startS < 0) startS = 0;
+            if (startS > buffer.length - 2) return null;
+            if (endS > buffer.length) endS = buffer.length;
+            if (endS - startS < 2) return null;
+            var data = buffer.getChannelData(0);
+            var bars = 60;
+            var step = (endS - startS) / bars;
+            // 抽样聚合: 每根柱最多采样 160 个点。
+            // 若逐样本扫描, 几分钟的音频会有上千万次比较, 播放开始首次绘制波形时
+            // 会阻塞主线程数百毫秒 (用户感知为「开头卡」)。抽样后成本与音频长度无关。
+            var SAMPLES_PER_BAR = 160;
+            var peaks = [];
+            for (var b = 0; b < bars; b++) {
+                var s0 = startS + Math.floor(b * step);
+                var s1 = startS + Math.floor((b + 1) * step);
+                if (s1 <= s0) s1 = s0 + 1;
+                if (s1 > endS) s1 = endS;
+                var span = s1 - s0;
+                var stride = Math.max(1, Math.floor(span / SAMPLES_PER_BAR));
+                var mn = 1, mx = -1;
+                for (var si = s0; si < s1; si += stride) {
+                    var v = data[si];
+                    if (v < mn) mn = v;
+                    if (v > mx) mx = v;
+                }
+                // 补采本柱最后一个样本, 避免峰值恰好落在步长间隙
+                if (s1 - 1 >= s0) {
+                    var lv = data[s1 - 1];
+                    if (lv < mn) mn = lv;
+                    if (lv > mx) mx = lv;
+                }
+                if (mn > mx) { mn = 0; mx = 0; }
+                peaks.push({ min: mn, max: mx });
+            }
+            return peaks;
+        } catch (e) {
+            return null;
+        }
+    };
+
+    // 取波形缓存 (带签名防陈旧; 计算失败缓存 null 避免每帧重试)
+    //   签名必须包含 clip.id + bufferId + offsetSec + dur: 裁剪/分割后 offset/dur 变化立即重算
+    PianoRoll.prototype._getAudioPeaks = function(clip) {
+        var sig = (clip.id || '') + '@' + (clip.bufferId || '') + '@'
+            + (clip.offsetSec || 0) + '@' + this._audioClipDuration(clip);
+        var entry = this._audioPeaks[clip.id];
+        if (entry && entry.sig === sig) return entry.peaks;
+        // 播放中不在渲染帧内同步扫描 PCM: 先跳过波形, 空闲时计算完再重绘
+        var playing = !!(window.WebNBS && window.WebNBS.state && window.WebNBS.state.isPlaying);
+        if (playing) {
+            this._audioPeaks[clip.id] = { sig: sig, peaks: null };
+            var self = this;
+            setTimeout(function() {
+                var e2 = self._audioPeaks[clip.id];
+                if (!e2 || e2.sig !== sig) return;
+                e2.peaks = self._computeAudioPeaks(clip);
+                self._fullRedrawNeeded = true;
+                if (self.requestRender) self.requestRender(); else self.render();
+            }, 0);
+            return null;
+        }
+        var peaks = this._computeAudioPeaks(clip);
+        this._audioPeaks[clip.id] = { sig: sig, peaks: peaks };
+        return peaks;
+    };
+
     // ============ 片段编辑模式 (剪映/AE 风格的整曲片段剪辑) ============
     PianoRoll.prototype.setSegmentsEditMode = function(on) {
         on = !!on;
@@ -1473,6 +1896,8 @@
             this.setTimelinePosition(segPos);
         } else {
             this._segDrag = null;
+            this._segLyricDrag = null;
+            this._segLyricSelectedId = null;
             this._segHover = null;
             this.segmentSelectedIds = [];
             this.segmentSelectedId = null;
@@ -1528,7 +1953,8 @@
             }
             if (y < self.getSegmentAreaTop()) return;
             var hit = self._segHitTest(x, y);
-            if (!hit) return;
+            // 歌词块右键: 不当作片段处理 (交给歌词自己的编辑入口)
+            if (!hit || !hit.seg) return;
             var ids = self.segmentSelectedIds || [];
             if (ids.indexOf(hit.seg.id) < 0) {
                 self.segmentSelectedIds = [hit.seg.id];
@@ -1548,7 +1974,12 @@
             var x = ev.clientX - rect.left;
             var y = ev.clientY - rect.top;
             var hit = self._segHitTest(x, y);
-            if (hit && typeof self.onSegmentOpen === 'function') self.onSegmentOpen(hit.seg);
+            if (hit && hit.type === 'seg-lyric') {
+                // 双击歌词块: 进入文本编辑 (与 NBS 模式一致)
+                self._segOpenLyricEditor(hit.clip.id, ev.clientX, ev.clientY);
+                return;
+            }
+            if (hit && hit.seg && typeof self.onSegmentOpen === 'function') self.onSegmentOpen(hit.seg);
         });
     };
 
@@ -1648,7 +2079,7 @@
         return list;
     };
 
-    // 命中测试: 返回 { seg, zone:'left'|'right'|'body' }
+    // 命中测试: 返回 { seg, zone:'left'|'right'|'body' } 或 { type:'seg-lyric', clip, zone }
     // 按绘制顺序反向遍历 (从最上层开始), 同轨重叠时优先命中后绘制的片段
     PianoRoll.prototype._segHitTest = function(x, y) {
         if (y < this.getSegmentAreaTop()) return null;
@@ -1660,6 +2091,12 @@
         var lt = this.getSegmentLaneTop(lane);
         var lh = lanes[lane].height;
         if (y < lt + 4 || y > lt + lh - 4) return null;
+        // 歌词特殊轨道: 允许命中/编辑歌词块 (音频特殊轨道保持只读)
+        var sp = lanes[lane].special;
+        if (sp && sp.kind === 'lyric') {
+            return this._segHitLyricClip(x, sp);
+        }
+        if (sp && sp.kind === 'audio') return null;
         var list = this._segRenderOrder();
         var edge = 7;
         for (var i = list.length - 1; i >= 0; i--) {
@@ -1671,9 +2108,157 @@
             var zone = 'body';
             if (x <= x0 + edge) zone = 'left';
             else if (x >= x1 - edge) zone = 'right';
-            return { seg: s, zone: zone, x0: x0, x1: x1 };
+            return { type: 'seg', seg: s, zone: zone, x0: x0, x1: x1 };
         }
         return null;
+    };
+
+    // 歌词特殊轨道命中: 用 _tickToScreen 与歌词轨道索引反查 state.lyrics 中的块
+    PianoRoll.prototype._segHitLyricClip = function(x, sp) {
+        var st = (window.WebNBS && window.WebNBS.state) || null;
+        if (!st) return null;
+        var srcLanes = st.lyricLanes || [];
+        var laneIndex = -1;
+        for (var i = 0; i < srcLanes.length; i++) {
+            if (srcLanes[i] && srcLanes[i].id === sp.laneId) { laneIndex = i; break; }
+        }
+        if (laneIndex < 0) return null;
+        var cellWpx = this._cfg.cellW * this._zoomX();
+        var edge = 6;
+        var lyrics = st.lyrics || [];
+        for (var j = lyrics.length - 1; j >= 0; j--) {
+            var c = lyrics[j];
+            if (!c || (c.lane || 0) !== laneIndex) continue;
+            var dur = (typeof c.duration === 'number' && isFinite(c.duration) && c.duration >= 1)
+                ? Math.round(c.duration) : 4;
+            var x0 = this._tickToScreen(c.tick);
+            var x1 = x0 + Math.max(3, cellWpx * dur);
+            if (x < x0 - 2 || x > x1 + 2) continue;
+            var zone = 'move';
+            if (x1 - x0 > edge * 2.2) {
+                if (x - x0 <= edge) zone = 'left';
+                else if (x1 - x <= edge) zone = 'right';
+            }
+            return { type: 'seg-lyric', clip: c, zone: zone, x0: x0, x1: x1 };
+        }
+        return null;
+    };
+
+    // 片段模式歌词拖动: 按下时记录原始位置/时长, 拖动期间直接改 state.lyrics 实时预览
+    PianoRoll.prototype._segBeginLyricDrag = function(hit, x, y) {
+        var clip = hit.clip;
+        var dur = (typeof clip.duration === 'number' && isFinite(clip.duration) && clip.duration >= 1)
+            ? Math.round(clip.duration) : 4;
+        this._segLyricDrag = {
+            id: clip.id,
+            mode: hit.zone,
+            startX: x,
+            startY: y,
+            origTick: clip.tick,
+            origLane: clip.lane || 0,
+            origDuration: dur,
+            origEnd: clip.tick + dur,
+            anchorOffset: this._screenToTickFloat(x) - clip.tick,
+            moved: false,
+            undoPushed: false
+        };
+        this._segLyricSelectedId = clip.id;
+        this._segHover = null;
+    };
+
+    PianoRoll.prototype._segFindLyricById = function(id) {
+        var st = (window.WebNBS && window.WebNBS.state) || null;
+        var lyrics = (st && st.lyrics) || [];
+        for (var i = 0; i < lyrics.length; i++) {
+            if (lyrics[i] && lyrics[i].id === id) return lyrics[i];
+        }
+        return null;
+    };
+
+    PianoRoll.prototype._segApplyLyricDrag = function(x, y) {
+        var d = this._segLyricDrag;
+        if (!d) return false;
+        var clip = this._segFindLyricById(d.id);
+        if (!clip) return false;
+        if (!d.moved) {
+            if (Math.abs(x - d.startX) < 2 && Math.abs(y - d.startY) < 2) return false;
+            d.moved = true;
+        }
+        // snap 到整数 tick
+        var tickNow = Math.round(this._screenToTickFloat(x));
+        var newTick = clip.tick;
+        var newDur = d.origDuration;
+        if (d.mode === 'move') {
+            newTick = Math.max(0, Math.round(this._screenToTickFloat(x) - d.anchorOffset));
+        } else if (d.mode === 'right') {
+            newDur = Math.max(1, tickNow - d.origTick);
+        } else if (d.mode === 'left') {
+            var ns = Math.max(0, Math.min(d.origEnd - 1, tickNow));
+            newTick = ns;
+            newDur = d.origEnd - ns;
+        }
+        if (newTick === clip.tick && newDur === (clip.duration || d.origDuration)) {
+            this.canvas.style.cursor = (d.mode === 'move') ? 'grabbing' : 'ew-resize';
+            return false;
+        }
+        // 首次真正改动前记录撤销点 (此时 state 尚未被修改)
+        if (!d.undoPushed) {
+            d.undoPushed = true;
+            if (typeof this.onLyricClipDragStart === 'function') this.onLyricClipDragStart();
+            else if (window.WebNBS && window.WebNBS.pushUndo) window.WebNBS.pushUndo();
+        }
+        // 实时预览: 直接写回 state.lyrics 中的对象
+        clip.tick = newTick;
+        clip.duration = newDur;
+        this.canvas.style.cursor = (d.mode === 'move') ? 'grabbing' : 'ew-resize';
+        this._fullRedrawNeeded = true;
+        this.requestRender();
+        return true;
+    };
+
+    PianoRoll.prototype._segEndLyricDrag = function() {
+        var d = this._segLyricDrag;
+        this._segLyricDrag = null;
+        this.canvas.style.cursor = 'default';
+        if (!d) return;
+        if (!d.moved || !d.undoPushed) {
+            this._fullRedrawNeeded = true;
+            this.requestRender();
+            return;
+        }
+        var N = window.WebNBS;
+        if (N && typeof N.commitLyricClipDrag === 'function') {
+            // 复用主侧提交: 重建索引 + 同步卷帘 + markDirty
+            N.commitLyricClipDrag(d.id, d.origTick, d.origLane, d.mode);
+        } else if (N) {
+            if (typeof N.syncLyricsToRoll === 'function') N.syncLyricsToRoll();
+            if (typeof N.markDirty === 'function') N.markDirty();
+        }
+        this._fullRedrawNeeded = true;
+        this.requestRender();
+    };
+
+    // 片段模式双击歌词块: 打开与 NBS 一致的歌词文本编辑弹窗
+    PianoRoll.prototype._segOpenLyricEditor = function(clipId, clientX, clientY) {
+        var N = window.WebNBS;
+        if (N && typeof N.showLyricEditorPop === 'function') {
+            N.showLyricEditorPop(clipId, clientX, clientY);
+            return;
+        }
+        var clip = this._segFindLyricById(clipId);
+        if (!clip || !N || typeof N.showAppPrompt !== 'function') return;
+        var self = this;
+        N.showAppPrompt('歌词', clip.text || '', { title: '歌词' }).then(function(val) {
+            if (val === null || val === undefined) return;
+            var v = String(val).trim();
+            if (!v) return;
+            if (N.pushUndo) N.pushUndo();
+            clip.text = v;
+            if (typeof N.syncLyricsToRoll === 'function') N.syncLyricsToRoll();
+            if (typeof N.markDirty === 'function') N.markDirty();
+            self._fullRedrawNeeded = true;
+            self.requestRender();
+        });
     };
 
     PianoRoll.prototype._segSnapTick = function(tick, segId) {
@@ -1770,7 +2355,9 @@
         var avail = Math.max(2, devH - padY * 2);
         var bh = Math.max(1, Math.min(3 * s, avail * 0.10));
         // 轨道模式: 按片段内相对轨道位置分布 (轨道号小的显示在上方)
-        var useTrack = (this.segmentPreviewMode !== 'pitch');
+        // pitch / physical 模式: 纵向按音高 (physical 为「音色基音 + key」的物理音调)
+        var useTrack = (this.segmentPreviewMode === 'track');
+        var usePhysical = (this.segmentPreviewMode === 'physical');
         var minL = Infinity, maxL = -Infinity;
         if (useTrack) {
             for (var lk = 0; lk < arr.length; lk++) {
@@ -1797,7 +2384,7 @@
                 var nl = isFinite(n.layer) ? n.layer : 0;
                 ry = padY + ((nl - minL) / spanL) * (avail - bh);
             } else {
-                var key = isFinite(n.key) ? n.key : minK;
+                var key = usePhysical ? segPhysicalPitch(n) : (isFinite(n.key) ? n.key : minK);
                 ry = padY + (1 - (key - minK) / spanK) * (avail - bh);
             }
             // 落点全部取整: 相邻音符边界严丝合缝, 不产生半透明抗锯齿像素
@@ -1822,12 +2409,13 @@
         var pw = this.getSegmentPanelWidth();
         var self = this;
 
-        // 音高范围 (全曲固定映射)
+        // 音高范围 (全曲固定映射; physical 模式按音色基音偏移后的物理音调计算)
         if (this._segKeyMin === undefined || this._segKeyDirty) {
             var mn = 999, mx = -1;
             var nl = this.notes || [];
+            var usePhysicalKeys = (this.segmentPreviewMode === 'physical');
             for (var q = 0; q < nl.length; q++) {
-                var k = nl[q].key;
+                var k = usePhysicalKeys ? segPhysicalPitch(nl[q]) : nl[q].key;
                 if (!isFinite(k)) continue;
                 if (k < mn) mn = k;
                 if (k > mx) mx = k;
@@ -1899,6 +2487,9 @@
             }, selIds, lanes, true);
         }
 
+        // 特殊轨道只读块 (歌词/音频同步行): 每帧从 state 实时读取, 不缓存
+        this._segDrawSpecialLanes(ctx, lanes, pw, areaTop, bottomLimit);
+
         // 框选矩形
         if (this._segMarquee) {
             var m = this._segMarquee;
@@ -1960,15 +2551,18 @@
             this._segRoundRect(ctx, x0 + 1, top + 2, 3, Math.max(2, hh - 4), 2);
             ctx.fill();
         }
-        // 名称 + 时长: 极窄片段不显示; 放不下时截断并加省略号
+        // 名称 + 时长: 极窄片段不显示; 标签跟随视口裁剪 (块被裁掉时贴住可见区边缘)
         if (hh >= 34) {
-            var blockW = x1 - x0;
             var padX = 4;
-            var labelMaxW = blockW - padX * 2 - 6;   // 留出左右内边距
+            var clipLeft = this.getSegmentPanelWidth() + 2;
+            var clipRight = this.displayWidth - 2;
+            var textLeft = Math.max(x0 + 2 + padX, clipLeft);
+            var textRight = Math.min(x1 - 2, clipRight);
+            var labelMaxW = textRight - textLeft - padX;
             if (labelMaxW >= 8) {
                 ctx.save();
                 ctx.beginPath();
-                ctx.rect(x0 + 2, top, Math.max(0, blockW - 4), hh);
+                ctx.rect(textLeft - padX, top, Math.max(0, textRight - (textLeft - padX)), hh);
                 ctx.clip();
 
                 ctx.font = '11px "Segoe UI", sans-serif';
@@ -1991,10 +2585,10 @@
                 // 背景宽度严格贴合文字 (左右各 padX)
                 var tw = ctx.measureText(label).width + padX * 2;
                 ctx.fillStyle = SEG_THEME.chip;
-                this._segRoundRect(ctx, x0 + 2, top + 4, tw, 15, 4);
+                this._segRoundRect(ctx, textLeft - padX, top + 4, tw, 15, 4);
                 ctx.fill();
                 ctx.fillStyle = SEG_THEME.text;
-                ctx.fillText(label, x0 + 2 + padX, top + 12);
+                ctx.fillText(label, textLeft, top + 12);
                 ctx.restore();
             }
         }
@@ -2005,6 +2599,177 @@
             ctx.fillRect(x1 - 5, top + 3, 3, hh - 6);
         }
         ctx.restore();
+    };
+
+    // ============ 片段编辑器: 特殊轨道渲染 (歌词可编辑 / 音频只读) ============
+    // lane.special = { kind:'lyric'|'audio', laneId } 由外部 03-segment-model.js 注入;
+    // 每帧从 window.WebNBS.state 实时读取: 歌词块支持拖动/改长度/双击编辑, 音频块保持只读。
+    PianoRoll.prototype._segDrawSpecialLanes = function(ctx, lanes, pw, areaTop, bottomLimit) {
+        var st = (window.WebNBS && window.WebNBS.state) || null;
+        for (var i = 0; i < lanes.length; i++) {
+            var lane = lanes[i];
+            var sp = lane && lane.special;
+            if (!sp || (sp.kind !== 'lyric' && sp.kind !== 'audio')) continue;
+            var lt = this.getSegmentLaneTop(i);
+            var lh = lane.height;
+            if (lt + lh < areaTop || lt > bottomLimit) continue;
+            var w = this.displayWidth;
+            var top = lt + 5;
+            var hh = lh - 10;
+
+            // 行背景稍暗 (特殊轨道视觉区分)
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+            ctx.fillRect(pw, lt, Math.max(0, w - pw), Math.min(lh, Math.max(0, bottomLimit - lt)));
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(pw, areaTop, Math.max(0, w - pw), Math.max(0, bottomLimit - areaTop));
+            ctx.clip();
+
+            var cellWpx = this._cfg.cellW * this._zoomX();
+            var isAudioKind = (sp.kind === 'audio');
+            // 文本可见区 (跟随视口裁剪): 左界 = 侧栏右边, 右界 = 画布右边
+            var textClipLeft = pw + 2;
+            var textClipRight = w - 2;
+
+            // special.laneId 是轨道 id (如 'al1'/'ll1'), 而 clip.lane 是索引 → 先反查索引
+            var srcLanes = isAudioKind
+                ? ((st && st.audioLanes) || [])
+                : ((st && st.lyricLanes) || []);
+            var specialLaneIndex = -1;
+            for (var sli = 0; sli < srcLanes.length; sli++) {
+                if (srcLanes[sli] && srcLanes[sli].id === sp.laneId) { specialLaneIndex = sli; break; }
+            }
+            if (specialLaneIndex < 0) {
+                ctx.restore();
+                continue;
+            }
+
+            if (isAudioKind) {
+                // 音频同步行: 中性青灰只读块 + 简化波形示意 + 名称 (与 NBS 音频块同色系)
+                var aclips = (st && st.audioClips) || [];
+                for (var ac = 0; ac < aclips.length; ac++) {
+                    var c = aclips[ac];
+                    if ((c.lane || 0) !== specialLaneIndex) continue;
+                    var dur = (typeof c.dur === 'number' && isFinite(c.dur) && c.dur >= 1) ? Math.round(c.dur) : 4;
+                    var x0 = this._tickToScreen(c.tick);
+                    var bw = Math.max(3, cellWpx * dur);
+                    var x1 = x0 + bw;
+                    if (x1 < pw || x0 > w) continue;
+                    if (hh < 4) continue;
+                    var missing = !!c.missing;
+                    ctx.save();
+                    ctx.fillStyle = missing ? 'rgba(86,122,132,0.35)' : 'rgba(86,122,132,0.78)';
+                    this._segRoundRect(ctx, x0, top, bw, hh, 4);
+                    ctx.fill();
+                    ctx.strokeStyle = 'rgba(140,180,190,0.45)';
+                    ctx.lineWidth = 1;
+                    this._segRoundRect(ctx, x0 + 0.5, top + 0.5, Math.max(2, bw - 1), hh - 1, 4);
+                    ctx.stroke();
+                    if (missing && ctx.setLineDash) {
+                        ctx.setLineDash([4, 3]);
+                        ctx.strokeStyle = 'rgba(236,246,248,0.65)';
+                        ctx.lineWidth = 1;
+                        this._segRoundRect(ctx, x0 + 1, top + 1, Math.max(2, bw - 2), hh - 2, 4);
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+                    }
+                    // 简化波形示意: 等距竖线 (不做真实峰值聚合)
+                    if (bw > 14 && hh > 8) {
+                        ctx.fillStyle = 'rgba(255,255,255,0.32)';
+                        var bars = Math.max(3, Math.min(16, Math.floor(bw / 6)));
+                        for (var bi = 0; bi < bars; bi++) {
+                            var bx = x0 + 4 + ((bw - 8) * bi) / bars;
+                            var bh2 = hh * (0.25 + 0.45 * ((bi * 7 + 3) % 10) / 10);
+                            ctx.fillRect(bx, top + (hh - bh2) / 2, 1.5, bh2);
+                        }
+                    }
+                    // 名称 (跟随视口裁剪 + 超宽省略)
+                    var aLabel = missing
+                        ? ((window.WebNBSI18n && WebNBSI18n.translate) ? WebNBSI18n.translate('缺失音频') : '缺失音频')
+                        : String(c.name || '');
+                    var aTextLeft = Math.max(x0 + 5, textClipLeft);
+                    var aTextRight = Math.min(x1, textClipRight);
+                    var aVisibleW = aTextRight - aTextLeft;
+                    if (aVisibleW > 18 && aLabel) {
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.rect(aTextLeft, top, aVisibleW, hh);
+                        ctx.clip();
+                        ctx.font = '10px "Segoe UI", sans-serif';
+                        ctx.textAlign = 'left';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillStyle = 'rgba(236,246,248,0.92)';
+                        var aMaxW = aVisibleW - 2;
+                        var aDrawn = aLabel;
+                        if (ctx.measureText(aDrawn).width > aMaxW) {
+                            while (aDrawn.length > 1 && ctx.measureText(aDrawn + '…').width > aMaxW) aDrawn = aDrawn.slice(0, -1);
+                            aDrawn += '…';
+                        }
+                        ctx.fillText(aDrawn, aTextLeft, top + hh / 2);
+                        ctx.restore();
+                    }
+                    ctx.restore();
+                }
+            } else {
+                // 歌词同步行: 米黄可编辑块 (数据源 state.lyrics, 支持拖动/改长度/双击编辑)
+                var lyrics = (st && st.lyrics) || [];
+                for (var lc = 0; lc < lyrics.length; lc++) {
+                    var L = lyrics[lc];
+                    if ((L.lane || 0) !== specialLaneIndex) continue;
+                    var lDur = (typeof L.duration === 'number' && isFinite(L.duration) && L.duration >= 1) ? Math.round(L.duration) : 4;
+                    var lx0 = this._tickToScreen(L.tick);
+                    var lw = Math.max(3, cellWpx * lDur);
+                    var lx1 = lx0 + lw;
+                    if (lx1 < pw || lx0 > w) continue;
+                    if (hh < 4) continue;
+                    var lSelected = (this._segLyricSelectedId === L.id)
+                        || (this._segLyricDrag && this._segLyricDrag.id === L.id);
+                    ctx.fillStyle = 'rgba(222, 196, 143, 0.72)';   // 米黄
+                    this._segRoundRect(ctx, lx0, top, lw, hh, 4);
+                    ctx.fill();
+                    // 选中: 亮色内描边 (简单高亮, 不改变填充)
+                    ctx.strokeStyle = lSelected ? 'rgba(255,255,255,0.95)' : 'rgba(0,0,0,0.3)';
+                    ctx.lineWidth = lSelected ? 1.5 : 1;
+                    this._segRoundRect(ctx, lx0 + 0.5, top + 0.5, Math.max(2, lw - 1), hh - 1, 4);
+                    ctx.stroke();
+                    // 文本 (跟随视口裁剪 + 超宽省略)
+                    var lLabel = String(L.text || '');
+                    var lTextLeft = Math.max(lx0 + 5, textClipLeft);
+                    var lTextRight = Math.min(lx1, textClipRight);
+                    var lVisibleW = lTextRight - lTextLeft;
+                    if (lVisibleW > 18 && lLabel) {
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.rect(lTextLeft, top, lVisibleW, hh);
+                        ctx.clip();
+                        ctx.font = '10px "Segoe UI", sans-serif';
+                        ctx.textAlign = 'left';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillStyle = '#3a2f1d';
+                        var lMaxW = lVisibleW - 2;
+                        var lDrawn = lLabel;
+                        if (ctx.measureText(lDrawn).width > lMaxW) {
+                            while (lDrawn.length > 1 && ctx.measureText(lDrawn + '…').width > lMaxW) lDrawn = lDrawn.slice(0, -1);
+                            lDrawn += '…';
+                        }
+                        ctx.fillText(lDrawn, lTextLeft, top + hh / 2);
+                        ctx.restore();
+                    }
+                }
+            }
+
+            // 「同步」角标 (右上角, 青蓝色小字)
+            var syncLabel = (window.WebNBSI18n && WebNBSI18n.translate) ? WebNBSI18n.translate('同步') : '同步';
+            ctx.font = 'bold 9px "Segoe UI", sans-serif';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'top';
+            ctx.fillStyle = 'rgba(109, 200, 220, 0.85)';
+            ctx.fillText(syncLabel, w - 6, lt + 3);
+            ctx.restore();
+        }
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
     };
 
     // 触屏长按片段 (约 450ms): 打开全屏钢琴卷帘; 移动超过 10px 取消
@@ -2080,7 +2845,18 @@
         this._segDown = { x: x, y: y, button: e.button };
         var hit = this._segHitTest(x, y);
         var multi = e.ctrlKey || e.metaKey || e.shiftKey;
-        if (hit) {
+        if (hit && hit.type === 'seg-lyric') {
+            // 歌词块: 单独一套拖动状态机, 不触发片段拖动/空白平移
+            this._segDrag = null;
+            this._segMarquee = null;
+            this._segSeekDrag = false;
+            this._segBeginLyricDrag(hit, x, y);
+            this._fullRedrawNeeded = true;
+            this.requestRender();
+            e.preventDefault();
+            return;
+        }
+        if (hit && hit.seg) {
             var ids = (this.segmentSelectedIds || []).slice();
             if (multi) {
                 var idx = ids.indexOf(hit.seg.id);
@@ -2102,8 +2878,10 @@
             this._segMarquee = null;
             if (typeof this.onSegmentSelectionChange === 'function') this.onSegmentSelectionChange();
         } else {
-            // 空白处: 不改变片段选择
+            // 空白处: 不改变片段选择; 歌词块拖动/高亮一并清理
             this._segDrag = null;
+            this._segLyricDrag = null;
+            this._segLyricSelectedId = null;
             if (e.shiftKey) {
                 // Shift + 拖拽空白 = 框选 (保留原有框选能力)
                 this._segMarquee = {
@@ -2176,12 +2954,21 @@
             this._updateEdgeAutoScroll(x, y, false);
             return;
         }
+        // 歌词块拖动: 实时预览移动/改长度
+        if (this._segLyricDrag) {
+            this._segApplyLyricDrag(x, y);
+            return;
+        }
         var d = this._segDrag;
         if (!d) {
-            // 悬停光标
+            // 悬停光标 (含歌词块: 左右边缘改长度 / 中间移动)
             var hov = this._segHitTest(x, y);
             var cur = 'default';
-            if (hov) cur = (hov.zone === 'left' || hov.zone === 'right') ? 'ew-resize' : 'grab';
+            if (hov && hov.type === 'seg-lyric') {
+                cur = (hov.zone === 'left' || hov.zone === 'right') ? 'ew-resize' : 'move';
+            } else if (hov) {
+                cur = (hov.zone === 'left' || hov.zone === 'right') ? 'ew-resize' : 'grab';
+            }
             if (this.canvas.style.cursor !== cur) this.canvas.style.cursor = cur;
             return;
         }
@@ -2242,6 +3029,9 @@
             this._segSeekDrag = false;
         } else if (this._segMarquee) {
             this._segMarquee = null;
+        } else if (this._segLyricDrag) {
+            // 歌词块拖动收口: 提交 + pushUndo/同步/markDirty
+            this._segEndLyricDrag();
         } else if (this._segDrag) {
             var d = this._segDrag;
             if (d.moved && typeof this.onSegmentCommit === 'function') {
@@ -3297,18 +4087,20 @@
     };
 
     // 拖动中统一处理 (桌面鼠标 + 触屏共用): 更新落点行 + 跟手/让位偏移动画
-    //   _trackDragKind: 'track' 在 NBS 轨道行内排序; 'lyric' 可落到任意行 (据此换算插入位置)
+    //   _trackDragKind: 'track' 在 NBS 轨道行内排序; 'lyric'/'audio' 可落到任意行 (据此换算插入位置)
     PianoRoll.prototype._updateTrackDrag = function(screenYAbsolute) {
         if (!this._isDraggingTrack || this._draggedTrackLayer < 0) return;
         var cellH = this._cfg.cellH * this._zoomY();
         var dragged = this._draggedTrackLayer;   // 行号
         var isLyric = (this._trackDragKind === 'lyric');
+        var isAudio = (this._trackDragKind === 'audio');
+        var kindType = isLyric ? 'lyric' : (isAudio ? 'audio' : 'track');
         var layout = this._rowLayout();
         var lastRow = this._rowCount() - 1;
-        // 可落点行区间
+        // 可落点行区间 (歌词/音频行可落到任意行, NBS 轨道只在轨道行内排序)
         var rangeFrom = 0;
         var rangeTo = lastRow;
-        if (!isLyric) {
+        if (!isLyric && !isAudio) {
             rangeTo = (this.trackCount > 0) ? this._rowIndexOfTrack(this.trackCount - 1) : -1;
         }
         if (rangeTo < rangeFrom) return;
@@ -3316,8 +4108,8 @@
         if (!isFinite(target)) target = rangeFrom;
         if (target < rangeFrom) target = rangeFrom;
         if (target > rangeTo) target = rangeTo;
-        // NBS 轨道排序时, 落在歌词行的落点吸附到最近的 NBS 轨道行
-        if (!isLyric) {
+        // NBS 轨道排序时, 落在歌词/音频行的落点吸附到最近的 NBS 轨道行
+        if (!isLyric && !isAudio) {
             var up = target, down = target, found = -1;
             while (up >= rangeFrom || down <= rangeTo) {
                 var ru = (up >= rangeFrom) ? layout.rows[up] : null;
@@ -3340,7 +4132,7 @@
             if (row === dragged) continue;
             var item = layout.rows[row];
             if (!item) continue;
-            if (isLyric ? item.type !== 'lyric' : item.type !== 'track') continue;
+            if (item.type !== kindType) continue;
             if (off[row] === undefined) off[row] = 0;
             if (target > dragged && row > dragged && row <= target) {
                 tgt[row] = -cellH;
@@ -3399,6 +4191,19 @@
                 }
                 if (this.onReorderLyricLane && fromLane >= 0) {
                     this.onReorderLyricLane(fromLane, after);
+                }
+            } else if (pending.kind === 'audio') {
+                // 音频轨道: 行号 → 插入位置 after (与歌词轨道同一套换算)
+                var aFromLane = this._rowLayout().rows[pending.from]
+                    ? this._rowLayout().rows[pending.from].lane : -1;
+                var aAfter = -1;
+                var aLayout = this._rowLayout();
+                var aLimit = Math.min(pending.to, aLayout.rows.length - 1);
+                for (var ar = 0; ar <= aLimit; ar++) {
+                    if (aLayout.rows[ar] && aLayout.rows[ar].type === 'track') aAfter++;
+                }
+                if (this.onReorderAudioLane && aFromLane >= 0) {
+                    this.onReorderAudioLane(aFromLane, aAfter);
                 }
             } else if (this.onReorderTrack) {
                 var fromLayer = this._rowLayout().rows[pending.from]
@@ -3588,15 +4393,12 @@
 
     // 处理音轨面板点击命中 (鼠标/触摸共用)
     PianoRoll.prototype._handleTrackPanelHit = function(hit, e) {
-        if (hit.type === 'addtrack') {
-            if (this.onAddTrack) this.onAddTrack();
+        if (hit.type === 'addentry') {
+            // 「添加」按钮: 弹出轨道类型菜单 (NBS 音轨 / 歌词轨道 / 音频轨道)
+            if (this.onAddTrackMenu) this.onAddTrackMenu(e.clientX, e.clientY);
             return;
         }
         // ---- 歌词轨道行 ----
-        if (hit.type === 'addlyriclane') {
-            if (this.onAddLyricLane) this.onAddLyricLane();
-            return;
-        }
         if (hit.type === 'lyric-delete') {
             if (this.onDeleteLyricLane) this.onDeleteLyricLane(hit.lane);
             return;
@@ -3608,6 +4410,21 @@
             return;
         }
         if (hit.type === 'lyric-drag') {
+            // 拖动排序: 由 _onMouseDown / _onTouchStart 的长按拖动逻辑处理
+            return;
+        }
+        // ---- 音频轨道行 ----
+        if (hit.type === 'audio-delete') {
+            if (this.onDeleteAudioLane) this.onDeleteAudioLane(hit.lane);
+            return;
+        }
+        if (hit.type === 'audio-name') {
+            var auLayout = this._getLyricLaneButtonLayout(this._cfg.cellH * this._zoomY());
+            var auY = this._rowY(this._rowIndexOfAudio(hit.lane));
+            this._showAudioLaneNameEditor(hit.lane, auLayout.nameStart, auY, auLayout.nameEnd - auLayout.nameStart);
+            return;
+        }
+        if (hit.type === 'audio-drag') {
             // 拖动排序: 由 _onMouseDown / _onTouchStart 的长按拖动逻辑处理
             return;
         }
@@ -3882,6 +4699,39 @@
         });
     };
 
+    // 音频轨道名称编辑浮层 (与歌词轨道重命名同一交互, 边框青蓝色系)
+    PianoRoll.prototype._showAudioLaneNameEditor = function(lane, x, y, width) {
+        var self = this;
+        if (this._trackNameInput) {
+            this._trackNameInput.remove();
+            this._trackNameInput = null;
+        }
+        var info = (this.audioLanes && this.audioLanes[lane]) || {};
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.value = info.name || '';
+        input.style.cssText = 'position:fixed;z-index:10000;background:#1a1a2e;color:#bfe3ee;border:1px solid #3d9db8;border-radius:3px;padding:2px 4px;font-size:11px;font-family:inherit;width:' + Math.max(60, width) + 'px;';
+        var rect = this.canvas.getBoundingClientRect();
+        input.style.left = (rect.left + x) + 'px';
+        input.style.top = (rect.top + y) + 'px';
+        document.body.appendChild(input);
+        this._trackNameInput = input;
+        input.focus();
+        input.select();
+
+        var commitAudio = function() {
+            var newName = input.value.trim();
+            if (newName && self.onRenameAudioLane) self.onRenameAudioLane(lane, newName);
+            input.remove();
+            if (self._trackNameInput === input) self._trackNameInput = null;
+        };
+        input.addEventListener('blur', commitAudio);
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+            if (e.key === 'Escape') { input.value = info.name || ''; input.blur(); }
+        });
+    };
+
     // ============ 鼠标事件 ============
     PianoRoll.prototype._onMouseDown = function(e) {
         // 全局标记: 刚刚有右键菜单/弹窗被关闭, 这次 mousedown 是"关闭残留", 不应触发放置音符
@@ -3965,6 +4815,30 @@
             return;
         }
 
+        // 音频轨道行: 片段选中/拖动 (必须在网格/标尺分支之前判定)
+        var audioLane = this._audioLaneAtY(y);
+        if (e.button === 0 && audioLane >= 0 && x >= pw) {
+            var ahit = this._hitAudioClip(x, y);
+            if (ahit) {
+                this._beginAudioDrag(ahit, x, y);
+            } else {
+                this._setAudioSelected(null);
+            }
+            // 点击音频行时清空音符选中, 避免 Delete 键误删音符
+            if (this._clearSelection) this._clearSelection();
+            this._mouseDown = true;
+            this._audioLaneClick = true;
+            this._pendingPlace = false;
+            this._hasMoved = false;
+            this._isDraggingNote = false;
+            this._isPanning = false;
+            this._mouseButton = e.button;
+            this._dragStartX = x;
+            this._dragStartY = y;
+            e.preventDefault();
+            return;
+        }
+
         // 时间轴标尺: 拖动时播放头直接跟随鼠标 (像素级, 不吸附网格)
         if (tlZone === 'ruler' && x >= pw) {
             this._isTimelineDrag = true;
@@ -4003,10 +4877,13 @@
         if (!this.segmentsEditMode && x < pw && y >= this._cfg.timelineHeight && e.button === 0) {
             var hit = this._hitTestTrackPanel(x, y);
             if (hit) {
-                // 拖动手柄: 桌面端直接进入拖拽模式 (NBS 轨道与歌词轨道共用同一状态机)
-                if (hit.type === 'drag' || hit.type === 'lyric-drag') {
-                    this._trackDragKind = (hit.type === 'lyric-drag') ? 'lyric' : 'track';
-                    var dragRow = (hit.type === 'lyric-drag') ? this._lyricRow(hit.lane) : this._rowIndexOfTrack(hit.layer);
+                // 拖动手柄: 桌面端直接进入拖拽模式 (NBS/歌词/音频轨道共用同一状态机)
+                if (hit.type === 'drag' || hit.type === 'lyric-drag' || hit.type === 'audio-drag') {
+                    this._trackDragKind = (hit.type === 'lyric-drag') ? 'lyric'
+                        : (hit.type === 'audio-drag') ? 'audio' : 'track';
+                    var dragRow = (hit.type === 'lyric-drag') ? this._lyricRow(hit.lane)
+                        : (hit.type === 'audio-drag') ? this._rowIndexOfAudio(hit.lane)
+                        : this._rowIndexOfTrack(hit.layer);
                     if (!(dragRow >= 0)) dragRow = 0;
                     this._isDraggingTrack = true;
                     this._draggedTrackLayer = dragRow;
@@ -4023,7 +4900,7 @@
                     return;
                 }
                 // 按下视觉反馈 (名称区域除外)
-                if (hit.type !== 'name' && hit.type !== 'lyric-name') {
+                if (hit.type !== 'name' && hit.type !== 'lyric-name' && hit.type !== 'audio-name') {
                     this._trackPanelPressed = { layer: hit.layer, type: hit.type };
                     this._fullRedrawNeeded = true;
                     this.render();
@@ -4205,6 +5082,20 @@
             return;
         }
 
+        // 音频轨道行: 右键音频块 → 音频块菜单; 右键轨道空白 → 音频轨道菜单
+        var audioLaneHit = this._audioLaneAtY(y);
+        if (audioLaneHit >= 0) {
+            var audioHitCm = (x >= pw) ? this._hitAudioClip(x, y) : null;
+            if (audioHitCm) {
+                this._setAudioSelected(audioHitCm.clip.id);
+                if (this.onAudioClipContextMenu) this.onAudioClipContextMenu(audioHitCm.clip.id, e.clientX, e.clientY);
+            } else if (this.onAudioLaneContextMenu) {
+                var audioLaneTick = (x >= pw) ? this._screenToTick(x) : -1;
+                this.onAudioLaneContextMenu(audioLaneHit, audioLaneTick, e.clientX, e.clientY);
+            }
+            return;
+        }
+
         var ids = [];
         var clickedNote = this._getNoteAt(x, y);
         if (clickedNote) {
@@ -4301,6 +5192,28 @@
             this.requestRender();
         }
 
+        // 音频轨道行: 悬停高亮 + 光标 (端点 ew-resize / 片段体 grab)
+        var audioHoverLane = this._audioLaneAtY(y);
+        if (audioHoverLane >= 0 && x >= pw) {
+            var ahh = this._hitAudioClip(x, y);
+            var newAudioHover = ahh ? { id: ahh.clip.id, zone: ahh.zone } : null;
+            var oah = this._audioHover;
+            if ((oah && (!newAudioHover || oah.id !== newAudioHover.id || oah.zone !== newAudioHover.zone))
+                || (!oah && newAudioHover)) {
+                this._audioHover = newAudioHover;
+                this._fullRedrawNeeded = true;
+                this.requestRender();
+            }
+            if (!this._mouseDown) {
+                if (ahh && ahh.zone !== 'move') this.canvas.style.cursor = 'ew-resize';
+                else this.canvas.style.cursor = ahh ? 'grab' : 'pointer';
+            }
+        } else if (this._audioHover) {
+            this._audioHover = null;
+            this._fullRedrawNeeded = true;
+            this.requestRender();
+        }
+
         if (!this._mouseDown) return;
 
         // 歌词片段拖拽: 移动 / 改起点 / 改时长
@@ -4310,6 +5223,14 @@
         }
         // 歌词轨道空白处按下 (未命中片段): 不做其他拖拽, 避免误触画笔/橡皮/框选
         if (this._lyricLaneClick) return;
+
+        // 音频块拖拽: 移动 / 改起点 / 改时长
+        if (this._audioDrag) {
+            this._applyAudioDrag(x, y);
+            return;
+        }
+        // 音频轨道空白处按下 (未命中片段): 不做其他拖拽, 避免误触画笔/橡皮/框选
+        if (this._audioLaneClick) return;
 
         // 顶部滑动条拖拽 (左右翻页滚动视图)
         if (this._isDraggingProgressBar) {
@@ -4462,6 +5383,15 @@
         if (this._lyricLaneClick) {
             this._lyricLaneClick = false;
             this._endLyricDrag();
+            this._fullRedrawNeeded = true;
+            this.requestRender();
+            return;
+        }
+
+        // 音频轨道按下收口 (空白处点击/音频块拖拽结束)
+        if (this._audioLaneClick) {
+            this._audioLaneClick = false;
+            this._endAudioDrag();
             this._fullRedrawNeeded = true;
             this.requestRender();
             return;
@@ -4714,6 +5644,7 @@
             // 双指落下: 取消单指片段拖动/长按, 只做缩放, 避免误移动片段
             if (this._segPointerActive) {
                 this._segDrag = null;
+                this._segLyricDrag = null;
                 this._segMarquee = null;
                 this._segSeekDrag = false;
                 this._segPointerActive = false;
@@ -4724,12 +5655,11 @@
             var t1 = e.touches[0], t2 = e.touches[1];
             var dx = t1.clientX - t2.clientX, dy = t1.clientY - t2.clientY;
             this._pinchDist = Math.sqrt(dx * dx + dy * dy);
-            // 分轴缩放: 记录横/纵初始间距, 由位移变化量判定主导轴
+            // 自由缩放: 同时记录横/纵间距, 移动时两个方向各自按比例缩放 (无主轴锁定)
             this._pinchDX0 = Math.max(1, Math.abs(dx));
             this._pinchDY0 = Math.max(1, Math.abs(dy));
             this._pinchLastDX = this._pinchDX0;
             this._pinchLastDY = this._pinchDY0;
-            this._pinchAxis = null;
             var rect = this.canvas.getBoundingClientRect();
             this._pinchMidX = (t1.clientX + t2.clientX) / 2 - rect.left;
             this._pinchMidY = (t1.clientY + t2.clientY) / 2 - rect.top;
@@ -4752,13 +5682,14 @@
                 this._lastTouchY = y;
                 this._touchMoved = false;
                 this._segBlankAxis = null;
-                if (segHitTouch && segHitTouch.seg) {
+                if (segHitTouch) {
+                    // 片段块 / 歌词块统一交给 _segMouseDown 分派
                     this._segMouseDown({
                         button: 0, ctrlKey: false, metaKey: false, shiftKey: false,
                         preventDefault: function() {}
                     }, x, y);
-                    // 触屏长按片段 (约 450ms): 进入全屏钢琴卷帘页面
-                    this._startSegLongPress(segHitTouch.seg, x, y);
+                    // 触屏长按片段 (约 450ms): 进入全屏钢琴卷帘页面 (歌词块不进入)
+                    if (segHitTouch.seg) this._startSegLongPress(segHitTouch.seg, x, y);
                 } else {
                     // 空白处: 先不 seek, 交给 touchmove 按主轴判定
                     // 「垂直滑动 = 上下滚动轨道视图」/「水平滑动 = 拖动播放头」,
@@ -4812,6 +5743,30 @@
                 return;
             }
 
+            // 音频轨道行: 触摸选中/拖动 (必须在时间轴标尺分支之前判定)
+            var audioTouchLane = this._audioLaneAtY(y);
+            if (audioTouchLane >= 0 && x >= pw) {
+                this._touchStartX = x;
+                this._touchStartY = y;
+                this._lastTouchX = x;
+                this._lastTouchY = y;
+                this._touchMoved = false;
+                this._dragStartX = x;
+                this._dragStartY = y;
+                var tAhit = this._hitAudioClip(x, y);
+                if (tAhit) {
+                    this._beginAudioDrag(tAhit, x, y);
+                    this._touchMode = 'audio-drag';
+                    // 手机端: 长按音频块直接打开右键菜单 (无需双击)
+                    this._startAudioClipLongPress(tAhit.clip.id, touch.clientX, touch.clientY);
+                } else {
+                    this._setAudioSelected(null);
+                    if (this._clearSelection) this._clearSelection();
+                    this._touchMode = 'audio-blank';
+                }
+                return;
+            }
+
             // 时间轴标尺: 拖动时播放头直接跟随手指 (像素级, 不吸附网格)
             if (tlZone === 'ruler' && x >= pw) {
                 this._isTimelineDrag = true;
@@ -4854,11 +5809,15 @@
             if (!this.segmentsEditMode && x < pw && y >= this._cfg.timelineHeight) {
                 var hitResult = this._hitTestTrackPanel(x, y);
                 if (hitResult) {
-                    // 拖动手柄: 长按后进入拖拽模式 (NBS 轨道与歌词轨道同一套流程)
-                    if (hitResult.type === 'drag' || hitResult.type === 'lyric-drag') {
-                        this._trackDragKind = (hitResult.type === 'lyric-drag') ? 'lyric' : 'track';
+                    // 拖动手柄: 长按后进入拖拽模式 (NBS/歌词/音频轨道同一套流程)
+                    if (hitResult.type === 'drag' || hitResult.type === 'lyric-drag' || hitResult.type === 'audio-drag') {
+                        this._trackDragKind = (hitResult.type === 'lyric-drag') ? 'lyric'
+                            : (hitResult.type === 'audio-drag') ? 'audio' : 'track';
                         var touchDragRow = (hitResult.type === 'lyric-drag')
-                            ? this._lyricRow(hitResult.lane) : this._rowIndexOfTrack(hitResult.layer);
+                            ? this._lyricRow(hitResult.lane)
+                            : (hitResult.type === 'audio-drag')
+                            ? this._rowIndexOfAudio(hitResult.lane)
+                            : this._rowIndexOfTrack(hitResult.layer);
                         if (!(touchDragRow >= 0)) touchDragRow = 0;
                         this._touchMode = 'track-drag-pending';
                         this._touchStartX = x;
@@ -4992,19 +5951,18 @@
             var cx = (t1.clientX + t2.clientX) / 2 - rect.left;
             var cy = (t1.clientY + t2.clientY) / 2 - rect.top;
             var dxAbs = Math.abs(dx), dyAbs = Math.abs(dy);
-            // 主导轴判定: 横向间距变化 -> 每 tick 像素; 纵向间距变化 -> 行高
-            if (!this._pinchAxis) {
-                var chX = Math.abs(dxAbs - (this._pinchDX0 || 1));
-                var chY = Math.abs(dyAbs - (this._pinchDY0 || 1));
-                if (Math.max(chX, chY) > 8) this._pinchAxis = chX >= chY ? 'x' : 'y';
-            }
-            if (this._pinchAxis === 'x' && Math.abs(dxAbs - (this._pinchLastDX || 1)) > 2) {
-                var fx = dxAbs / Math.max(1, this._pinchLastDX || 1);
+            // 自由缩放: 横向间距比例 → 时间轴缩放, 纵向间距比例 → 行高缩放。
+            // 两个方向相互独立 (无主轴锁定), 各自变化超过 2px 才应用, 避免抖动。
+            var lastDX = this._pinchLastDX || 1;
+            var lastDY = this._pinchLastDY || 1;
+            if (Math.abs(dxAbs - lastDX) > 2) {
+                var fx = dxAbs / Math.max(1, lastDX);
                 this._pinchLastDX = dxAbs;
                 if (this.segmentsEditMode) this.zoomSegment(fx);
-                else this._pinchZoomHorizontal(fx, cx, cy);
-            } else if (this._pinchAxis === 'y' && Math.abs(dyAbs - (this._pinchLastDY || 1)) > 2) {
-                var fy = dyAbs / Math.max(1, this._pinchLastDY || 1);
+                else this._pinchZoomHorizontal(fx, cx, cy, true);
+            }
+            if (Math.abs(dyAbs - lastDY) > 2) {
+                var fy = dyAbs / Math.max(1, lastDY);
                 this._pinchLastDY = dyAbs;
                 if (this.segmentsEditMode) this.zoomSegmentLanes(fy);
                 else this.setZoomAxis('y', fy, cx, cy);
@@ -5123,6 +6081,24 @@
             }
             if (this._touchMode === 'lyric-blank') {
                 if (dx > 6 || dy > 6) { this._touchMoved = true; this._cancelLyricLongPress(); }
+                this._lastTouchX = x;
+                this._lastTouchY = y;
+                return;
+            }
+
+            // 音频临时轨道: 触摸拖动 (移动/换轨 / 改起点 / 改时长)
+            if (this._touchMode === 'audio-drag' && this._audioDrag) {
+                if (dx > 4 || dy > 4) {
+                    this._touchMoved = true;
+                    this._cancelAudioLongPress();
+                }
+                this._applyAudioDrag(x, y);
+                this._lastTouchX = x;
+                this._lastTouchY = y;
+                return;
+            }
+            if (this._touchMode === 'audio-blank') {
+                if (dx > 6 || dy > 6) this._touchMoved = true;
                 this._lastTouchX = x;
                 this._lastTouchY = y;
                 return;
@@ -5355,6 +6331,26 @@
                 }
             } else if (!movedLyric && lyricTapTick !== null && lyricTapTick >= 0) {
                 if (this.onLyricClipCreate) this.onLyricClipCreate(lyricTapTick, lyricTapLane, ccx, ccy);
+            }
+            this._fullRedrawNeeded = true;
+            this.render();
+            return;
+        }
+
+        // 音频临时轨道: 触摸结束 (轻点=选中, 拖动=提交)
+        if (this._touchMode === 'audio-drag' || this._touchMode === 'audio-blank') {
+            this._cancelAudioLongPress();
+            var wasAudioDrag = this._touchMode === 'audio-drag';
+            var audioDragId = this._audioDrag ? this._audioDrag.id : null;
+            var movedAudio = this._touchMoved;
+            this._touchMode = 'none';
+            if (wasAudioDrag) {
+                if (!movedAudio && audioDragId !== null) {
+                    // 轻点: 仅保持选中 (拖拽开始时已选中), 不提交
+                    this._audioDrag = null;
+                } else {
+                    this._endAudioDrag();
+                }
             }
             this._fullRedrawNeeded = true;
             this.render();
@@ -5630,18 +6626,36 @@
             }
         }
 
-        // 添加音轨按钮
-        if (this._addTrackBtnRect) {
-            var r = this._addTrackBtnRect;
-            if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) {
-                return { layer: -1, type: 'addtrack' };
+        // ---- 音频轨道行命中 (名称 / 删除 / 拖动; 布局与歌词行共用) ----
+        var audioCount = this._audioLaneCount();
+        if (audioCount > 0) {
+            var auLayout = this._getLyricLaneButtonLayout(cellH);
+            for (var al = 0; al < audioCount; al++) {
+                var auRowY = this._rowY(this._rowIndexOfAudio(al));
+                if (y < auRowY || y >= auRowY + cellH) continue;
+                var auMid = auRowY + cellH / 2;
+                var auBtnTop = auMid - auLayout.btnSize / 2;
+                var auBtnBottom = auMid + auLayout.btnSize / 2;
+                if (y >= auBtnTop && y <= auBtnBottom) {
+                    if (x >= auLayout.deleteX && x <= auLayout.deleteX + auLayout.deleteW) {
+                        return { layer: -(200 + al), lane: al, type: 'audio-delete' };
+                    }
+                    if (x >= auLayout.dragX && x <= auLayout.dragX + auLayout.dragW) {
+                        return { layer: -(200 + al), lane: al, type: 'audio-drag' };
+                    }
+                }
+                if (x >= auLayout.nameStart && x <= auLayout.nameEnd) {
+                    return { layer: -(200 + al), lane: al, type: 'audio-name' };
+                }
+                return null;
             }
         }
-        // 添加歌词轨道按钮
-        if (this._addLyricLaneBtnRect) {
-            var lr = this._addLyricLaneBtnRect;
-            if (x >= lr.x && x <= lr.x + lr.w && y >= lr.y && y <= lr.y + lr.h) {
-                return { layer: -2, type: 'addlyriclane' };
+
+        // 「添加」按钮 (弹出轨道类型菜单: NBS 音轨 / 歌词轨道 / 音频轨道)
+        if (this._addEntryBtnRect) {
+            var r = this._addEntryBtnRect;
+            if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) {
+                return { layer: -3, type: 'addentry' };
             }
         }
         return null;
@@ -6653,7 +7667,7 @@
 
     // 双指横向缩放 (NBS 模式): 只改每 tick 像素宽度, 行高保持不变
     // 通过反向调整 zoomY 抵消 zoom 对纵向单元高度的影响
-    PianoRoll.prototype._pinchZoomHorizontal = function(factor, anchorX, anchorY) {
+    PianoRoll.prototype._pinchZoomHorizontal = function(factor, anchorX, anchorY, skipRowCompensation) {
         if (!isFinite(factor) || factor <= 0.05) return;
         if (this.segmentsEditMode) { this.zoomSegment(factor); return; }
         var cellW = this._cfg.cellW;
@@ -6665,8 +7679,11 @@
         var newZoom = Math.max(0.15, Math.min(4, oldZoom * factor));
         if (Math.abs(newZoom - oldZoom) < 1e-9) return;
         this.zoom = newZoom;
-        // 保持 cellH * zoom * zoomY 不变: 音高行高不随横向缩放跳动
-        this.zoomY = Math.max(0.25, Math.min(4, oldZoomY * oldZoom / newZoom));
+        // 保持 cellH * zoom * zoomY 不变: 音高行高不随横向缩放跳动。
+        // 双指自由缩放时纵向由 setZoomAxis('y') 独立控制, 跳过此补偿, 否则两轴相互抵消。
+        if (!skipRowCompensation) {
+            this.zoomY = Math.max(0.25, Math.min(4, oldZoomY * oldZoom / newZoom));
+        }
         this.scrollX = wx * cellW * this._zoomX() - cx + this._editOriginX();
         this._clampScrollX();
         void anchorY;
@@ -7125,6 +8142,9 @@
         // 歌词块 (歌词轨道行, 追加在 NBS 轨道下方, 行高与 NBS 轨道一致)
         this._drawLyricRows(ctx, w, pw);
 
+        // 音频块 (音频轨道行, 机制同歌词轨道, 青蓝系配色)
+        this._drawAudioRows(ctx, w, pw);
+
         // 动画中的音符 (删除/放置效果)
         this._drawAnimatedNotes();
 
@@ -7358,7 +8378,7 @@
     // 按页 = 书本翻页: 播放头在页内连续移动, 越过右边界时整页翻动, 播放头不固定
     // 按刻 = 播放头固定视口左 1/3, scrollX 量化到整 tick (一格一跳)
     // 按帧 = 播放头固定视口左 1/3, scrollX 连续逐帧平滑
-    // 关闭跟随 = 与按页相同的翻页行为, 只是不把播放头钉在视口位置
+    // 关闭跟随 = 不自动翻页: 保持用户当前视图, 只有播放头越出可视区时才滚动回可见范围
     PianoRoll.prototype._followState = function() {
         var st = (window.WebNBS && window.WebNBS.state) || {};
         var enabled = st.followProgress !== false;
@@ -7673,24 +8693,27 @@
                 drawHandle(x1px - 5, hoverZone === 'right' && x1px <= w);
             }
 
-            // 文字 (仅在空间足够时绘制, 超宽省略)
+            // 文字: 跟随视口裁剪 —— 块左侧被裁掉时贴住可见区左边缘, 右侧按可见宽度省略
             var label = String(clip.text || '');
-            if (wpx > 18 && label) {
+            var textLeft = Math.max(x0px + 6, pw + 2);
+            var textRight = Math.min(x1px, w - 2);
+            var visibleW = textRight - textLeft;
+            if (visibleW > 18 && label) {
                 ctx.save();
                 ctx.beginPath();
-                ctx.rect(x0px + 1, clipTop, Math.max(2, wpx - 2), clipH);
+                ctx.rect(textLeft, clipTop, visibleW, clipH);
                 ctx.clip();
                 ctx.font = (self._isDesktop ? '11px' : '10px') + ' "Segoe UI", sans-serif';
                 ctx.textAlign = 'left';
                 ctx.textBaseline = 'middle';
                 ctx.fillStyle = '#fff';
-                var maxW = wpx - 12;
+                var maxW = visibleW - 2;
                 var drawn = label;
                 if (ctx.measureText(drawn).width > maxW) {
                     while (drawn.length > 1 && ctx.measureText(drawn + '…').width > maxW) drawn = drawn.slice(0, -1);
                     drawn += '…';
                 }
-                ctx.fillText(drawn, x0px + 6, clipTop + clipH / 2 + 0.5);
+                ctx.fillText(drawn, textLeft, clipTop + clipH / 2 + 0.5);
                 ctx.restore();
             }
             ctx.restore();
@@ -7750,6 +8773,148 @@
                     ctx.restore();
                 }
             }
+        }
+        ctx.restore();
+
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+    };
+
+    // ============ 音频轨道块绘制 (中性青灰系, 区别歌词块) ============
+    // 与 _drawLyricRows 同一套机制: 只画块本身, 行底色由网格统一提供。
+    // 波形: buffer 可用时按 clip 窗口聚合峰值柱画在块内中部 (半透明白); 失败静默降级。
+    PianoRoll.prototype._drawAudioRows = function(ctx, w, pw) {
+        if (this.segmentsEditMode) return;
+        if (this._audioLaneCount() <= 0) return;
+        if (!(this.audioClips || []).length) return;
+        var self = this;
+        var cellWpx = this._cfg.cellW * this._zoomX();
+        var cellH = this._cfg.cellH * this._zoomY();
+        var h = this.displayHeight;
+        var top = this._editOriginY();
+
+        // 单个音频块绘制 (与歌词块同语言: 圆角块 + 内描边 + 文字 + 波形)
+        var drawClip = function(clip) {
+            var dur = self._audioClipDuration(clip);
+            var wpx = Math.max(3, cellWpx * dur);
+            var x0px = self._tickToScreen(clip.tick);
+            var x1px = x0px + wpx;
+            if (x1px < pw || x0px > w) return;
+            var laneIdx = Math.max(0, Math.min(self._audioLaneCount() - 1, clip.lane || 0));
+            var rect = self._audioRowRect(laneIdx);
+            var clipTop = rect.top, clipH = rect.h;
+            var selected = (clip.id === self.audioSelectedId);
+            var hovered = !!(self._audioHover && self._audioHover.id === clip.id);
+            var hoverZone = hovered ? self._audioHover.zone : null;
+            // 拖动中的片段不显示悬停态
+            if (self._audioDrag && self._audioDrag.id === clip.id) { hovered = false; hoverZone = null; }
+            var missing = !!clip.missing;
+
+            ctx.save();
+
+            // 块底色 (中性青灰: 与深色 UI 协调; 悬停略提亮, 缺失时更淡)
+            var base = missing
+                ? 'rgba(86,122,132,0.35)'
+                : (hovered ? 'rgba(104,146,156,0.86)' : 'rgba(86,122,132,0.78)');
+            ctx.fillStyle = base;
+            self._roundRect(ctx, x0px + 1, clipTop, Math.max(2, wpx - 2), clipH, 3);
+            ctx.fill();
+
+            // 选中: 亮边框; 缺失: 虚线边框
+            if (selected) {
+                ctx.strokeStyle = '#cfe8ee';
+                ctx.lineWidth = 1.5;
+                self._roundRect(ctx, x0px + 1, clipTop, Math.max(2, wpx - 2), clipH, 3);
+                ctx.stroke();
+            } else {
+                ctx.strokeStyle = 'rgba(140,180,190,0.45)';
+                ctx.lineWidth = 1;
+                self._roundRect(ctx, x0px + 0.5, clipTop + 0.5, Math.max(2, wpx - 2), clipH, 3);
+                ctx.stroke();
+            }
+            if (missing && ctx.setLineDash) {
+                ctx.setLineDash([4, 3]);
+                ctx.strokeStyle = 'rgba(236,246,248,0.65)';
+                ctx.lineWidth = 1;
+                self._roundRect(ctx, x0px + 2.5, clipTop + 1.5, Math.max(2, wpx - 5), clipH - 3, 3);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // 左边框亮线
+            if (wpx > 4) {
+                ctx.fillStyle = 'rgba(236,246,248,0.45)';
+                ctx.fillRect(x0px + 2, clipTop + 2, 1.5, Math.max(1, clipH - 4));
+            }
+
+            // 波形 (块内中部, 半透明白; 无 peaks 时静默跳过)
+            // min/max 柱以中线对称绘制, 柱间距不小于 2px (密集时不逐像素画)
+            var peaks = self._getAudioPeaks(clip);
+            if (peaks && wpx > 10 && clipH > 8) {
+                var waveTop = clipTop + clipH * 0.30;
+                var waveH = clipH * 0.40;
+                var midY = waveTop + waveH / 2;
+                ctx.fillStyle = 'rgba(255,255,255,0.32)';
+                var waveX0 = x0px + 5;
+                var waveW = wpx - 10;
+                var bw = waveW / peaks.length;
+                var pStep = Math.max(1, Math.ceil(2 / Math.max(0.01, bw)));
+                for (var p = 0; p < peaks.length; p += pStep) {
+                    var pk = peaks[p];
+                    var topAmp = Math.max(0, Math.min(waveH / 2, (pk.max / 2) * waveH));
+                    var botAmp = Math.max(0, Math.min(waveH / 2, (-pk.min / 2) * waveH));
+                    var bx = waveX0 + p * bw;
+                    if (bx > x1px - 3) break;
+                    ctx.fillRect(bx, midY - Math.max(1, topAmp), Math.max(1, Math.min(2, bw)), Math.max(1, topAmp) + Math.max(1, botAmp));
+                }
+            }
+
+            // 左右端点手柄: 悬停该端点时高亮, 提示可拖动改变长度/起点
+            var edgeW = Math.min(7, cellH / 3);
+            if (wpx > edgeW * 2.2) {
+                var drawHandle = function(hx, hot) {
+                    ctx.fillStyle = hot ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.35)';
+                    ctx.fillRect(hx, clipTop + 2, 2, clipH - 4);
+                };
+                drawHandle(x0px + 3, hoverZone === 'left' && x0px >= pw);
+                drawHandle(x1px - 5, hoverZone === 'right' && x1px <= w);
+            }
+
+            // 文字: 🔊 前缀 + 名称 (跟随视口裁剪, 超宽省略); missing 时提示「缺失音频」
+            var label = missing
+                ? ((window.WebNBSI18n && WebNBSI18n.translate) ? WebNBSI18n.translate('缺失音频') : '缺失音频')
+                : ('\uD83D\uDD0A ' + String(clip.name || ''));
+            var textLeft = Math.max(x0px + 6, pw + 2);
+            var textRight = Math.min(x1px, w - 2);
+            var visibleW = textRight - textLeft;
+            if (visibleW > 18 && label) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(textLeft, clipTop, visibleW, clipH);
+                ctx.clip();
+                ctx.font = (self._isDesktop ? '11px' : '10px') + ' "Segoe UI", sans-serif';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = 'rgba(236,246,248,0.92)';
+                var maxW = visibleW - 2;
+                var drawn = label;
+                if (ctx.measureText(drawn).width > maxW) {
+                    while (drawn.length > 1 && ctx.measureText(drawn + '…').width > maxW) drawn = drawn.slice(0, -1);
+                    drawn += '…';
+                }
+                ctx.fillText(drawn, textLeft, clipTop + clipH / 2 + 0.5);
+                ctx.restore();
+            }
+            ctx.restore();
+        };
+
+        // 块统一裁剪到轨道内容区 (不覆盖左侧信息栏)
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(pw, top, Math.max(0, w - pw), h - top);
+        ctx.clip();
+        for (var i = 0; i < this.audioClips.length; i++) {
+            drawClip(this.audioClips[i]);
         }
         ctx.restore();
 
@@ -8203,22 +9368,97 @@
             }
         }
 
-        // 添加音轨 / 添加歌词轨道 按钮 (底部并排)
+        // ---- 音频轨道行 (额外轨道) ----
+        // 与歌词轨道行同布局 (名称 / 删除 / 拖动排序), 符号 🔊 + 青蓝色点缀
+        var audioLaneTotal = this._audioLaneCount();
+        if (audioLaneTotal > 0) {
+            var auLayout2 = this._getLyricLaneButtonLayout(cellH);
+            var audioWord = (window.WebNBSI18n && WebNBSI18n.translate) ? WebNBSI18n.translate('音频') : '音频';
+            for (var av = 0; av < audioLaneTotal; av++) {
+                var auRowIdx = this._rowIndexOfAudio(av);
+                var auY2 = this._audioRowScreenY(av);   // 含轨道排序动画偏移
+                if (auY2 + cellH < cfg.timelineHeight || auY2 > h) continue;
+                var auInfo = this.audioLanes[av] || {};
+
+                // 行背景: 与 NBS/歌词轨道行相同的奇偶底色
+                ctx.fillStyle = (auRowIdx % 2 === 0)
+                    ? 'rgba(255, 255, 255, 0.03)'
+                    : 'rgba(255, 255, 255, 0.01)';
+                ctx.fillRect(0, auY2, pw, cellH);
+
+                // 选中音频块所在轨道高亮 (青蓝)
+                if (this.audioSelectedId != null) {
+                    var selAudio = this._findAudioById(this.audioSelectedId);
+                    if (selAudio && (selAudio.lane || 0) === av) {
+                        ctx.fillStyle = 'rgba(61, 157, 184, 0.14)';
+                        ctx.fillRect(0, auY2, pw, cellH);
+                    }
+                }
+
+                var auTextY = auY2 + cellH / 2;
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+                // 🔊 符号 + 轨道名 (青蓝色点缀; 静音态灰显)
+                ctx.fillStyle = 'rgba(109, 200, 220, 0.55)';
+                ctx.font = 'bold 10px "Segoe UI", sans-serif';
+                ctx.fillText('\uD83D\uDD0A', auLayout2.nameStart, auTextY);
+                var auName = auInfo.name || (audioWord + ' ' + (av + 1));
+                var auMaxW = Math.max(24, auLayout2.nameEnd - auLayout2.nameStart - 14);
+                ctx.font = '11px "Segoe UI", "Microsoft YaHei", sans-serif';
+                if (ctx.measureText(auName).width > auMaxW) {
+                    while (auName.length > 1 && ctx.measureText(auName + '..').width > auMaxW) {
+                        auName = auName.slice(0, -1);
+                    }
+                    auName += '..';
+                }
+                ctx.fillStyle = auInfo.muted ? 'rgba(255, 255, 255, 0.32)' : '#d0d0d0';
+                ctx.fillText(auName, auLayout2.nameStart + 14, auTextY);
+                if (auInfo.muted) {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
+                    ctx.font = 'bold 9px "Segoe UI", sans-serif';
+                    ctx.textAlign = 'left';
+                    ctx.fillText('M', auLayout2.nameStart + 14 + ctx.measureText(auName).width + 6, auTextY);
+                    ctx.textAlign = 'left';
+                }
+
+                // 删除按钮 (✕)
+                ctx.fillStyle = 'rgba(255,255,255,0.06)';
+                ctx.fillRect(auLayout2.deleteX, auTextY - auLayout2.btnSize / 2, auLayout2.deleteW, auLayout2.btnSize);
+                btnOverlay(-(200 + av), 'audio-delete', auLayout2.deleteX, auTextY - auLayout2.btnSize / 2, auLayout2.deleteW, auLayout2.btnSize);
+                ctx.strokeStyle = 'rgba(233,69,96,0.5)';
+                ctx.lineWidth = 0.5;
+                ctx.strokeRect(auLayout2.deleteX, auTextY - auLayout2.btnSize / 2, auLayout2.deleteW, auLayout2.btnSize);
+                ctx.fillStyle = '#e94560';
+                ctx.font = 'bold ' + Math.max(8, Math.min(12, auLayout2.btnSize * 0.65)) + 'px "Segoe UI", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('✕', auLayout2.deleteX + auLayout2.deleteW / 2, auTextY);
+
+                // 拖动手柄 (与 NBS/歌词轨道行共用同一套绘制)
+                this._drawTrackDragHandle(auLayout2.dragX, auLayout2.dragW, auLayout2.btnSize, auTextY, this._isDesktop);
+
+                // 行分隔线 (与 NBS 轨道行一致)
+                ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+                ctx.lineWidth = 0.5;
+                ctx.beginPath();
+                ctx.moveTo(0, auY2 + cellH - 0.5);
+                ctx.lineTo(pw, auY2 + cellH - 0.5);
+                ctx.stroke();
+            }
+        }
+
+        // 「添加」按钮 (弹出菜单选择轨道类型: NBS 音轨 / 歌词轨道 / 音频轨道)
         var addTrackY = this._rowCount() * cellH - this.scrollY + cfg.timelineHeight;
         var addBtnH = 24;
-        this._addTrackBtnRect = null;
-        this._addLyricLaneBtnRect = null;
+        this._addEntryBtnRect = null;
         if (addTrackY + addBtnH < h && this.trackCount > 0) {
-            var addGap = 4;
-            var addBtnW = Math.max(56, Math.min((pw - 8 - addGap) / 2, 116));
-            var totalW = addBtnW * 2 + addGap;
-            var addBtnX = Math.max(4, (pw - totalW) / 2);
+            var addBtnW = Math.max(72, Math.min(pw - 8, 120));
+            var addBtnX = Math.max(4, (pw - addBtnW) / 2);
             var btnY = addTrackY + 4;
 
-            // 添加音轨 (原有入口)
             ctx.fillStyle = 'rgba(78,205,196,0.15)';
             ctx.fillRect(addBtnX, btnY, addBtnW, addBtnH);
-            btnOverlay(-1, 'addtrack', addBtnX, btnY, addBtnW, addBtnH);
+            btnOverlay(-3, 'addentry', addBtnX, btnY, addBtnW, addBtnH);
             ctx.strokeStyle = 'rgba(78,205,196,0.4)';
             ctx.lineWidth = 1;
             ctx.strokeRect(addBtnX, btnY, addBtnW, addBtnH);
@@ -8226,22 +9466,9 @@
             ctx.font = '11px "Segoe UI", "Microsoft YaHei", sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            var addTrackLabel = '+ ' + ((window.WebNBSI18n && WebNBSI18n.translate) ? WebNBSI18n.translate('添加音轨') : '添加音轨');
-            ctx.fillText(addTrackLabel, addBtnX + addBtnW / 2, btnY + addBtnH / 2);
-            this._addTrackBtnRect = { x: addBtnX, y: btnY, w: addBtnW, h: addBtnH };
-
-            // 添加歌词轨道 (额外轨道)
-            var lyBtnX = addBtnX + addBtnW + addGap;
-            ctx.fillStyle = 'rgba(233,69,96,0.14)';
-            ctx.fillRect(lyBtnX, btnY, addBtnW, addBtnH);
-            btnOverlay(-2, 'addlyriclane', lyBtnX, btnY, addBtnW, addBtnH);
-            ctx.strokeStyle = 'rgba(233,69,96,0.45)';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(lyBtnX, btnY, addBtnW, addBtnH);
-            ctx.fillStyle = '#e94560';
-            var addLyricLabel = '+ ' + ((window.WebNBSI18n && WebNBSI18n.translate) ? WebNBSI18n.translate('添加歌词轨道') : '添加歌词轨道');
-            ctx.fillText(addLyricLabel, lyBtnX + addBtnW / 2, btnY + addBtnH / 2);
-            this._addLyricLaneBtnRect = { x: lyBtnX, y: btnY, w: addBtnW, h: addBtnH };
+            var addEntryLabel = '+ ' + ((window.WebNBSI18n && WebNBSI18n.translate) ? WebNBSI18n.translate('添加') : '添加');
+            ctx.fillText(addEntryLabel, addBtnX + addBtnW / 2, btnY + addBtnH / 2);
+            this._addEntryBtnRect = { x: addBtnX, y: btnY, w: addBtnW, h: addBtnH };
         }
 
         // 拖拽排序视觉指示 (NBS 轨道与歌词轨道共用)

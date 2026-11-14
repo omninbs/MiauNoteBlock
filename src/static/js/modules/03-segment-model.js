@@ -40,6 +40,71 @@
             if (!isFinite(ln.height) || ln.height < 24) ln.height = SEG_DEFAULT_LANE_H;
             ln.color = laneColorAt(ln, i);
         }
+        segmentSyncSpecialLanes();
+    }
+
+    // 把歌词/音频特殊轨道同步进片段 lanes (幂等, 可频繁调用):
+    //   - state.lyricLanes / state.audioLanes 的每条轨道各对应一条 special lane,
+    //     缺失则追加到数组尾部 (普通 lane 之后);
+    //   - special 指向的源轨道已删除时, 对应 special lane 同步移除
+    //     (并重排 segments 的 lane 索引, 保证普通片段不错位);
+    //   - special lane 不承载片段音符: notes 恒为空数组, 合成回工程时被完全跳过。
+    function segmentSyncSpecialLanes() {
+        var lanes = state.segmentLanes;
+        var nextId = 1;
+        for (var i = 0; i < lanes.length; i++) {
+            if (isFinite(lanes[i].id) && lanes[i].id >= nextId) nextId = lanes[i].id + 1;
+        }
+        function hasSpecial(kind, laneId) {
+            for (var k = 0; k < lanes.length; k++) {
+                var sp = lanes[k].special;
+                if (sp && sp.kind === kind && sp.laneId === laneId) return true;
+            }
+            return false;
+        }
+
+        // 追加缺失的特殊轨道 (先歌词后音频, 各自排在尾部)
+        for (var pass = 0; pass < 2; pass++) {
+            var kind = pass === 0 ? 'lyric' : 'audio';
+            var srcLanes = pass === 0 ? (state.lyricLanes || []) : (state.audioLanes || []);
+            for (var j = 0; j < srcLanes.length; j++) {
+                var src = srcLanes[j];
+                if (!src || src.id === undefined || src.id === null) continue;
+                if (hasSpecial(kind, src.id)) continue;
+                lanes.push({
+                    id: nextId++,
+                    name: src.name || '',
+                    muted: false, solo: false, volume: 100,
+                    height: 48, notes: [],
+                    special: { kind: kind, laneId: src.id }
+                });
+            }
+        }
+
+        // 反向清理: 收集仍存活的 lyricLane/audioLane id, 移除已悬空的 special lane
+        var aliveIds = { lyric: {}, audio: {} };
+        var srcLists = { lyric: state.lyricLanes || [], audio: state.audioLanes || [] };
+        for (var kind2 in srcLists) {
+            if (!srcLists.hasOwnProperty(kind2)) continue;
+            for (var q = 0; q < srcLists[kind2].length; q++) {
+                var sl = srcLists[kind2][q];
+                if (sl && sl.id !== undefined && sl.id !== null) aliveIds[kind2][sl.id] = true;
+            }
+        }
+        var keep = [], idxMap = {}, removed = false;
+        for (var m = 0; m < lanes.length; m++) {
+            var sp2 = lanes[m].special;
+            if (sp2 && !aliveIds[sp2.kind][sp2.laneId]) { removed = true; continue; }
+            idxMap[m] = keep.length;
+            keep.push(lanes[m]);
+        }
+        if (removed) {
+            state.segmentLanes = keep;
+            var segs = state.segments || [];
+            for (var s = 0; s < segs.length; s++) {
+                if (idxMap[segs[s].lane] !== undefined) segs[s].lane = idxMap[segs[s].lane];
+            }
+        }
     }
 
     // 确保最下方始终保留一条「空轨道」, 方便用户继续向下拖入新轨道

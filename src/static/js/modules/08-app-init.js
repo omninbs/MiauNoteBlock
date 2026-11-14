@@ -521,20 +521,29 @@
             });
         }
         if (segmentPreviewModeSel) {
-            // 默认「根据音调大小」; 用户显式选过「根据轨道位置」时保持 track
+            // 默认「根据音调大小」; 支持 track / pitch / physical
+            var SEG_PREVIEW_MODES = { track: 1, pitch: 1, physical: 1 };
+            function applySegmentPreviewMode(mode) {
+                if (state.pianoRoll && state.pianoRoll.setSegmentPreviewMode) {
+                    state.pianoRoll.setSegmentPreviewMode(mode);
+                }
+                if (state.pianoRoll && state.pianoRoll.render) state.pianoRoll.render();
+            }
             var segPrevMode = 'pitch';
             try {
-                if (localStorage.getItem('segment_preview_mode') === 'track') segPrevMode = 'track';
+                var savedSegPrev = localStorage.getItem('noteblock.segment_preview_mode')
+                    || localStorage.getItem('segment_preview_mode');
+                if (savedSegPrev && SEG_PREVIEW_MODES[savedSegPrev]) segPrevMode = savedSegPrev;
             } catch (e7) {}
             segmentPreviewModeSel.value = segPrevMode;
-            if (state.pianoRoll && state.pianoRoll.setSegmentPreviewMode) {
-                state.pianoRoll.setSegmentPreviewMode(segPrevMode);
-            }
+            applySegmentPreviewMode(segPrevMode);
             segmentPreviewModeSel.addEventListener('change', function() {
-                try { localStorage.setItem('segment_preview_mode', this.value); } catch (e8) {}
-                if (state.pianoRoll && state.pianoRoll.setSegmentPreviewMode) {
-                    state.pianoRoll.setSegmentPreviewMode(this.value);
-                }
+                var mode = SEG_PREVIEW_MODES[this.value] ? this.value : 'pitch';
+                try {
+                    localStorage.setItem('noteblock.segment_preview_mode', mode);
+                    localStorage.setItem('segment_preview_mode', mode);
+                } catch (e8) {}
+                applySegmentPreviewMode(mode);
             });
         }
 
@@ -564,7 +573,7 @@
                 }
             });
         }
-        // 片段钢琴窗口 (浮动窗口): 时间栏 / 进度条地图 / 力度控制器 显隐
+        // 钢琴卷帘门 (浮动窗口): 时间栏 / 进度条地图 / 力度控制器 显隐
         (function () {
             var spw = window.SegmentPianoWindow;
             var current = (spw && spw.getSettings) ? spw.getSettings() : { ruler: true, minimap: true, velocity: true };
@@ -793,7 +802,12 @@
             var keys = [45, 60, 75];
             // 三个示例音符使用不同音量, 让「音符透明度跟随音量」也能在预览中体现
             var vels = [100, 76, 48];
-            var colors = ['#3f8f4f', '#3f6f9f', '#9f6f3f'];
+            // 底色必须取该音色对应的乐器色, 否则预览里的图标(音色)与块颜色会对不上
+            var colors = [];
+            for (var ci = 0; ci < insts.length; ci++) {
+                colors.push(pr._getInstrumentColor ? pr._getInstrumentColor(insts[ci])
+                    : ((window.NOTE_COLORS || [])[insts[ci]] || '#888888'));
+            }
             // _drawNoteBlock 的 scale 以传入单元格的中心为基准放大,
             // 因此把逻辑坐标向内偏移, 让放大后的可见块正好落在预览位置
             var offX = baseW * (scale - 1) / 2;
@@ -1553,12 +1567,12 @@
                 moreBtn.style.display = '';
                 var collectedItems = [];
                 var overflowW = totalCollapsibleW - availableForOverflow;
-                // 倒序检测, 优先收起靠后的按钮
+                // 倒序检测, 优先收起靠后的按钮; 溢出宽度补偿完即停,
+                // 不能因 collectedItems 非空就继续把其余按钮也全部收走
                 for (var ck = collapsibles.length - 1; ck >= 0; ck--) {
-                    if (overflowW > 0 || collectedItems.length > 0) {
-                        collectedItems.push(collapsibles[ck]);
-                        overflowW -= collapsibleWidths[ck];
-                    }
+                    if (overflowW <= 0) break;
+                    collectedItems.push(collapsibles[ck]);
+                    overflowW -= collapsibleWidths[ck];
                 }
                 // 小屏幕 (<=560px) 且有 collected, 全部收起
                 if (toolbarW <= 560) {
@@ -1691,6 +1705,10 @@
         // 使用 capture 阶段拦截, 关闭菜单时阻止事件继续传播到 canvas (避免误放置音符)
         var suppressNextCanvasClick = false;
         var closeAllPopups = function(e) {
+            // 取色器浮层 (挂在 body 上): 点击其内部/遮罩时不应关闭任何下层弹窗
+            if (e.target && e.target.closest && e.target.closest('.wn-cp-overlay')) {
+                return;
+            }
             // 歌词编辑小悬浮窗 (挂在 body 上): 点击内部不关闭
             var lyricEditorPop = document.getElementById('lyric-editor-pop');
             if (lyricEditorPop && lyricEditorPop.contains(e.target)) {

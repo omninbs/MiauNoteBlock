@@ -51,6 +51,21 @@
         activeLyricId: null,
         _activeLyric: null,
         lyricClipboard: [],   // 歌词片段剪贴板: [{ text, duration, lane, relTick }]
+
+        // 音频轨道 (「额外轨道」): [{ id, name, after, volume, muted }]
+        //   与歌词轨道同机制: 不写入 .nbs, 只随工程元数据持久化; 行内只能放音频块
+        audioLanes: [],
+        // 音频块: [{ id, lane, tick, dur, offsetSec, bufferId, gain }]
+        //   lane: state.audioLanes 的索引; dur 为块长度(tick), 恒 >= 1;
+        //   offsetSec 为源音频内的起始偏移(秒); gain 为块增益(0-200, 100=原声)
+        audioClips: [],
+        // 已解码音频缓冲: { id: { name, buffer, duration } }
+        //   仅内存持有, 不随工程持久化; 刷新后 clips 保留但标记缺失音频, 需重新导入
+        audioBuffers: {},
+        _audioLaneIdSeq: 0,
+        _audioClipIdSeq: 0,
+        _audioBufferIdSeq: 0,
+
         // 片段编辑: 多轨剪辑模型
         // segments: [{ id, lane, start, end, name, notes:[{rel,layer,...}] }]
         segments: [],

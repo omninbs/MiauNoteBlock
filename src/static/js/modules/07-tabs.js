@@ -21,6 +21,7 @@
     function markDirty() { return N.markDirty.apply(this, arguments); }
     function projectDbDelete() { return N.projectDbDelete.apply(this, arguments); }
     function projectDbPut() { return N.projectDbPut.apply(this, arguments); }
+    function refreshAudioLaneUI() { return N.refreshAudioLaneUI.apply(this, arguments); }
     function safeSetItem() { return N.safeSetItem.apply(this, arguments); }
     function saveFileToLocalStorage() { return N.saveFileToLocalStorage.apply(this, arguments); }
     function segmentEnsure() { return N.segmentEnsure.apply(this, arguments); }
@@ -28,6 +29,7 @@
     function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
     function showAppConfirm() { return N.showAppConfirm.apply(this, arguments); }
     function syncLyricsToRoll() { return N.syncLyricsToRoll.apply(this, arguments); }
+    function syncAudioToRoll() { return N.syncAudioToRoll.apply(this, arguments); }
     function updateInstrumentSelectorUI() { return N.updateInstrumentSelectorUI.apply(this, arguments); }
     function updateNoteCount() { return N.updateNoteCount.apply(this, arguments); }
     function updatePianoKeyboardHighlight() { return N.updatePianoKeyboardHighlight.apply(this, arguments); }
@@ -59,8 +61,13 @@
         // 新建文件: 清空歌词轨道与歌词块 (歌词为工程元数据, 不随新文件保留)
         state.lyrics = [];
         state.lyricLanes = [];
+        // 新建文件: 音频轨道/音频块/已解码缓冲一并清空
+        state.audioLanes = [];
+        state.audioClips = [];
+        state.audioBuffers = {};
         lyricRebuildIndex();
         syncLyricsToRoll();
+        syncAudioToRoll();
         // 新建文件: 片段重置为整个工程一个片段
         exitSegmentsEditMode();
         state.segments = [];
@@ -172,6 +179,10 @@
             selectedPianoKey: state.selectedPianoKey,
             lyrics: JSON.parse(JSON.stringify(state.lyrics || [])),
             lyricLanes: JSON.parse(JSON.stringify(state.lyricLanes || [])),
+            audioLanes: JSON.parse(JSON.stringify(state.audioLanes || [])),
+            audioClips: JSON.parse(JSON.stringify(state.audioClips || [])),
+            // 已解码音频缓冲: 按引用在标签页间共享 (AudioBuffer 无法 JSON 序列化, 也不写入持久化)
+            audioBuffers: state.audioBuffers || {},
             segments: JSON.parse(JSON.stringify(state.segments || [])),
             segmentLanes: JSON.parse(JSON.stringify(state.segmentLanes || [])),
             segmentSeq: state._segmentIdSeq || 0,
@@ -200,6 +211,9 @@
         state.selectedPianoKey = s.selectedPianoKey;
         state.lyrics = JSON.parse(JSON.stringify(s.lyrics || []));
         state.lyricLanes = JSON.parse(JSON.stringify(s.lyricLanes || []));
+        state.audioLanes = JSON.parse(JSON.stringify(s.audioLanes || []));
+        state.audioClips = JSON.parse(JSON.stringify(s.audioClips || []));
+        state.audioBuffers = s.audioBuffers || {};
         state.segments = JSON.parse(JSON.stringify(s.segments || []));
         state.segmentLanes = JSON.parse(JSON.stringify(s.segmentLanes || []));
         state._segmentIdSeq = s.segmentSeq || 0;
@@ -237,6 +251,7 @@
         updateTrackPanelUI();
         lyricRebuildIndex();
         syncLyricsToRoll();
+        refreshAudioLaneUI();
         segmentSync();
         updateSongInfo();
         updateNoteCount();
@@ -469,6 +484,8 @@
                 solo_layers: Array.isArray(meta.solo_layers) ? meta.solo_layers.slice() : [],
                 lyrics: JSON.parse(JSON.stringify(s.lyrics || [])),
                 lyricLanes: JSON.parse(JSON.stringify(s.lyricLanes || [])),
+                audioLanes: JSON.parse(JSON.stringify(s.audioLanes || [])),
+                audioClips: JSON.parse(JSON.stringify(s.audioClips || [])),
                 segments: JSON.parse(JSON.stringify(s.segments || []))
             },
             notes: s.notes || [],

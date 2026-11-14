@@ -30,6 +30,7 @@
     function renderCustomInstList() { return N.renderCustomInstList.apply(this, arguments); }
     function renderTabs() { return N.renderTabs.apply(this, arguments); }
     function segmentSorted() { return N.segmentSorted.apply(this, arguments); }
+    function segmentEnsureComposedForExport() { return N.segmentEnsureComposedForExport.apply(this, arguments); }
     function showAppAlert() { return N.showAppAlert.apply(this, arguments); }
     function showAppPrompt() { return N.showAppPrompt.apply(this, arguments); }
     function showExportMetaDialog() { return N.showExportMetaDialog.apply(this, arguments); }
@@ -590,6 +591,8 @@
         if (N.shared._isExporting) return;
         N.shared._isExporting = true;
         try {
+            // 片段编辑的改动只在 state.segments 中: 先缝合再取音符, 否则导出的 NBS 是旧内容
+            segmentEnsureComposedForExport();
             var song = buildExportSongData(input);
             var exportName = input.name + '.nbs';
             showTaskProgress(exportName, '导出 NBS');
@@ -633,10 +636,18 @@
         N.shared._isExporting = true;
         showTaskProgress(input.name + (input.mode === 'mnb' ? '.mnb' : '.zip'), '打包工程…');
         try {
+            // 关键: 片段必须与 song.nbs 使用同一坐标系/层号。
+            // 片段编辑模式内导出时 state.notes 尚未缝合, 否则导入后片段大量为空。
+            segmentEnsureComposedForExport();
             var song = buildExportSongData(input);
             NBSClient.saveNBS(song).then(function(nbsBlob) {
                 var zip = new JSZip();
                 zip.file('song.nbs', nbsBlob);
+                // MNB 工程: 额外打包音频 (wav) 与 audio.json 音频元数据
+                var audioPayload = null;
+                var audioPayloadP = (input.mode === 'mnb' && typeof N.buildAudioExportPayload === 'function')
+                    ? N.buildAudioExportPayload().then(function(p) { audioPayload = p; }).catch(function() { audioPayload = null; })
+                    : Promise.resolve();
                 // 歌词数据: 勾选导出歌词时写入 lyrics.json
                 var hasLyrics = !!(input.lyricsZip && state.lyrics && state.lyrics.length);
                 if (hasLyrics) zip.file('lyrics.json', JSON.stringify(buildLyricsJson(), null, 2));
@@ -669,7 +680,14 @@
                         }));
                     })(item, no);
                 }
-                Promise.all(tasks).then(function() {
+                Promise.all(tasks.concat([audioPayloadP])).then(function() {
+                    // 音频文件与音频元数据写入压缩包 (无音频时 audioPayload 为 null)
+                    if (audioPayload && audioPayload.files && audioPayload.files.length) {
+                        for (var af = 0; af < audioPayload.files.length; af++) {
+                            zip.file(audioPayload.files[af].fileName, audioPayload.files[af].blob);
+                        }
+                        zip.file('audio.json', JSON.stringify(audioPayload.meta));
+                    }
                     // 计算 NBS 文件哈希, 供导入时校验分组数据是否与歌曲匹配
                     var hashP = (window.CustomInstruments && typeof CustomInstruments.hashBlob === 'function')
                         ? CustomInstruments.hashBlob(nbsBlob).catch(function() { return ''; })
@@ -682,6 +700,7 @@
                         if (nbsHash) meta.nbsHash = 'sha256:' + nbsHash;
                         if (hasLyrics) meta.lyrics = 'lyrics.json';
                         if (hasSegments) meta.segments = 'segments.json';
+                        if (audioPayload && audioPayload.files && audioPayload.files.length) meta.audio = 'audio.json';
                         zip.file('metadata.json', JSON.stringify(meta, null, 2));
                         return zip.generateAsync({ type: 'blob', mimeType: 'application/zip' });
                     });
@@ -944,14 +963,22 @@
                             // 注意必须在 applyParsedSong 之后 (载入歌曲会清空歌词)
                             return importLyricsFromZip(ctx.zipFile, ctx.meta).then(function(lyrCount) {
                                 return importSegmentsFromZip(ctx.zipFile, ctx.meta, song.notes).then(function(segCount) {
-                                    var msg = changed
-                                        ? '作品包导入完成，自定义音色已装载并重映射。'
-                                        : '作品包导入完成，歌曲已载入。';
-                                    if (lyrCount >= 0) msg += '\n' + i18nText('已还原歌词标注') + ': ' + lyrCount;
-                                    else msg += '\n' + i18nText('歌词数据解析失败，已跳过。');
-                                    if (segCount > 0) msg += '\n' + i18nText('已还原片段分割') + ': ' + segCount;
-                                    if (!hashOk) msg += '\n' + i18nText('NBS 文件校验不一致，分组数据可能不可靠。');
-                                    showAppAlert(msg, {title: '导入作品包', icon: 'fa-solid fa-circle-check'});
+                                    // 音频还原: 包内含 audio.json (或 metadata.audio 指向的文件) 时执行
+                                    var audioRefName = ctx.meta.audio || 'audio.json';
+                                    var audioP = (typeof N.importAudioPackage === 'function' && ctx.zipFile.file(audioRefName))
+                                        ? N.importAudioPackage(ctx.zipFile, ctx.meta).catch(function() { return 0; })
+                                        : Promise.resolve(0);
+                                    return audioP.then(function(audioCount) {
+                                        var msg = changed
+                                            ? '作品包导入完成，自定义音色已装载并重映射。'
+                                            : '作品包导入完成，歌曲已载入。';
+                                        if (lyrCount >= 0) msg += '\n' + i18nText('已还原歌词标注') + ': ' + lyrCount;
+                                        else msg += '\n' + i18nText('歌词数据解析失败，已跳过。');
+                                        if (segCount > 0) msg += '\n' + i18nText('已还原片段分割') + ': ' + segCount;
+                                        if (audioCount > 0) msg += '\n' + i18nText('已还原音频') + ': ' + audioCount;
+                                        if (!hashOk) msg += '\n' + i18nText('NBS 文件校验不一致，分组数据可能不可靠。');
+                                        showAppAlert(msg, {title: '导入作品包', icon: 'fa-solid fa-circle-check'});
+                                    });
                                 });
                             });
                         });

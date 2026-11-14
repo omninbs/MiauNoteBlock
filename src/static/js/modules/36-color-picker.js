@@ -146,11 +146,11 @@
             + '</div>'
             + '<div class="wn-cp-swatches" hidden></div>'
             + '</div>'
+            + '</div>'
+            + '</div>'
             + '<div class="wn-cp-actions">'
             + '<button type="button" class="wn-cp-btn wn-cp-cancel">' + i18nText('取消') + '</button>'
             + '<button type="button" class="wn-cp-btn wn-cp-ok">' + i18nText('确定') + '</button>'
-            + '</div>'
-            + '</div>'
             + '</div>'
             + '</div>';
         document.body.appendChild(_root);
@@ -164,10 +164,17 @@
         _gEl = _root.querySelector('.wn-cp-g');
         _bEl = _root.querySelector('.wn-cp-b');
 
-        // 点击遮罩空白处关闭 (面板内部点击不关闭)
+        // 点击遮罩空白处关闭: 要求按下与抬起都在面板外, 避免面板内拖动/滑出色轮时误关
+        var overlayPressed = false;
         _root.addEventListener('pointerdown', function(e) {
-            if (!_panel.contains(e.target)) closeColorPicker();
+            overlayPressed = !_panel.contains(e.target);
         });
+        _root.addEventListener('pointerup', function(e) {
+            var outside = !_panel.contains(e.target);
+            if (overlayPressed && outside) closeColorPicker();
+            overlayPressed = false;
+        });
+        _root.addEventListener('pointercancel', function() { overlayPressed = false; });
         _root.querySelector('.wn-cp-close').addEventListener('click', closeColorPicker);
         _root.querySelector('.wn-cp-cancel').addEventListener('click', closeColorPicker);
         // 预设色板: 点击即选中该色 (走 applyHex 触发实时预览)
@@ -238,7 +245,7 @@
         }
         var vw = window.innerWidth || document.documentElement.clientWidth;
         var vh = window.innerHeight || document.documentElement.clientHeight;
-        var pw = _panel.offsetWidth || 404;
+        var pw = _panel.offsetWidth || 300;
         var ph = _panel.offsetHeight || 300;
         var margin = 8;
         var left, top;
@@ -284,7 +291,7 @@
         _root.classList.toggle('is-mobile', isMobile());
         _root.style.display = isMobile() ? 'flex' : 'block';
         // 先显示以便测量尺寸, 再创建 iro 并定位
-        createPicker(isMobile() ? 240 : 150);
+        createPicker(isMobile() ? 220 : 118);
         syncInputs({
             r: parseInt(_currentHex.slice(1, 3), 16),
             g: parseInt(_currentHex.slice(3, 5), 16),

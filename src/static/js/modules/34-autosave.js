@@ -1058,6 +1058,7 @@
         var tooltipEl = null;
         var tooltipTimeout = null;
         var tooltipTarget = null;
+        var tooltipGuard = null;
         var TOOLTIP_DELAY = 400;
 
         function ensureTooltip() {
@@ -1066,6 +1067,28 @@
             tooltipEl.className = 'btn-tooltip';
             tooltipEl.style.cssText = 'position:fixed;z-index:99999;padding:6px 10px;background:rgba(0,0,0,0.88);color:#fff;font-size:12px;line-height:1.45;border-radius:6px;pointer-events:none;opacity:0;transition:opacity 0.15s;max-width:280px;box-shadow:0 4px 12px rgba(0,0,0,0.3);word-break:break-word;white-space:normal;';
             document.body.appendChild(tooltipEl);
+        }
+
+        // 元素是否仍可见 (被移除或隐藏时不再显示 tooltip)
+        function isTargetAlive(el) {
+            if (!el || !el.isConnected) return false;
+            return !!el.getClientRects().length;
+        }
+
+        // 显示期间守护: 元素被隐藏/移除或鼠标已移开时立即收起
+        function startGuard() {
+            if (tooltipGuard) return;
+            tooltipGuard = setInterval(function () {
+                if (!tooltipTarget) { stopGuard(); return; }
+                if (!isTargetAlive(tooltipTarget)) {
+                    restoreTitle(tooltipTarget);
+                    hideTooltip();
+                }
+            }, 250);
+        }
+
+        function stopGuard() {
+            if (tooltipGuard) { clearInterval(tooltipGuard); tooltipGuard = null; }
         }
 
         function showTooltip(el, text) {
@@ -1083,11 +1106,13 @@
             }
             tooltipEl.style.left = x + 'px';
             tooltipEl.style.top = y + 'px';
+            startGuard();
         }
 
         function hideTooltip() {
             if (tooltipEl) tooltipEl.style.opacity = '0';
             tooltipTarget = null;
+            stopGuard();
             if (tooltipTimeout) { clearTimeout(tooltipTimeout); tooltipTimeout = null; }
         }
 
@@ -1109,19 +1134,28 @@
             t.removeAttribute('title');
             if (tooltipTimeout) { clearTimeout(tooltipTimeout); tooltipTimeout = null; }
             tooltipTarget = t;
-            tooltipTimeout = setTimeout(function() { showTooltip(t, title); }, TOOLTIP_DELAY);
+            tooltipTimeout = setTimeout(function () {
+                tooltipTimeout = null;
+                // 延迟期间元素可能已被移除/隐藏
+                if (!isTargetAlive(t)) { hideTooltip(); return; }
+                showTooltip(t, title);
+            }, TOOLTIP_DELAY);
         });
 
-        // 移出窗口/文档边界时兜底隐藏并恢复 title
+        // 移出当前元素 (含窗口/文档边界) 时立即收起并恢复 title
         document.addEventListener('mouseout', function(e) {
-            if (!e.relatedTarget && tooltipTarget) {
-                restoreTitle(tooltipTarget);
-                hideTooltip();
-            }
+            if (!tooltipTarget) return;
+            var to = e.relatedTarget;
+            if (to && (to === tooltipTarget || tooltipTarget.contains(to))) return;
+            restoreTitle(tooltipTarget);
+            hideTooltip();
         });
 
         // 点击时隐藏
         document.addEventListener('mousedown', hideTooltip);
+        // 滚动导致位置错位时直接收起
+        window.addEventListener('scroll', function() { if (tooltipTarget) hideTooltip(); }, true);
+        window.addEventListener('blur', function() { if (tooltipTarget) hideTooltip(); });
 
         function restoreTitle(el) {
             if (!el) return;

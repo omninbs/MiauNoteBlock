@@ -581,7 +581,7 @@ function playAudioClip(buffer, whenSec, offsetSec, gain, pan, layerKey) {
     }
 
     source.start(startAt, offset);
-    var entry = { source: source, layer: layerKey };
+    var entry = { source: source, layer: layerKey, gainNode: gainNode };
     _activeSources.push(entry);
     source.onended = function() {
         var idx = _activeSources.indexOf(entry);
@@ -709,7 +709,7 @@ function playStreamedAudioClip(buffer, startAt, offsetSec, gain, pan, layerKey) 
         var stopped = false;
         var endedSent = false;
 
-        var entry = { layer: layerKey, stream: true, node: node };
+        var entry = { layer: layerKey, stream: true, node: node, gainNode: gainNode };
 
         function makeChunk() {
             var outL = new Float32Array(framesPerChunk);
@@ -1077,6 +1077,25 @@ function stopLayerAudio(layer) {
     }
 }
 
+/**
+ * 实时调整某层正在播放的音频块增益 (不重启播放, 用于试听时拖动增益滑条)
+ * @param {string|number} layerKey - 层标识
+ * @param {number} gain - 目标增益 (1 = 原声)
+ */
+function setClipLayerGain(layerKey, gain) {
+    var g = (typeof gain === 'number' && isFinite(gain)) ? Math.max(0, gain) : 1;
+    for (var i = 0; i < _activeSources.length; i++) {
+        var entry = _activeSources[i];
+        if (!entry || entry.layer !== layerKey || !entry.gainNode) continue;
+        var param = entry.gainNode.gain;
+        if (audioContext && param.setTargetAtTime) {
+            param.setTargetAtTime(g, audioContext.currentTime, 0.02);
+        } else {
+            param.value = g;
+        }
+    }
+}
+
 function stopAllAudio() {
     if (!audioContext) return;
     // 1. 停止并断开所有活动音源节点 (含流式音频块)
@@ -1135,6 +1154,8 @@ window.AudioEngine = {
     isEnhanceEnabled: isAudioEnhanceEnabled,
     stopAll: stopAllAudio,
     stopLayer: stopLayerAudio,
+    // 实时调整某层音频块的增益 (试听时拖动增益滑条)
+    setClipGain: setClipLayerGain,
     // 当前仍在发声的音源数量 (音符音频完全播放结束才减一)
     getActiveVoiceCount: function() { return _activeSources.length; },
     // 长音频流式播放: 模块是否就绪 / 当前是否有流式音频块在播放

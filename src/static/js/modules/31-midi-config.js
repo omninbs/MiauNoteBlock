@@ -515,7 +515,8 @@
         var entries = [
             { fmt: 'nbs', icon: 'fa-solid fa-file-code', label: t('导出为 NBS'), tip: t('标准 NBS 歌曲文件, 不含歌词') },
             { fmt: 'mnb', icon: 'fa-solid fa-box-archive', label: t('导出为 MNB 工程'), tip: t('工程压缩包, 可携带歌词与自定义音色') },
-            { fmt: 'lyrics', icon: 'fa-solid fa-microphone-lines', label: t('导出歌词元数据'), tip: t('仅导出歌词轨道与歌词块 (JSON)') }
+            { fmt: 'lyrics', icon: 'fa-solid fa-microphone-lines', label: t('导出歌词元数据'), tip: t('仅导出歌词轨道与歌词块 (JSON)') },
+            { fmt: 'mgsong', icon: 'fa-solid fa-compact-disc', label: t('导出 MusicGroove 曲谱 (.mgsong)'), tip: t('单音轨曲谱 + 可选背景音乐, 供 MusicGroove 模组使用') }
         ];
         for (var i = 0; i < entries.length; i++) {
             (function(entry) {
@@ -527,7 +528,11 @@
                 item.addEventListener('click', function(e) {
                     e.stopPropagation();
                     hideFileMenu();
-                    exportNBS(entry.fmt);
+                    if (entry.fmt === 'mgsong') {
+                        if (N.showMgsongExportDialog) N.showMgsongExportDialog();
+                    } else {
+                        exportNBS(entry.fmt);
+                    }
                 });
                 sub.appendChild(item);
             })(entries[i]);

@@ -9,6 +9,26 @@
     var tipEl = null;
     var tipTimer = null;
     var tipHideTimer = null;
+    var tipOwner = null;
+    var tipGuard = null;
+
+    // 元素是否仍处于可显示状态 (未被移除或隐藏)
+    function tipOwnerAlive(el) {
+        if (!el || !el.isConnected) return false;
+        return !!el.getClientRects().length;
+    }
+
+    function startTipGuard() {
+        if (tipGuard) return;
+        tipGuard = setInterval(function () {
+            if (!tipOwner) { stopTipGuard(); return; }
+            if (!tipOwnerAlive(tipOwner)) hideTip();
+        }, 250);
+    }
+
+    function stopTipGuard() {
+        if (tipGuard) { clearInterval(tipGuard); tipGuard = null; }
+    }
 
     function ensureTipEl() {
         if (tipEl) return tipEl;
@@ -33,17 +53,23 @@
         if (ty + rect.height > window.innerHeight - 4) ty = y - rect.height - 8;
         el.style.left = Math.max(4, tx) + 'px';
         el.style.top = Math.max(4, ty) + 'px';
+        startTipGuard();
     }
 
     function hideTip() {
-        if (!tipEl) return;
-        tipEl.classList.remove('cdd-tip-visible');
+        if (tipEl) tipEl.classList.remove('cdd-tip-visible');
+        tipOwner = null;
+        stopTipGuard();
     }
 
-    function scheduleTip(text, e) {
+    function scheduleTip(text, e, el) {
         if (tipTimer) clearTimeout(tipTimer);
         if (tipHideTimer) clearTimeout(tipHideTimer);
-        tipTimer = setTimeout(function() {
+        tipOwner = el;
+        tipTimer = setTimeout(function () {
+            tipTimer = null;
+            // 延迟期间元素可能已被移除/隐藏, 或鼠标已移开
+            if (!tipOwnerAlive(el)) { tipOwner = null; return; }
             showTip(text, e.clientX, e.clientY);
         }, 500);
     }
@@ -66,7 +92,7 @@
                 // changes can translate tooltips after the custom conversion.
                 if (!el.dataset.i18nDataTip) el.dataset.i18nDataTip = el.dataset.i18nTitle || text;
                 el.addEventListener('mouseenter', function(e) {
-                    scheduleTip(el.getAttribute('data-tip') || text, e);
+                    scheduleTip(el.getAttribute('data-tip') || text, e, el);
                 });
                 el.addEventListener('mousemove', function(e) {
                     if (tipEl && tipEl.classList.contains('cdd-tip-visible')) {
@@ -115,7 +141,7 @@
         // needs the unmodified source value to translate future tooltip text.
         if (!el.dataset.i18nDataTip) el.dataset.i18nDataTip = el.dataset.i18nTitle || text;
         el.addEventListener('mouseenter', function(e) {
-            scheduleTip(el.getAttribute('data-tip') || text, e);
+            scheduleTip(el.getAttribute('data-tip') || text, e, el);
         });
         el.addEventListener('mousemove', function(e) {
             if (tipEl && tipEl.classList.contains('cdd-tip-visible')) {

@@ -1,20 +1,20 @@
 <div align="center">
 
-<!-- LOGO Made By AI-->
+<!-- LOGO为AI生成 -->
 <img src="/docs/logo.jpg" alt="MiauNoteBlock" width="1280" />
 
 # MiauNoteBlock
 
-**A cross-platform Minecraft Note Block (NBS) music editor that runs entirely in your browser.**
+**一款完全在浏览器中运行的跨平台我的世界音符盒（NBS）音乐编辑器。**
 
-*Compose, edit, preview and export note block music — no installation required.*
+*编曲、编辑、试听、导出，全程无需安装，功能丰富，让自动化辅助你快速编曲！*
 
 [![Stars](https://img.shields.io/github/stars/omninbs/MiauNoteBlock?style=for-the-badge&logo=github&color=f2b705)](https://github.com/omninbs/MiauNoteBlock/stargazers)
 [![License](https://img.shields.io/github/license/omninbs/MiauNoteBlock?style=for-the-badge&color=3da639)](./LICENSE)
-[![Website](https://img.shields.io/badge/Live%20Demo-webnbs.com-4a90d9?style=for-the-badge&logo=googlechrome&logoColor=white)](https://webnbs.com)
-[![Languages](https://img.shields.io/badge/i18n-10%20languages-8a63d2?style=for-the-badge&logo=googletranslate&logoColor=white)](#-supported-languages)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=for-the-badge&logo=git&logoColor=white)](#-contributing)
-[![Made with AI](https://img.shields.io/badge/code-~70%25%20AI--generated-ff69b4?style=for-the-badge&logo=openai&logoColor=white)](#-about-ai-generated-code)
+[![Website](https://img.shields.io/badge/在线体验-webnbs.com-4a90d9?style=for-the-badge&logo=googlechrome&logoColor=white)](https://webnbs.com)
+[![Languages](https://img.shields.io/badge/多语言-10%20种-8a63d2?style=for-the-badge&logo=googletranslate&logoColor=white)](#-支持的界面语言)
+[![PRs Welcome](https://img.shields.io/badge/欢迎-PR-brightgreen?style=for-the-badge&logo=git&logoColor=white)](#-参与贡献)
+[![Made with AI](https://img.shields.io/badge/代码-约70%25%20由AI生成-ff69b4?style=for-the-badge&logo=openai&logoColor=white)](#-关于-AI-生成的代码)
 
 [**English**](./Readme.md) · [**简体中文**](./Readme_CN.md)
 
@@ -24,112 +24,114 @@
 
 <div align="center">
 
-### 🎹 [**Open the online editor → webnbs.com**](https://webnbs.com)
+### 🎹 [**打开在线编辑器 → webnbs.com**](https://webnbs.com)
 
 </div>
 
 ---
 
-## 📖 Table of Contents
+## 📖 目录
 
-- [What is MiauNoteBlock?](#-what-is-miaunoteblock)
-- [Features](#-features)
-- [Try it online](#-try-it-online)
-- [Supported languages](#-supported-languages)
-- [Tech stack](#-tech-stack)
-- [Getting started](#-getting-started)
-- [Project structure](#-project-structure)
-- [Contributing](#-contributing)
-- [Community](#-community)
-- [License](#-license)
-- [About AI-generated code](#-about-ai-generated-code)
-
----
-
-## 🐱 What is MiauNoteBlock?
-
-**MiauNoteBlock** is a fully client-side, cross-platform editor for **Minecraft Note Block Studio (NBS)** projects. It aims to make note block music composition available on *every* device — desktop, laptop, tablet and phone — straight from a browser tab, with no installs, no plugins and no uploads to a server.
-
-It reads and writes the standard `.nbs` format used by the Minecraft Note Block community, imports and exports **MIDI**, converts arbitrary music into the Minecraft note block range with an **octave-shifting algorithm** that keeps the original feel, and can render your song to **MP3 / WAV** — all locally on your machine.
-
-> **Privacy by design:** your files are processed in the browser. Nothing is uploaded, nothing is stored permanently.
-
-It was originally published as *NoteBlockWeb*, and is now called **MiauNoteBlock**.
+- [MiauNoteBlock 是什么？](#-miaunoteblock-是什么)
+- [功能特性](#-功能特性)
+- [在线体验](#-在线体验)
+- [支持的界面语言](#-支持的界面语言)
+- [技术栈](#-技术栈)
+- [快速开始](#-快速开始)
+- [项目结构](#-项目结构)
+- [参与贡献](#-参与贡献)
+- [交流与反馈](#-交流与反馈)
+- [开源协议](#-开源协议)
+- [关于 AI 生成的代码](#-关于-AI-生成的代码)
 
 ---
 
-## ✨ Features
+## 🐱 MiauNoteBlock 是什么？
+
+**MiauNoteBlock** 是一款完全运行在浏览器端的 **Minecraft Note Block Studio（NBS）** 编辑器。它的目标是让音符盒编曲在**任何设备**上都能用——电脑、笔记本、平板、手机，打开浏览器就能创作，无需安装、无需插件、也无需把文件上传到服务器。
+
+它读写 Minecraft 音符盒社区通用的标准 `.nbs` 格式，支持 **MIDI** 导入导出，通过**八度转换算法**把任意音乐搬进音符盒音域且尽量不损失听感，还能在本地把作品渲染成 **MP3 / WAV**。
+
+> **隐私优先：** 所有文件都在你的浏览器里处理，不上传、不永久存储。
+
+它最初以 *NoteBlockWeb* 的名字发布，现在正式更名为 **MiauNoteBlock**。
+
+---
+
+## ✨ 功能特性
 
 <table>
 <tr><td width="50%" valign="top">
 
-**🎼 Editing**
-- Full-featured **piano-roll** editor on Canvas
-- Standard `.nbs` import / export
-- Brush, eraser, select and performance tools
-- Multi-select, copy / paste, undo / redo
-- Note find & replace (Ctrl+F)
-- Track management, volume and instrument per track
-- Note-block click-count and block-name overlays
+**🎼 编辑**
+- Canvas 实现的完整**钢琴卷帘**编辑器
+- 标准 `.nbs` 导入 / 导出
+- 画笔、橡皮、选择、演奏等多种工具
+- 框选多选、复制粘贴、撤销重做
+- 音符查找 / 替换（Ctrl+F）
+- 音轨管理、音量与音色控制
+- 音符点击次数 / 方块名叠加显示
 
 </td><td width="50%" valign="top">
 
-**🎧 Audio & MIDI**
-- **MIDI import / export**, fully offline
-- **Octave-conversion algorithm** — fits any song into the Minecraft note-block range with minimal audible loss
-- **GM timbre fitting**: maps MIDI General MIDI programs onto NBS instruments, with per-instrument high/low substitutions
-- **Automatic sustain-track detection** for organ / strings / pad style programs
-- **SoundFont (SF3 / SF2)** support via SpessaSynth, with graceful fallback to the built-in synth
-- Render your song to **MP3 / WAV** in the browser
+**🎧 音频与 MIDI**
+- **MIDI 导入 / 导出**，完全离线
+- **八度转换算法**：在尽量不损失听感的前提下把音乐塞进音符盒音域
+- **GM 音色拟合**：把 MIDI 的 General MIDI 音色映射到 NBS 音色，并按乐器自动配置高 / 低替代音色
+- **延音轨道自动识别**：风琴、弦乐、Pad 等持续型音色自动启用延音
+- 支持 **SoundFont（SF3 / SF2）**，基于 SpessaSynth，失败时回退内置合成器
+- 在浏览器内直接渲染导出 **MP3 / WAV**
 
 </td></tr>
 <tr><td width="50%" valign="top">
 
-**🐈 Extras**
-- **Custom instruments** — import your own samples, stored locally (metadata in `localStorage`, audio in `IndexedDB`)
-- **Song compression** — perceptually-driven note reduction, from "dedupe only" to aggressive, with a live size estimate
-- **QWERTY performance mode** — play the grid like an instrument
-- Creative-assist tools for arranging
-- Fully **offline build** (`file://`) with embedded audio
+**🐈 更多**
+- **自定义音色**：导入自己的采样，本地保存（元数据存 `localStorage`，音频存 `IndexedDB`）
+- **歌曲压缩**：基于感知模型的音符精简，从「仅去重」到强力压缩，并实时预估体积
+- **QWERTY 演奏模式**：把网格当成乐器来弹
+- 创作辅助工具，让编排更顺手
+- 完全**离线构建**（`file://`），音频内嵌可直接双击打开
 
 </td><td width="50%" valign="top">
 
-**🌍 Platform**
-- Runs in any modern browser — **no install**
-- **Touch optimised**: brush/eraser drag-drawing, two-finger panning, landscape drawer
-- **10 UI languages** (AI-translated)
-- Adaptive WinUI 3 / Fluent Design inspired theme with Mica / Acrylic surfaces
-- Optional native desktop / mobile clients on the roadmap
+**🌍 平台**
+- 任何现代浏览器都能跑，**免安装**就是我们的特点，当然我们也正在逐步推测安装版本的，来摆脱浏览器的多余UI。
+- **触控优化**：画笔 / 橡皮连续涂抹、双指平移、横屏抽屉
+- **10 种界面语言**（AI 翻译）
+- 仿 WinUI 3 / Fluent Design 的自适应主题，含 Mica / Acrylic 半透明材质
+- 原生桌面 / 移动客户端已在计划中
 
 </td></tr>
 </table>
 
 ---
 
-## ⬇ Try it online
+## ⬇ 在线体验
 
-The editor is publicly deployed and free to use:
+编辑器已公开部署，任何人都可以免费使用：
 
-> ### 👉 **[https://webnbs.com](https://webnbs.com)**
+> ###  **[https://webnbs.com](https://webnbs.com)**   ៷>ᴗ<៷
 
-Nothing to download, nothing to install. Your song stays on your device.
+B站Toy版本：https://www.bilibili.com/toy/webnbs
 
-**Offline / self-hosted build** (double-click `index.html`, works over `file://`):
+无需下载、无需安装，作品始终留在你自己的设备上。
+
+**离线 / 自托管构建**（双击 `index.html`，可在 `file://` 下使用）：
 
 ```bash
-npm install      # one-time, for the build script
-npm run build    # src/  ->  blbl-toy/  with base64-embedded audio
+npm install      # 仅构建脚本需要，一次即可
+npm run build    # src/  ->  blbl-toy/，音频以 base64 内嵌
 ```
 
-Then open `blbl-toy/index.html`.
+然后打开 `blbl-toy/index.html`。
 
-> Native desktop and mobile clients are planned to remove browser-window limitations.
+> 为了摆脱浏览器窗口的限制，我们正在计划制作原生桌面 / 移动客户端。
 
 ---
 
-## 🌍 Supported languages
+## 🌍 支持的界面语言
 
-| Language | Locale |
+| 语言 | Locale |
 | --- | --- |
 | English (United States) | `en-US` |
 | 简体中文 | `zh-CN` |
@@ -142,11 +144,11 @@ Then open `blbl-toy/index.html`.
 | 한국어 | `ko-KR` |
 | Bahasa Indonesia | `id-ID` |
 
-Translations are AI-generated and may contain inaccuracies — issues and corrections are very welcome.
+翻译由 AI 生成，可能并不完全准确。
 
 ---
 
-## 🛠 Tech stack
+## 🛠 技术栈
 
 <div align="center">
 
@@ -162,113 +164,117 @@ Translations are AI-generated and may contain inaccuracies — issues and correc
 
 </div>
 
-- **Frontend:** vanilla JavaScript (no framework), layered Canvas rendering, Web Audio API playback, Web MIDI for live input.
-- **Audio:** SpessaSynth (`WorkletSynthesizer`) for SoundFont playback, plus a built-in fallback synth and an offline render pipeline for MP3/WAV export.
-- **Backend:** a small **FastAPI** service that only serves static files, exposes a tiny `/api/config` endpoint and injects SEO metadata. All NBS/MIDI parsing, conversion and playback happen **client-side**.
+- **前端：** 原生 JavaScript（无框架）、分层 Canvas 渲染、Web Audio API 播放、Web MIDI 实时输入。
+- **音频：** 使用 SpessaSynth（`WorkletSynthesizer`）播放 SoundFont，另有内置回退合成器，以及一套离线渲染管线用于导出 MP3/WAV。
+- **后端：** 一个轻量的 **FastAPI** 服务，只负责托管静态文件、提供极小的 `/api/config` 接口并注入 SEO 元数据。所有 NBS/MIDI 的解析、转换与播放都在**客户端**完成。
 
 ---
 
-## 🚀 Getting started
+## 🚀 快速开始
 
-### Run locally (dev server)
+### 本地运行（开发服务器）
 
 ```bash
-# 1. Install Python dependencies
+# 1. 安装 Python 依赖
 pip install fastapi uvicorn pyyaml
 
-# 2. Start the server (reads config.yaml, default port 8000)
+# 2. 启动服务（读取 config.yaml，默认端口 8000）
 python app.py
 ```
 
-Then open `http://127.0.0.1:8000`.
+然后访问 `http://127.0.0.1:8000`（如果你改端口了，需要注意访问的端口是否正确）。
 
-### Build the offline bundle
+### 构建离线包
 
 ```bash
-npm run build          # or: node build_local.js
-# Windows convenience script:
+npm run build          # 或：node build_local.js
+# Windows 便捷脚本：
 build_local.bat
 ```
 
-This produces `blbl-toy/`, a self-contained copy of the app with the 20 OGG instrument samples embedded as base64 so it works when opened directly from disk.
+构建产物在 `blbl-toy/`，其中的 20 个 OGG 音色样本会以 base64 内嵌，可直接从磁盘双击打开使用。
 
-### Configuration
+正如文件夹名称，这个脚本的目的就是构建离线包，便于我上传B站的Toy。
+本项目已经上传了Bilibili Toy：https://www.bilibili.com/toy/webnbs
 
-`config.yaml` is created automatically on first run. It controls the listening host/port, the privacy notice, the release notes shown in-app, the SoundFont download URL and the SEO metadata.
+### 配置
+
+首次启动会自动生成 `config.yaml`，用于配置监听地址与端口、隐私声明、应用内显示的更新日志、SoundFont 下载地址以及 SEO 元数据。
 
 ---
 
-## 📁 Project structure
+## 📁 项目结构
 
 ```text
 MiauNoteBlock/
-├── app.py                  # FastAPI static host + SEO injection
-├── config.yaml             # Server / privacy / release / soundfont / SEO config
-├── build_local.js          # Offline (file://) build script
-├── build_local.bat         # Windows build helper
+├── app.py                  # FastAPI 静态托管 + SEO 注入
+├── config.yaml             # 服务器 / 隐私 / 版本 / 音色库 / SEO 配置
+├── build_local.js          # 离线（file://）构建脚本
+├── build_local.bat         # Windows 构建脚本
 ├── src/
-│   ├── index.html          # Single-page app shell
+│   ├── index.html          # 单页应用外壳
 │   └── static/
-│       ├── css/            # WinUI/Fluent-inspired theme
-│       ├── js/             # Editor, piano roll, NBS/MIDI client, audio engine, i18n
-│       ├── sounds/         # 20 OGG note-block instrument samples
-│       └── sprites/        # Instrument icons
-├── docs/                   # Design documents
-└── test/                   # Node/Python regression tests
+│       ├── css/            # WinUI / Fluent 风格主题
+│       ├── js/             # 编辑器、钢琴卷帘、NBS/MIDI 客户端、音频引擎、i18n
+│       ├── sounds/         # 20 个 OGG 音符盒音色样本
+│       └── sprites/        # 乐器图标
+├── docs/                   # 设计文档
+└── test/                   # Node / Python 回归测试
 ```
 
 ---
 
-## 👥 Contributing
+## 👥 参与贡献
 
-Contributions of all sizes are welcome — bug reports, translation fixes, features and design feedback.
+欢迎任何规模的贡献——报 Bug、修翻译、加功能、提设计建议都行。
 
-1. **Found a bug or have an idea?** [Open an issue](../../issues/new/choose).
-2. **Sending a pull request?** Please open an issue to discuss the change first, unless it is a very small fix.
-3. **Translations:** the 10 locale dictionaries live in `src/static/js/i18n.js`. Adding or fixing strings is a great first contribution.
+1. **发现 BUG 或有新想法？** 请到 [Issues](../../issues/new/choose) 提交。
+2. **翻译：** 10 种语言的词典都在 `src/static/js/i18n.js`，补充或修正文案是很好的入门贡献。
 
-Local development requires **Node.js** (for the build/tests) and **Python 3** (for the dev server).
-
----
-
-## 💬 Community
-
-Join the QQ group to share songs, get support and meet other NBS creators:
-
-> **QQ Group: 2156069838**
-
-Feedback email: `3451392772@qq.com`
+本地开发需要 **Node.js**（用于构建与测试）和 **Python 3**（用于开发服务器）。
 
 ---
 
-## 📜 License
+## 💬 交流与反馈
 
-Licensed under the **GNU General Public License v3.0**.
+欢迎加入 QQ 交流群，分享乐曲、获取技术支持，和其他 NBS 创作者交流：
 
-- Free for personal study and local modification.
-- Any public distribution (free or commercial) of derivative works **must remain open-source, credit the original author, and comply fully with GPLv3**.
-- **Closed-source commercial redistribution without separate written authorization is prohibited.**
+> **QQ 交流群：2156069838**
 
-The goal is simple: let more people edit NBS files on more devices, with plenty of useful new features along the way.
-
-See [LICENSE](./LICENSE) for the full text.
+反馈邮箱：`3451392772@qq.com`
 
 ---
 
-## 🤖 About AI-generated code
+## 📜 开源协议
 
-**Roughly 70% of this project's code was written by AI.**
+本项目采用 **GNU General Public License v3.0** 开源协议。
 
-> It does not guarantee perfect code quality, but the results have proven that AI is genuinely impressive. Due to personal habits, some parts lack thorough comments and are sprinkled with AI-generated notes that are not always relevant. When reading the code, feel free to let an AI assist you.
+- 允许个人学习、本地自由修改；
+- 任何公开分发（免费 / 商用）的衍生程序，**必须保持开源、标注原作者，并遵循 GPLv3 协议**；
+- **禁止未经单独授权闭源打包进行商业售卖。**，我不希望我的免费的软件被用于收益。
+
+我们只是想让更多人能在不同设备上编辑 NBS，同时也加入了很多实用的新颖功能。
+
+完整协议内容见 [LICENSE](./LICENSE)。
+
+---
+
+## 🤖 关于 AI 生成的代码
+
+**本项目约 70% 的代码由 AI 编写。**
+
+> 虽然它不能保证代码质量完美，但事实证明 AI 确实令人印象深刻。由于个人习惯，有些代码缺乏完美的注释，并充斥着 AI 生成的无关备注。阅读代码时，你可以让 AI 提供协助。
+
+我们不排斥你使用AI编写后提交PR，但是不要不经过review和测试就提交PR，这很烦。
 
 ---
 
 <div align="center">
 
-**If MiauNoteBlock helps you make Minecraft note block music, please leave a ⭐ — it really helps!**
+**如果 MiauNoteBlock 对你的我的世界音符盒创作有帮助，请点一个 ⭐ Star，这真的很重要！**
 
-<a href="https://github.com/COM1919/MiauNoteBlock/stargazers"><img src="https://img.shields.io/github/stars/COM1919/MiauNoteBlock?style=social" alt="Star this repo" /></a>
+<a href="https://github.com/COM1919/MiauNoteBlock/stargazers"><img src="https://img.shields.io/github/stars/COM1919/MiauNoteBlock?style=social" alt="给项目点 Star" /></a>
 
-<sub>Made with ❤ and a lot of prompt engineering.</sub>
+<sub>用 ❤ 和大量的提示词工程制作，还有时间哦。</sub>
 
 </div>

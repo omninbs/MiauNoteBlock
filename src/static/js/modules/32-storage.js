@@ -63,7 +63,12 @@
             }
             // 同时清理 IndexedDB 中没有对应历史记录的孤儿文件
             projectDbKeys().then(function(ids) {
-                var orphans = ids.filter(function(id) { return !validIds[id]; });
+                var orphans = ids.filter(function(id) {
+                    // 音频资源记录 (audio_asset__*) 不属于工程文件, 不能按历史列表判定为孤儿,
+                    // 否则每次刷新都会被当成垃圾清掉, 导致音频块波形/播放全部丢失
+                    if (String(id).indexOf('audio_asset__') === 0) return false;
+                    return !validIds[id];
+                });
                 if (!orphans.length) return;
                 orphans.forEach(function(id) { projectDbDelete(id); });
                 console.info('已清理 ' + orphans.length + ' 个 IndexedDB 孤儿文件');
@@ -517,7 +522,7 @@
             ? JSON.parse(JSON.stringify(data.audioClips))
             : (Array.isArray(song.audioClips) ? JSON.parse(JSON.stringify(song.audioClips)) : []);
         state.audioBuffers = {};
-        // 工程内保存了音频 (WAV base64) 时异步解码还原; 否则保持缺失标记
+        // 工程内保存了音频时异步解码还原; 未内联的资源回退 IndexedDB 中的原始字节
         if (data.audioAssets && typeof N.restoreAudioAssets === 'function') {
             N.restoreAudioAssets(data.audioAssets).then(function (map) {
                 state.audioBuffers = map || {};
@@ -525,6 +530,7 @@
             }).catch(function () { refreshAudioLaneUI(); });
         } else {
             refreshAudioLaneUI();
+            if (typeof N.restoreAudioAssetsFromDb === 'function') N.restoreAudioAssetsFromDb();
         }
         state.notes = notes;
         // 新格式不再把音符重复写入 song, 这里补齐, 保证 song.notes 与 state.notes 一致

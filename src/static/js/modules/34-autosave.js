@@ -246,6 +246,10 @@
                     state.audioBuffers = map || {};
                     refreshAudioLaneUI();
                 }).catch(function () {});
+            } else if (typeof N.restoreAudioAssetsFromDb === 'function') {
+                // 自动保存不写音频字节: 从 IndexedDB 按 bufferId 重新解码还原
+                // (否则刷新后音频块全部变为缺失, 波形消失)
+                N.restoreAudioAssetsFromDb();
             }
             // 片段数据随自动保存一并恢复
             state._segmentIdSeq = 0;

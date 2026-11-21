@@ -1626,10 +1626,12 @@
     // 片段编辑模式内直接导出时, state.notes 仍是进入片段模式前的旧内容,
     // 而 segments.json 记录的是当前片段坐标 —— 两者不一致, 导入后会按新片段窗口
     // 去切旧音符, 表现为「大部分片段是空的」。导出前必须先把片段 compose 回来。
+    // 注意: 只有仍在片段编辑模式内才需要缝合 —— 退出片段模式时 exitSegmentsEditMode
+    // 已经缝合过了; 若在 NBS 模式下也按 _segmentsEdited 缝合, 会用片段里的旧音符副本
+    // 覆盖用户退出后在 NBS 模式中的后续编辑, 导出反而变成「未更改前的旧状态」。
     function segmentEnsureComposedForExport() {
         if (!Array.isArray(state.segments) || !state.segments.length) return false;
-        // 未进过片段编辑且片段只是自动生成的整曲占位 → 无需重排层
-        if (!state.segmentsEditMode && !state._segmentsEdited) return false;
+        if (!state.segmentsEditMode) return false;
         segmentCompose();
         if (state.pianoRoll) state.pianoRoll.setNotes(state.notes);
         rebuildFromNotes();

@@ -499,7 +499,8 @@
         this.audioSelectedId = null;      // 当前选中的音频块 id
         this._audioHover = null;          // { id, zone } 悬停高亮
         this.audioBuffers = null;         // { id: { name, buffer, duration } } 外部注入的引用 (仅内存)
-        this._audioPeaks = {};            // 波形缓存 key = clip.id → { sig, peaks }
+        this._audioPeaks = {};            // 波形缓存 key = clip.id → { sig, bars, peaks }
+        this._wavePeaks = {};             // 缺失音频时用 clip.wave 重采样的峰值缓存
         this._audioLaneClick = false;     // 本次按下是否落在音频行内 (用于 mouseup 分支收口)
         this._audioLongPressTimer = null; // 触摸端长按音频块 → 右键菜单
         this.DEFAULT_AUDIOCLIP_DURATION = 4;
@@ -1564,10 +1565,17 @@
         }
     };
 
-    // 音频 buffer 表: { id: { name, buffer, duration } } — 浅存引用, 换表后波形缓存全部失效
+    // 音频 buffer 表: { id: { name, buffer, duration } } — 浅存引用
+    //   仅在引用整体替换时清空波形缓存; 同一对象内追加 buffer 时保留已有 key 的峰值缓存,
+    //   避免每次轨道编辑 (syncAudioToRoll) 后把所有波形重算一遍
     PianoRoll.prototype.setAudioBuffers = function(map) {
-        this.audioBuffers = map || null;
-        this._audioPeaks = {};
+        var next = map || null;
+        var changed = (this.audioBuffers !== next);
+        this.audioBuffers = next;
+        if (changed) {
+            this._audioPeaks = {};
+            this._wavePeaks = {};
+        }
         this._fullRedrawNeeded = true;
         this.requestRender();
     };
@@ -1780,9 +1788,10 @@
         }
     };
 
-    // 波形峰值缓存 (key = clip.id): 取 buffer 通道数据, 按 offsetSec + dur 秒窗口聚合 ~60 根 min/max 柱
+    // 波形峰值缓存 (key = clip.id): 取 buffer 通道数据, 按 offsetSec + dur 秒窗口聚合 min/max 柱
+    //   bars: 聚合柱数 (由绘制宽度决定; 柱数越多形状越贴近真实波形)
     //   计算失败 (无 buffer / 异常) 静默降级返回 null
-    PianoRoll.prototype._computeAudioPeaks = function(clip) {
+    PianoRoll.prototype._computeAudioPeaks = function(clip, bars) {
         try {
             var entry = this.audioBuffers ? this.audioBuffers[clip.bufferId] : null;
             var buffer = entry && entry.buffer;
@@ -1798,14 +1807,17 @@
             if (startS > buffer.length - 2) return null;
             if (endS > buffer.length) endS = buffer.length;
             if (endS - startS < 2) return null;
-            var data = buffer.getChannelData(0);
-            var bars = 60;
+            // 立体声: 两声道一起取极值 (只用左声道时, 右声道独有内容会显示成空白)
+            var dataL = buffer.getChannelData(0);
+            var dataR = (buffer.numberOfChannels > 1) ? buffer.getChannelData(1) : null;
+            bars = Math.max(4, Math.min(4000, Math.round(bars) || 60));
             var step = (endS - startS) / bars;
             // 抽样聚合: 每根柱最多采样 160 个点。
             // 若逐样本扫描, 几分钟的音频会有上千万次比较, 播放开始首次绘制波形时
             // 会阻塞主线程数百毫秒 (用户感知为「开头卡」)。抽样后成本与音频长度无关。
             var SAMPLES_PER_BAR = 160;
             var peaks = [];
+            var maxAbs = 0;
             for (var b = 0; b < bars; b++) {
                 var s0 = startS + Math.floor(b * step);
                 var s1 = startS + Math.floor((b + 1) * step);
@@ -1815,19 +1827,33 @@
                 var stride = Math.max(1, Math.floor(span / SAMPLES_PER_BAR));
                 var mn = 1, mx = -1;
                 for (var si = s0; si < s1; si += stride) {
-                    var v = data[si];
+                    var v = dataL[si];
                     if (v < mn) mn = v;
                     if (v > mx) mx = v;
+                    if (dataR) {
+                        var vr = dataR[si];
+                        if (vr < mn) mn = vr;
+                        if (vr > mx) mx = vr;
+                    }
                 }
                 // 补采本柱最后一个样本, 避免峰值恰好落在步长间隙
                 if (s1 - 1 >= s0) {
-                    var lv = data[s1 - 1];
+                    var lv = dataL[s1 - 1];
                     if (lv < mn) mn = lv;
                     if (lv > mx) mx = lv;
+                    if (dataR) {
+                        var rv = dataR[s1 - 1];
+                        if (rv < mn) mn = rv;
+                        if (rv > mx) mx = rv;
+                    }
                 }
                 if (mn > mx) { mn = 0; mx = 0; }
                 peaks.push({ min: mn, max: mx });
+                if (mx > maxAbs) maxAbs = mx;
+                if (-mn > maxAbs) maxAbs = -mn;
             }
+            // 窗口内最大绝对峰值: 绘制时按此归一化, 让低响度音频的波形也能看清形状
+            peaks.maxAbs = maxAbs;
             return peaks;
         } catch (e) {
             return null;
@@ -1835,29 +1861,166 @@
     };
 
     // 取波形缓存 (带签名防陈旧; 计算失败缓存 null 避免每帧重试)
-    //   签名必须包含 clip.id + bufferId + offsetSec + dur: 裁剪/分割后 offset/dur 变化立即重算
-    PianoRoll.prototype._getAudioPeaks = function(clip) {
+    //   签名必须包含 clip.id + bufferId + offsetSec + dur + tempo:
+    //   裁剪/分割后 offset/dur 变化、或改速度 (tick→秒换算变化) 都要立即重算
+    //   bars 单独比对: 不同显示宽度需要不同柱数, 避免拿到低分辨率缓存
+    PianoRoll.prototype._getAudioPeaks = function(clip, bars) {
+        bars = Math.max(4, Math.min(4000, Math.round(bars) || 60));
+        var st = (window.WebNBS && window.WebNBS.state) || {};
+        var tempo = parseFloat(st.tempo);
+        if (!isFinite(tempo) || tempo <= 0) tempo = 20;
         var sig = (clip.id || '') + '@' + (clip.bufferId || '') + '@'
-            + (clip.offsetSec || 0) + '@' + this._audioClipDuration(clip);
+            + (clip.offsetSec || 0) + '@' + this._audioClipDuration(clip) + '@' + tempo;
         var entry = this._audioPeaks[clip.id];
-        if (entry && entry.sig === sig) return entry.peaks;
-        // 播放中不在渲染帧内同步扫描 PCM: 先跳过波形, 空闲时计算完再重绘
+        if (entry && entry.sig === sig && entry.bars === bars) return entry.peaks;
+        // 播放中限制聚合柱数: 波形略粗但绝不会整段空白
+        // (旧实现播放时直接返回 null 等异步结果, 用户看着「没有波形」)
         var playing = !!(window.WebNBS && window.WebNBS.state && window.WebNBS.state.isPlaying);
-        if (playing) {
-            this._audioPeaks[clip.id] = { sig: sig, peaks: null };
-            var self = this;
-            setTimeout(function() {
-                var e2 = self._audioPeaks[clip.id];
-                if (!e2 || e2.sig !== sig) return;
-                e2.peaks = self._computeAudioPeaks(clip);
-                self._fullRedrawNeeded = true;
-                if (self.requestRender) self.requestRender(); else self.render();
-            }, 0);
+        if (playing && bars > 800) {
+            bars = 800;
+            if (entry && entry.sig === sig && entry.bars === bars) return entry.peaks;
+        }
+        var peaks = this._computeAudioPeaks(clip, bars);
+        this._audioPeaks[clip.id] = { sig: sig, bars: bars, peaks: peaks };
+        return peaks;
+    };
+
+    // 从 AudioBuffer 生成可持久化的波形概览 (随工程一起保存)
+    //   返回 { dur: 音频总时长(秒), data: [min0,max0,min1,max1,...] } (0~255 量化)
+    //   目的: 音频缓冲丢失 (刷新/换设备/file:// 无 IndexedDB/旧工程) 时仍能画出真实波形
+    PianoRoll.prototype.buildClipWaveData = function(buffer, n) {
+        try {
+            if (!buffer || !buffer.getChannelData || !(buffer.length > 0)) return null;
+            n = Math.max(120, Math.min(2000, n || 800));
+            var dataL = buffer.getChannelData(0);
+            var dataR = (buffer.numberOfChannels > 1) ? buffer.getChannelData(1) : null;
+            var total = buffer.length;
+            var step = total / n;
+            var out = new Array(n * 2);
+            for (var b = 0; b < n; b++) {
+                var s0 = Math.floor(b * step);
+                var s1 = Math.floor((b + 1) * step);
+                if (s1 <= s0) s1 = s0 + 1;
+                if (s1 > total) s1 = total;
+                var stride = Math.max(1, Math.floor((s1 - s0) / 120));
+                var mn = 1, mx = -1;
+                for (var i = s0; i < s1; i += stride) {
+                    var v = dataL[i];
+                    if (v < mn) mn = v;
+                    if (v > mx) mx = v;
+                    if (dataR) {
+                        var vr = dataR[i];
+                        if (vr < mn) mn = vr;
+                        if (vr > mx) mx = vr;
+                    }
+                }
+                if (mn > mx) { mn = 0; mx = 0; }
+                out[b * 2] = Math.round((Math.max(-1, mn) + 1) * 127.5);
+                out[b * 2 + 1] = Math.round((Math.max(-1, mx) + 1) * 127.5);
+            }
+            return { dur: buffer.duration || 0, data: out };
+        } catch (e) {
             return null;
         }
-        var peaks = this._computeAudioPeaks(clip);
-        this._audioPeaks[clip.id] = { sig: sig, peaks: peaks };
-        return peaks;
+    };
+
+    // 用持久化的波形概览 (clip.wave) 生成峰值柱: buffer 不可用时的兜底
+    //   clip.wave.data 描述整段音频, 按 clip 的 offsetSec/dur 截取对应窗口再重采样到 bars
+    PianoRoll.prototype._peaksFromWaveData = function(clip, bars) {
+        var w = clip && clip.wave;
+        if (!w || !w.data || !(w.data.length >= 4) || !(w.dur > 0)) return null;
+        var totalN = Math.floor(w.data.length / 2);
+        var durSec = this._audioClipSeconds(clip);
+        if (!(durSec > 0)) return null;
+        bars = Math.max(4, Math.min(2000, Math.round(bars) || 60));
+        // 缓存: 缺失音频时每帧都要用概览重采样, 不缓存会持续吃 CPU
+        var st = (window.WebNBS && window.WebNBS.state) || {};
+        var tempo = parseFloat(st.tempo);
+        if (!isFinite(tempo) || tempo <= 0) tempo = 20;
+        var key = bars + '|' + (clip.offsetSec || 0) + '|' + this._audioClipDuration(clip)
+            + '|' + tempo + '|' + totalN;
+        var cache = this._wavePeaks || (this._wavePeaks = {});
+        var hit = cache[clip.id];
+        if (hit && hit.key === key) return hit.peaks;
+        var off = (typeof clip.offsetSec === 'number' && isFinite(clip.offsetSec)) ? clip.offsetSec : 0;
+        var t0 = Math.max(0, Math.min(1, off / w.dur));
+        var t1 = Math.max(t0, Math.min(1, (off + durSec) / w.dur));
+        var i0 = Math.floor(t0 * totalN);
+        var i1 = Math.ceil(t1 * totalN);
+        if (i1 <= i0) i1 = i0 + 1;
+        if (i1 > totalN) i1 = totalN;
+        var count = i1 - i0;
+        bars = Math.max(4, Math.min(4000, Math.round(bars) || 60));
+        var out = new Array(bars);
+        var maxAbs = 0;
+        for (var b = 0; b < bars; b++) {
+            var a = i0 + Math.floor(b * count / bars);
+            var z = i0 + Math.floor((b + 1) * count / bars);
+            if (z <= a) z = a + 1;
+            if (z > totalN) z = totalN;
+            var mn = 1, mx = -1;
+            for (var i = a; i < z; i++) {
+                var vmin = w.data[i * 2] / 127.5 - 1;
+                var vmax = w.data[i * 2 + 1] / 127.5 - 1;
+                if (vmin < mn) mn = vmin;
+                if (vmax > mx) mx = vmax;
+            }
+            if (mn > mx) { mn = 0; mx = 0; }
+            out[b] = { min: mn, max: mx };
+            if (mx > maxAbs) maxAbs = mx;
+            if (-mn > maxAbs) maxAbs = -mn;
+        }
+        out.maxAbs = maxAbs;
+        cache[clip.id] = { key: key, peaks: out };
+        return out;
+    };
+
+    // 音频块波形绘制 (NBS 音频轨与片段模式音频同步块共用)
+    //   x0/wpx: 块的水平屏幕区间; top/h: 波形可用的纵向区间 (块内)
+    //   参考「导出曲谱」弹窗的画法: 按列取 min/max 填充
+    //   振幅按本窗口最大峰值归一化 + pow(0.8) 感知压缩: 低响度音频也能看清起伏
+    PianoRoll.prototype._drawClipWaveform = function(ctx, clip, x0, wpx, top, h) {
+        var padX = 2;
+        var waveW = wpx - padX * 2;
+        if (waveW < 4 || h < 2) return;
+        // 约 1.5px 一根柱: 波形更细腻, 同时把绘制次数减半
+        var bars = Math.max(6, Math.min(2000, Math.round(waveW / 1.5)));
+        var peaks = this._getAudioPeaks(clip, bars);
+        if (!peaks || !peaks.length) {
+            // buffer 不可用 (音频缺失/刷新后未解码) → 用随工程保存的波形概览兜底
+            peaks = this._peaksFromWaveData(clip, bars);
+            if (!peaks || !peaks.length) return;
+        }
+        var midY = top + h / 2;
+        var halfH = Math.max(1, h / 2) * 0.92;   // 上下留一点空隙, 波形不会顶到块边
+        var bw = waveW / peaks.length;
+        // 柱宽跟随柱间距 (+0.4 防亚像素缝隙, 宽块上不会出现梳齿状空隙)
+        var barW = Math.max(1, bw + 0.4);
+        // 归一化: 窗口内最大峰值映射到满幅; 极静音窗口 (峰值过小) 不放大, 以免画成满幅噪声
+        var maxAbs = peaks.maxAbs || 0;
+        var norm = (maxAbs > 0.04) ? (1 / maxAbs) : 1;
+        var waveX0 = x0 + padX;
+        // 只绘制视口内的柱: 长音频的宽块可能有上百根柱不可见
+        var visW = this.displayWidth || 4000;
+        var bwSafe = Math.max(0.5, bw);
+        var i0 = Math.max(0, Math.floor((0 - waveX0) / bwSafe) - 1);
+        var i1 = Math.min(peaks.length, Math.ceil((visW - waveX0) / bwSafe) + 1);
+        // 单条路径批量填充: 比逐柱 fillRect 少大量调用开销, 且半透明不会叠加变色
+        ctx.fillStyle = 'rgba(198,232,248,0.92)';
+        ctx.beginPath();
+        for (var p = i0; p < i1; p++) {
+            var pk = peaks[p];
+            var up = halfH * Math.pow(Math.max(0, pk.max) * norm, 0.8);
+            var dn = halfH * Math.pow(Math.max(0, -pk.min) * norm, 0.8);
+            if (up > halfH) up = halfH;
+            if (dn > halfH) dn = halfH;
+            var bx = waveX0 + p * bw;
+            // 静音处保留 1px 中线, 块内不会出现断裂空白
+            var y0 = midY - Math.max(0.5, up);
+            var y1 = midY + Math.max(0.5, dn);
+            ctx.rect(bx, y0, barW, Math.max(1, y1 - y0));
+        }
+        ctx.fill();
     };
 
     // ============ 片段编辑模式 (剪映/AE 风格的整曲片段剪辑) ============
@@ -2651,7 +2814,7 @@
                 for (var ac = 0; ac < aclips.length; ac++) {
                     var c = aclips[ac];
                     if ((c.lane || 0) !== specialLaneIndex) continue;
-                    var dur = (typeof c.dur === 'number' && isFinite(c.dur) && c.dur >= 1) ? Math.round(c.dur) : 4;
+                    var dur = this._audioClipDuration(c);
                     var x0 = this._tickToScreen(c.tick);
                     var bw = Math.max(3, cellWpx * dur);
                     var x1 = x0 + bw;
@@ -2659,31 +2822,24 @@
                     if (hh < 4) continue;
                     var missing = !!c.missing;
                     ctx.save();
-                    ctx.fillStyle = missing ? 'rgba(86,122,132,0.35)' : 'rgba(86,122,132,0.78)';
+                    // 极淡青灰底衬: 仅标示块范围, 让真实波形成为视觉主体
+                    ctx.fillStyle = missing ? 'rgba(86,122,132,0.10)' : 'rgba(86,122,132,0.18)';
                     this._segRoundRect(ctx, x0, top, bw, hh, 4);
                     ctx.fill();
-                    ctx.strokeStyle = 'rgba(140,180,190,0.45)';
+                    ctx.strokeStyle = 'rgba(140,180,190,0.42)';
                     ctx.lineWidth = 1;
                     this._segRoundRect(ctx, x0 + 0.5, top + 0.5, Math.max(2, bw - 1), hh - 1, 4);
                     ctx.stroke();
                     if (missing && ctx.setLineDash) {
                         ctx.setLineDash([4, 3]);
-                        ctx.strokeStyle = 'rgba(236,246,248,0.65)';
+                        ctx.strokeStyle = 'rgba(236,246,248,0.55)';
                         ctx.lineWidth = 1;
                         this._segRoundRect(ctx, x0 + 1, top + 1, Math.max(2, bw - 2), hh - 2, 4);
                         ctx.stroke();
                         ctx.setLineDash([]);
                     }
-                    // 简化波形示意: 等距竖线 (不做真实峰值聚合)
-                    if (bw > 14 && hh > 8) {
-                        ctx.fillStyle = 'rgba(255,255,255,0.32)';
-                        var bars = Math.max(3, Math.min(16, Math.floor(bw / 6)));
-                        for (var bi = 0; bi < bars; bi++) {
-                            var bx = x0 + 4 + ((bw - 8) * bi) / bars;
-                            var bh2 = hh * (0.25 + 0.45 * ((bi * 7 + 3) % 10) / 10);
-                            ctx.fillRect(bx, top + (hh - bh2) / 2, 1.5, bh2);
-                        }
-                    }
+                    // 真实波形 (与 NBS 音频块同一套峰值聚合; 居中窄带)
+                    this._drawClipWaveform(ctx, c, x0, bw, top + hh * 0.24, Math.max(2, hh * 0.52));
                     // 名称 (跟随视口裁剪 + 超宽省略)
                     var aLabel = missing
                         ? ((window.WebNBSI18n && WebNBSI18n.translate) ? WebNBSI18n.translate('缺失音频') : '缺失音频')
@@ -2700,6 +2856,8 @@
                         ctx.textAlign = 'left';
                         ctx.textBaseline = 'middle';
                         ctx.fillStyle = 'rgba(236,246,248,0.92)';
+                        ctx.shadowColor = 'rgba(0,0,0,0.55)';
+                        ctx.shadowBlur = 2;
                         var aMaxW = aVisibleW - 2;
                         var aDrawn = aLabel;
                         if (ctx.measureText(aDrawn).width > aMaxW) {
@@ -8812,10 +8970,10 @@
 
             ctx.save();
 
-            // 块底色 (中性青灰: 与深色 UI 协调; 悬停略提亮, 缺失时更淡)
+            // 块底色 (极淡青灰底衬: 仅用于标示块范围, 让波形成为视觉主体)
             var base = missing
-                ? 'rgba(86,122,132,0.35)'
-                : (hovered ? 'rgba(104,146,156,0.86)' : 'rgba(86,122,132,0.78)');
+                ? 'rgba(86,122,132,0.10)'
+                : (hovered ? 'rgba(104,146,156,0.30)' : 'rgba(86,122,132,0.18)');
             ctx.fillStyle = base;
             self._roundRect(ctx, x0px + 1, clipTop, Math.max(2, wpx - 2), clipH, 3);
             ctx.fill();
@@ -8827,14 +8985,14 @@
                 self._roundRect(ctx, x0px + 1, clipTop, Math.max(2, wpx - 2), clipH, 3);
                 ctx.stroke();
             } else {
-                ctx.strokeStyle = 'rgba(140,180,190,0.45)';
+                ctx.strokeStyle = 'rgba(140,180,190,0.42)';
                 ctx.lineWidth = 1;
                 self._roundRect(ctx, x0px + 0.5, clipTop + 0.5, Math.max(2, wpx - 2), clipH, 3);
                 ctx.stroke();
             }
             if (missing && ctx.setLineDash) {
                 ctx.setLineDash([4, 3]);
-                ctx.strokeStyle = 'rgba(236,246,248,0.65)';
+                ctx.strokeStyle = 'rgba(236,246,248,0.55)';
                 ctx.lineWidth = 1;
                 self._roundRect(ctx, x0px + 2.5, clipTop + 1.5, Math.max(2, wpx - 5), clipH - 3, 3);
                 ctx.stroke();
@@ -8843,31 +9001,12 @@
 
             // 左边框亮线
             if (wpx > 4) {
-                ctx.fillStyle = 'rgba(236,246,248,0.45)';
+                ctx.fillStyle = 'rgba(236,246,248,0.35)';
                 ctx.fillRect(x0px + 2, clipTop + 2, 1.5, Math.max(1, clipH - 4));
             }
 
-            // 波形 (块内中部, 半透明白; 无 peaks 时静默跳过)
-            // min/max 柱以中线对称绘制, 柱间距不小于 2px (密集时不逐像素画)
-            var peaks = self._getAudioPeaks(clip);
-            if (peaks && wpx > 10 && clipH > 8) {
-                var waveTop = clipTop + clipH * 0.30;
-                var waveH = clipH * 0.40;
-                var midY = waveTop + waveH / 2;
-                ctx.fillStyle = 'rgba(255,255,255,0.32)';
-                var waveX0 = x0px + 5;
-                var waveW = wpx - 10;
-                var bw = waveW / peaks.length;
-                var pStep = Math.max(1, Math.ceil(2 / Math.max(0.01, bw)));
-                for (var p = 0; p < peaks.length; p += pStep) {
-                    var pk = peaks[p];
-                    var topAmp = Math.max(0, Math.min(waveH / 2, (pk.max / 2) * waveH));
-                    var botAmp = Math.max(0, Math.min(waveH / 2, (-pk.min / 2) * waveH));
-                    var bx = waveX0 + p * bw;
-                    if (bx > x1px - 3) break;
-                    ctx.fillRect(bx, midY - Math.max(1, topAmp), Math.max(1, Math.min(2, bw)), Math.max(1, topAmp) + Math.max(1, botAmp));
-                }
-            }
+            // 波形: 居中窄带 (约块高一半), 上下留白, 视觉上更细
+            self._drawClipWaveform(ctx, clip, x0px, wpx, clipTop + clipH * 0.24, Math.max(2, clipH * 0.52));
 
             // 左右端点手柄: 悬停该端点时高亮, 提示可拖动改变长度/起点
             var edgeW = Math.min(7, cellH / 3);
@@ -8896,11 +9035,23 @@
                 ctx.textAlign = 'left';
                 ctx.textBaseline = 'middle';
                 ctx.fillStyle = 'rgba(236,246,248,0.92)';
+                // 波形现在更亮, 文字加一层深色阴影保证可读性
+                ctx.shadowColor = 'rgba(0,0,0,0.55)';
+                ctx.shadowBlur = 2;
                 var maxW = visibleW - 2;
                 var drawn = label;
-                if (ctx.measureText(drawn).width > maxW) {
-                    while (drawn.length > 1 && ctx.measureText(drawn + '…').width > maxW) drawn = drawn.slice(0, -1);
-                    drawn += '…';
+                // 截断结果按「block id + 可见宽 + 名称长度」缓存, 避免每帧逐字符 measureText
+                var lcache = self._audioLabelCache || (self._audioLabelCache = {});
+                var lkey = clip.id + '|' + Math.round(visibleW) + '|' + label.length;
+                if (lcache[lkey] !== undefined) {
+                    drawn = lcache[lkey];
+                } else {
+                    if (ctx.measureText(drawn).width > maxW) {
+                        while (drawn.length > 1 && ctx.measureText(drawn + '…').width > maxW) drawn = drawn.slice(0, -1);
+                        drawn += '…';
+                    }
+                    if (Object.keys(lcache).length > 200) self._audioLabelCache = {};
+                    self._audioLabelCache[lkey] = drawn;
                 }
                 ctx.fillText(drawn, textLeft, clipTop + clipH / 2 + 0.5);
                 ctx.restore();

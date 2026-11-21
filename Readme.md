@@ -1,7 +1,7 @@
 <div align="center">
 
-<!-- LOGO为AI生成 -->
-<img src="/docs/logo.png" alt="MiauNoteBlock" width="1280" />
+<!-- LOGO Made By AI-->
+<img src="/docs/logo.jpg" alt="MiauNoteBlock" width="1280" />
 
 # MiauNoteBlock
 

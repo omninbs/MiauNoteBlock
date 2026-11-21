@@ -327,6 +327,12 @@
         if (pr.setAudioBuffers) pr.setAudioBuffers(state.audioBuffers);
         pr.audioClips = state.audioClips.map(function (c) {
             var buf = state.audioBuffers[c.bufferId];
+            // 惰性生成可持久化的波形概览: 音频仍在内存但工程里还没有波形数据时补一份,
+            // 之后即使音频缓冲丢失 (刷新/换设备/旧工程) 也能画出真实波形
+            if (!c.wave && buf && buf.buffer && pr.buildClipWaveData) {
+                var w = pr.buildClipWaveData(buf.buffer, 800);
+                if (w) c.wave = w;
+            }
             return {
                 id: c.id,
                 lane: c.lane || 0,
@@ -336,7 +342,8 @@
                 bufferId: c.bufferId,
                 gain: (typeof c.gain === 'number') ? c.gain : 1,
                 name: (buf && buf.name) || i18nText('音频轨道缺失音频'),
-                missing: !buf
+                missing: !buf,
+                wave: c.wave || null
             };
         });
         pr._fullRedrawNeeded = true;
@@ -355,12 +362,17 @@
             var reader = new FileReader();
             reader.onload = function () {
                 try {
-                    AudioEngine.decodeAudio(reader.result).then(function (buffer) {
+                    // 原始文件字节: 解码会 detach 传入的 ArrayBuffer, 先留一份副本写 IndexedDB,
+                    // 供刷新页面/重新打开后恢复波形与播放
+                    var raw = reader.result;
+                    var keepBytes = (raw && typeof raw.slice === 'function') ? raw.slice(0) : null;
+                    AudioEngine.decodeAudio(raw).then(function (buffer) {
                         try {
                             if (!buffer) throw new Error('decode failed');
                             // 先注册缓冲: addAudioLane 内的撤销点会把缓冲一起快照, 撤销一次即可完全回滚
                             var id = genAudioBufferId();
                             state.audioBuffers[id] = { name: file.name, buffer: buffer, duration: buffer.duration };
+                            persistAudioAsset(id, keepBytes, file.name, buffer.duration);
                             // 长音频: 导入空闲期预热流式播放节点, 避免首次播放时才开始初始化
                             setTimeout(function() {
                                 try {
@@ -867,6 +879,74 @@
         });
     }
 
+    // ============ 音频资源持久化 (IndexedDB) ============
+    // 自动保存快照里只记录 audioLanes/audioClips (体积小), 解码后的 AudioBuffer 无法序列化。
+    // 若只依赖快照, 刷新页面后音频块全部变成「缺失音频」, 波形自然消失。
+    // 这里把用户导入的原始音频字节写入 IndexedDB, 恢复工程时按 bufferId 重新解码,
+    // 使刷新/重新打开后波形与播放都能正常工作 (无需用户重新导入)。
+    var AUDIO_ASSET_KEY_PREFIX = 'audio_asset__';
+
+    // 写入原始音频字节 (ArrayBuffer); 失败静默降级 (仅失去刷新后恢复的能力)
+    function persistAudioAsset(bufferId, bytes, name, duration) {
+        if (!bufferId || !bytes) return;
+        if (typeof N.projectDbPut !== 'function') return;
+        try {
+            N.projectDbPut(AUDIO_ASSET_KEY_PREFIX + bufferId, {
+                name: name || '',
+                duration: (typeof duration === 'number' && isFinite(duration)) ? duration : 0,
+                bytes: bytes
+            }).catch(function () {});
+        } catch (e) {}
+    }
+
+    // 从 IndexedDB 还原当前工程仍引用的音频缓冲; 返回成功恢复的数量
+    function restoreAudioAssetsFromDb() {
+        var clips = state.audioClips || [];
+        var seen = {};
+        var ids = [];
+        for (var i = 0; i < clips.length; i++) {
+            var bid = clips[i] && clips[i].bufferId;
+            if (!bid || seen[bid]) continue;
+            seen[bid] = true;
+            if (!(state.audioBuffers || {})[bid]) ids.push(bid);
+        }
+        if (!ids.length || typeof N.projectDbGet !== 'function'
+            || !window.AudioEngine || !AudioEngine.decodeAudio) {
+            return Promise.resolve(0);
+        }
+        var tasks = ids.map(function (bid) {
+            return N.projectDbGet(AUDIO_ASSET_KEY_PREFIX + bid).then(function (rec) {
+                var bytes = rec && rec.bytes;
+                if (!bytes) return null;
+                // decodeAudioData 会接管 (detach) 传入的 ArrayBuffer, 交出副本以保留存储记录
+                var ab = (typeof bytes.slice === 'function') ? bytes.slice(0) : bytes;
+                if (typeof bytes.arrayBuffer === 'function') ab = bytes;
+                var p = (ab && typeof ab.arrayBuffer === 'function') ? ab.arrayBuffer() : Promise.resolve(ab);
+                return p.then(function (buf) {
+                    return AudioEngine.decodeAudio(buf);
+                }).then(function (buffer) {
+                    if (!buffer) return null;
+                    if (!state.audioBuffers) state.audioBuffers = {};
+                    state.audioBuffers[bid] = {
+                        name: rec.name || (bid + '.wav'),
+                        buffer: buffer,
+                        duration: (typeof rec.duration === 'number' && rec.duration > 0) ? rec.duration : buffer.duration
+                    };
+                    return bid;
+                }).catch(function () { return null; });
+            }).catch(function () { return null; });
+        });
+        return Promise.all(tasks).then(function (arr) {
+            var n = 0;
+            for (var k = 0; k < arr.length; k++) if (arr[k]) n++;
+            if (n) {
+                refreshAudioLaneUI();
+                scheduleAudioAssetPrewarm();
+            }
+            return n;
+        });
+    }
+
     // MNB 工程包音频还原: audio.json + audio/*.wav → state.audioBuffers/Lanes/Clips; 返回成功解码数
     function importAudioPackage(zipFile, meta) {
         if (!zipFile) return Promise.resolve(0);
@@ -887,8 +967,14 @@
                     if (!entry || !entry.fileName) return;
                     var f = zipFile.file(entry.fileName);
                     if (!f) return;
-                    return f.async('arraybuffer').then(function (ab) {
-                        return AudioEngine.decodeAudio(ab);
+                    return f.async('arraybuffer').then(function(ab) {
+                        // 包内 wav 同样写入 IndexedDB: 解码会 detach, 先留副本
+                        var keep = (ab && typeof ab.slice === 'function') ? ab.slice(0) : null;
+                        return AudioEngine.decodeAudio(ab).then(function (buffer) {
+                            if (buffer && keep) persistAudioAsset(entry.bufferId, keep,
+                                entry.name || (entry.bufferId + '.wav'), buffer.duration);
+                            return buffer;
+                        });
                     }).then(function (buffer) {
                         if (!buffer) return;
                         map[entry.bufferId] = {
@@ -1174,6 +1260,8 @@
     N.audioAssetsForSave = audioAssetsForSave;
     N.audioAssetsInline = audioAssetsInline;
     N.restoreAudioAssets = restoreAudioAssets;
+    N.persistAudioAsset = persistAudioAsset;
+    N.restoreAudioAssetsFromDb = restoreAudioAssetsFromDb;
     N.importAudioPackage = importAudioPackage;
     N.removeAudioClip = removeAudioClip;
     N.setAudioClipGain = setAudioClipGain;

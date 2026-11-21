@@ -271,7 +271,8 @@ async function clickMenuItem(page, idx) {
                 if (!sp) continue;
                 const top = pr.getSegmentLaneTop(i);
                 const h = lanes[i].height;
-                const y = Math.round((top + h / 2) * sy);
+                // 采样块上部 (波形带之外) 的底色, 避免采到白色波形
+                const y = Math.round((top + h * 0.12) * sy);
                 if (y < 0 || y >= cv.height) continue;
                 let img;
                 try {
@@ -279,7 +280,8 @@ async function clickMenuItem(page, idx) {
                 } catch (e) { continue; }
                 for (let p = 0; p < img.length; p += 4) {
                     const r = img[p], g = img[p + 1], b = img[p + 2];
-                    if (sp.kind === 'audio' && b > 100 && b > r + 30) out.audioPx++;
+                    // 音频块底色已改为极淡青灰 (突出波形), 判定相应地放宽: 只要带青色偏蓝的块底即可
+                    if (sp.kind === 'audio' && b > 35 && b > r + 12) out.audioPx++;
                     if (sp.kind === 'lyric' && r > 120 && g > 100 && b < 140) out.lyricPx++;
                 }
             }
